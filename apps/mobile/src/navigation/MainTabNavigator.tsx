@@ -1,0 +1,144 @@
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, FontSize, Shadows } from '@/constants/theme';
+import { DashboardScreen } from '@/screens/dashboard/DashboardScreen';
+import { MealLogScreen } from '@/screens/meal-log/MealLogScreen';
+import { AddMealScreen } from '@/screens/meal-log/AddMealScreen';
+import { FoodScanScreen } from '@/screens/meal-log/FoodScanScreen';
+import { MealPlanScreen } from '@/screens/meal-plan/MealPlanScreen';
+import { CalendarDayScreen } from '@/screens/meal-plan/CalendarDayScreen';
+import { RecipesScreen } from '@/screens/recipes/RecipesScreen';
+import { RecipeDetailScreen } from '@/screens/recipes/RecipeDetailScreen';
+import { ProfileScreen } from '@/screens/profile/ProfileScreen';
+import type {
+  MainTabParamList,
+  MealLogStackParamList,
+  MealPlanStackParamList,
+  RecipesStackParamList,
+} from './types';
+
+const Tab = createBottomTabNavigator<MainTabParamList>();
+const MealLogStack = createNativeStackNavigator<MealLogStackParamList>();
+const MealPlanStack = createNativeStackNavigator<MealPlanStackParamList>();
+const RecipesStack = createNativeStackNavigator<RecipesStackParamList>();
+
+function MealLogNavigator() {
+  return (
+    <MealLogStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.surface },
+        headerTintColor: Colors.text,
+        headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
+      }}
+    >
+      <MealLogStack.Screen
+        name="MealLogHome"
+        component={MealLogScreen}
+        options={{ title: 'Meal Log' }}
+      />
+      <MealLogStack.Screen
+        name="AddMeal"
+        component={AddMealScreen}
+        options={{ title: 'Add Meal' }}
+      />
+      <MealLogStack.Screen
+        name="FoodScan"
+        component={FoodScanScreen}
+        options={{ title: 'Scan Food', headerShown: false }}
+      />
+    </MealLogStack.Navigator>
+  );
+}
+
+function MealPlanNavigator() {
+  return (
+    <MealPlanStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.surface },
+        headerTintColor: Colors.text,
+        headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
+      }}
+    >
+      <MealPlanStack.Screen
+        name="MealPlanHome"
+        component={MealPlanScreen}
+        options={{ title: 'Meal Plan' }}
+      />
+      <MealPlanStack.Screen
+        name="CalendarDay"
+        component={CalendarDayScreen}
+        options={{ title: 'Day View' }}
+      />
+    </MealPlanStack.Navigator>
+  );
+}
+
+function RecipesNavigator() {
+  return (
+    <RecipesStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.surface },
+        headerTintColor: Colors.text,
+        headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
+      }}
+    >
+      <RecipesStack.Screen
+        name="RecipesList"
+        component={RecipesScreen}
+        options={{ title: 'Recipes' }}
+      />
+      <RecipesStack.Screen
+        name="RecipeDetail"
+        component={RecipeDetailScreen}
+        options={{ title: 'Recipe Detail' }}
+      />
+    </RecipesStack.Navigator>
+  );
+}
+
+export function MainTabNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap;
+          switch (route.name) {
+            case 'Dashboard':
+              iconName = focused ? 'home' : 'home-outline';
+              break;
+            case 'MealLog':
+              iconName = focused ? 'restaurant' : 'restaurant-outline';
+              break;
+            case 'MealPlan':
+              iconName = focused ? 'calendar' : 'calendar-outline';
+              break;
+            case 'Recipes':
+              iconName = focused ? 'book' : 'book-outline';
+              break;
+            case 'Profile':
+              iconName = focused ? 'person' : 'person-outline';
+              break;
+            default:
+              iconName = 'help-outline';
+          }
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textSecondary,
+        tabBarStyle: {
+          backgroundColor: Colors.surface,
+          borderTopColor: Colors.divider,
+          ...Shadows.sm,
+        },
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
+      <Tab.Screen name="MealLog" component={MealLogNavigator} options={{ title: 'Meal Log' }} />
+      <Tab.Screen name="MealPlan" component={MealPlanNavigator} options={{ title: 'Meal Plan' }} />
+      <Tab.Screen name="Recipes" component={RecipesNavigator} options={{ title: 'Recipes' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+    </Tab.Navigator>
+  );
+}
