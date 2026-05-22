@@ -1,0 +1,18 @@
+{
+  "name": "foodeez",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/mobile",
+    "apps/web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "mobile": "npm run start --workspace=@foodeez/mobile",
+    "android": "npm run android --workspace=@foodeez/mobile",
+    "web": "npm run dev --workspace=@foodeez/web",
+    "web:build": "npm run build --workspace=@foodeez/web",
+    "shared:build": "npm run build --workspace=@foodeez/shared",
+    "shared:dev": "npm run dev --workspace=@foodeez/shared"
+  }
+}
