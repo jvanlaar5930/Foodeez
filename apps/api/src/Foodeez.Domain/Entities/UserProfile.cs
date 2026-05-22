@@ -19,6 +19,7 @@ public class UserProfile : BaseEntity
     public float DailyFatTargetG { get; set; }
     public string? Notes { get; set; }
     public bool ProfileCompleted { get; set; }
+    public bool DarkMode { get; set; }
 
     public User User { get; set; } = null!;
 

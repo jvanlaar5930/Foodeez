@@ -45,7 +45,7 @@ const ALL_MEAL_TYPES = [
   MealType.EveningSnack,
 ];
 
-export default function CalendarDayScreen({ route, navigation }: Props) {
+export function CalendarDayScreen({ route, navigation }: Props) {
   const { date } = route.params;
   const parsedDate = parseISO(date);
   const { activePlan } = useMealPlanStore();

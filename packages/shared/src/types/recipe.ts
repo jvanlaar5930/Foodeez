@@ -2,7 +2,7 @@ import { NutritionalInfo } from './nutrition';
 
 export interface RecipeIngredient {
   id: string;
-  foodItemId: string;
+  foodItemId?: string;
   foodItemName: string;
   quantity: number;
   unit: string;

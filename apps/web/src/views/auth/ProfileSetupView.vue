@@ -15,29 +15,74 @@
       <div class="bg-white rounded-2xl shadow-sm p-8">
         <!-- Step 1: Basic info -->
         <div v-show="currentStep === 1">
-          <h2 class="text-2xl font-bold text-gray-900 mb-1">Tell us about yourself</h2>
+          <div class="flex items-start justify-between mb-1">
+            <h2 class="text-2xl font-bold text-gray-900">Tell us about yourself</h2>
+            <!-- Unit toggle -->
+            <div class="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5 flex-shrink-0 ml-4">
+              <button type="button"
+                class="px-3 py-1.5 rounded-md text-sm font-semibold transition-colors"
+                :class="useMetric ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                @click="setUnitSystem(true)">
+                Metric
+              </button>
+              <button type="button"
+                class="px-3 py-1.5 rounded-md text-sm font-semibold transition-colors"
+                :class="!useMetric ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                @click="setUnitSystem(false)">
+                US
+              </button>
+            </div>
+          </div>
           <p class="text-gray-500 mb-6">This helps us calculate your personalized nutrition targets.</p>
+
           <div class="space-y-5">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Height (cm)</label>
-                <input v-model.number="profile.heightCm" type="number" min="100" max="250" class="input" placeholder="175" />
+            <!-- Height -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Height</label>
+              <!-- Metric -->
+              <div v-if="useMetric" class="flex items-center gap-2">
+                <input v-model.number="displayHeightCm" type="number" min="100" max="250" class="input" placeholder="175" @change="onHeightCmChange" />
+                <span class="text-sm text-gray-500 flex-shrink-0">cm</span>
               </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Current Weight (kg)</label>
-                <input v-model.number="profile.weightKg" type="number" min="30" max="300" class="input" placeholder="70" />
+              <!-- Imperial -->
+              <div v-else class="flex items-center gap-2">
+                <input v-model.number="displayFeet" type="number" min="3" max="8" class="input" placeholder="5" @change="onImperialHeightChange" />
+                <span class="text-sm text-gray-500 flex-shrink-0">ft</span>
+                <input v-model.number="displayInches" type="number" min="0" max="11" class="input" placeholder="10" @change="onImperialHeightChange" />
+                <span class="text-sm text-gray-500 flex-shrink-0">in</span>
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Target Weight (kg)</label>
-                <input v-model.number="profile.targetWeightKg" type="number" min="30" max="300" class="input" placeholder="65 (optional)" />
+
+            <!-- Current weight -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Current Weight</label>
+              <div class="flex items-center gap-2">
+                <input v-if="useMetric" v-model.number="displayWeightKg" type="number" min="30" max="300" step="0.1" class="input" placeholder="70" @change="onWeightKgChange" />
+                <input v-else v-model.number="displayWeightLbs" type="number" min="66" max="660" step="0.5" class="input" placeholder="154" @change="onWeightLbsChange" />
+                <span class="text-sm text-gray-500 flex-shrink-0">{{ useMetric ? 'kg' : 'lbs' }}</span>
               </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Age</label>
+            </div>
+
+            <!-- Target weight -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Target Weight <span class="text-gray-400 font-normal">(optional)</span></label>
+              <div class="flex items-center gap-2">
+                <input v-if="useMetric" v-model.number="displayTargetKg" type="number" min="30" max="300" step="0.1" class="input" :placeholder="useMetric ? 'e.g. 65' : 'e.g. 143'" @change="onTargetKgChange" />
+                <input v-else v-model.number="displayTargetLbs" type="number" min="66" max="660" step="0.5" class="input" placeholder="e.g. 143" @change="onTargetLbsChange" />
+                <span class="text-sm text-gray-500 flex-shrink-0">{{ useMetric ? 'kg' : 'lbs' }}</span>
+              </div>
+            </div>
+
+            <!-- Age -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Age</label>
+              <div class="flex items-center gap-2">
                 <input v-model.number="profile.age" type="number" min="13" max="120" class="input" placeholder="28" />
+                <span class="text-sm text-gray-500 flex-shrink-0">years</span>
               </div>
             </div>
+
+            <!-- Gender -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Gender</label>
               <div class="grid grid-cols-2 gap-2">
@@ -119,13 +164,58 @@
             </div>
           </div>
 
-          <p class="text-xs text-gray-400 text-center mt-4">
-            These targets can be adjusted anytime from your profile settings.
-          </p>
+          <div class="mt-5">
+            <button type="button"
+              class="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-500 transition-colors"
+              @click="showCalculationInfo = !showCalculationInfo">
+              {{ showCalculationInfo ? 'Hide calculation details ▲' : 'How are these calculated? ▼' }}
+            </button>
+            <div v-if="showCalculationInfo" class="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-500 space-y-1">
+              <p>
+                Calorie target is derived using the
+                <span class="font-medium text-gray-700">Mifflin-St Jeor equation</span> for resting metabolic rate,
+                adjusted by your activity level using
+                <span class="font-medium text-gray-700">Harris-Benedict activity multipliers</span>,
+                and further modified for your goal.
+              </p>
+              <p>
+                Macro targets follow
+                <span class="font-medium text-gray-700">Dietary Reference Intakes (DRI)</span>
+                guidelines from the
+                <span class="font-medium text-gray-700">National Academies of Medicine</span>.
+              </p>
+              <p class="text-gray-400 pt-1">
+                These are general estimates and not a substitute for advice from a registered dietitian or physician.
+                Targets can be adjusted anytime from your profile settings.
+              </p>
+            </div>
+          </div>
         </div>
 
+        <!-- Legal disclaimer — shown only on final step -->
+        <div v-if="currentStep === TOTAL_STEPS" class="mt-5">
+          <button type="button"
+            class="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-500 transition-colors"
+            @click="showDisclaimer = !showDisclaimer">
+            {{ showDisclaimer ? 'Hide disclaimer ▲' : 'View disclaimer ▼' }}
+          </button>
+          <div v-if="showDisclaimer" class="mt-2 text-xs text-gray-400 leading-relaxed border border-gray-100 rounded-lg p-3 bg-gray-50">
+            By clicking <span class="font-medium text-gray-500">Complete Setup</span> you acknowledge that the
+            nutrition targets and recommendations provided by Foodeez are generated algorithmically for
+            informational purposes only and do not constitute medical advice, diagnosis, or treatment.
+            Foodeez and its affiliates make no warranties, express or implied, regarding the accuracy,
+            completeness, or suitability of these targets for your individual health circumstances.
+            You assume full responsibility for any dietary changes you make based on this information.
+            Always consult a qualified healthcare provider or registered dietitian before making significant
+            changes to your diet, especially if you have a medical condition, are pregnant, or are under
+            the age of 18.
+          </div>
+        </div>
+
+        <AppAlert v-if="setupError" variant="error" :message="setupError" class="mt-4" />
+
         <!-- Navigation -->
-        <div class="flex gap-3 mt-8">
+        <div class="flex gap-3 mt-4">
           <button v-if="currentStep > 1" type="button"
             class="flex-1 py-2.5 border-2 border-gray-200 rounded-lg font-semibold text-gray-600 hover:border-gray-300 transition-colors"
             @click="currentStep--">
@@ -155,6 +245,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useProfileStore } from '@/stores/profile';
 import { Gender, ActivityLevel, DietaryGoal } from '@foodeez/shared';
+import AppAlert from '@/components/ui/AppAlert.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -163,7 +254,12 @@ const profileStore = useProfileStore();
 const TOTAL_STEPS = 4;
 const currentStep = ref(1);
 const isLoading = ref(false);
+const setupError = ref('');
+const useMetric = ref(true);
+const showDisclaimer = ref(false);
+const showCalculationInfo = ref(false);
 
+// Profile always stored in metric (cm / kg) internally
 const profile = ref({
   heightCm: 175,
   weightKg: 70,
@@ -174,6 +270,57 @@ const profile = ref({
   activityLevel: ActivityLevel.ModeratelyActive as ActivityLevel,
   notes: '',
 });
+
+// --- Conversion helpers ---
+const cmToFeetInches = (cm: number) => {
+  const totalInches = cm / 2.54;
+  return { feet: Math.floor(totalInches / 12), inches: Math.round(totalInches % 12) };
+};
+const feetInchesToCm = (feet: number, inches: number) => Math.round((feet * 12 + inches) * 2.54);
+const kgToLbs = (kg: number) => Math.round(kg * 2.20462 * 10) / 10;
+const lbsToKg = (lbs: number) => Math.round(lbs / 2.20462 * 10) / 10;
+
+// --- Imperial display refs (only used when useMetric === false) ---
+const displayFeet = ref(5);
+const displayInches = ref(9);
+const displayWeightLbs = ref(kgToLbs(70));
+const displayTargetLbs = ref<number | undefined>(undefined);
+
+// Metric display refs (two-way bound to profile except during unit switching)
+const displayHeightCm = ref(175);
+const displayWeightKg = ref(70);
+const displayTargetKg = ref<number | undefined>(undefined);
+
+function setUnitSystem(metric: boolean) {
+  if (metric === useMetric.value) return;
+  if (metric) {
+    // Imperial → Metric
+    profile.value.heightCm = feetInchesToCm(displayFeet.value, displayInches.value);
+    profile.value.weightKg = lbsToKg(displayWeightLbs.value);
+    profile.value.targetWeightKg = displayTargetLbs.value != null ? lbsToKg(displayTargetLbs.value) : undefined;
+    displayHeightCm.value = profile.value.heightCm;
+    displayWeightKg.value = profile.value.weightKg;
+    displayTargetKg.value = profile.value.targetWeightKg;
+  } else {
+    // Metric → Imperial
+    const { feet, inches } = cmToFeetInches(profile.value.heightCm);
+    displayFeet.value = feet;
+    displayInches.value = inches;
+    displayWeightLbs.value = kgToLbs(profile.value.weightKg);
+    displayTargetLbs.value = profile.value.targetWeightKg != null ? kgToLbs(profile.value.targetWeightKg) : undefined;
+  }
+  useMetric.value = metric;
+}
+
+// Metric input handlers
+function onHeightCmChange() { profile.value.heightCm = displayHeightCm.value; }
+function onWeightKgChange() { profile.value.weightKg = displayWeightKg.value; }
+function onTargetKgChange() { profile.value.targetWeightKg = displayTargetKg.value || undefined; }
+
+// Imperial input handlers
+function onImperialHeightChange() { profile.value.heightCm = feetInchesToCm(displayFeet.value, displayInches.value); }
+function onWeightLbsChange() { profile.value.weightKg = lbsToKg(displayWeightLbs.value); }
+function onTargetLbsChange() { profile.value.targetWeightKg = displayTargetLbs.value != null ? lbsToKg(displayTargetLbs.value) : undefined; }
 
 const GENDERS = [
   { value: Gender.Male, label: 'Male' },
@@ -232,14 +379,20 @@ function nextStep() {
 }
 
 async function handleComplete() {
-  if (!authStore.user?.id) return;
+  setupError.value = '';
+
+  if (!authStore.user?.id) {
+    setupError.value = 'Your session has expired. Please sign in again.';
+    setTimeout(() => router.push('/auth/login'), 2000);
+    return;
+  }
+
   isLoading.value = true;
   try {
     await profileStore.updateProfile(authStore.user.id, profile.value);
     router.push('/dashboard');
   } catch {
-    // Profile update failed — still navigate to dashboard
-    router.push('/dashboard');
+    setupError.value = 'Failed to save your profile. Please try again.';
   } finally {
     isLoading.value = false;
   }
@@ -247,6 +400,8 @@ async function handleComplete() {
 </script>
 
 <style scoped>
+@reference "tailwindcss";
+
 .input {
   @apply w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500;
 }

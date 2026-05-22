@@ -28,13 +28,18 @@
     "plugins": [
       [
         "expo-camera",
-        { "cameraPermission": "Allow Foodeez to access your camera to scan food." }
+        {
+          "cameraPermission": "Allow Foodeez to access your camera to scan food."
+        }
       ],
       [
         "expo-image-picker",
-        { "photosPermission": "Allow Foodeez to access your photos to analyze food." }
+        {
+          "photosPermission": "Allow Foodeez to access your photos to analyze food."
+        }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-secure-store"
     ]
   }
 }

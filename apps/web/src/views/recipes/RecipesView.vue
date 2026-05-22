@@ -38,9 +38,12 @@
         <div v-for="recipe in filteredRecipes" :key="recipe.id"
           class="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
           @click="selectedRecipe = recipe">
-          <!-- Placeholder image -->
-          <div class="h-36 bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
-            <span class="text-4xl">🍽️</span>
+          <!-- Recipe image -->
+          <div class="h-36 bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center overflow-hidden">
+            <img v-if="recipe.imageUrl" :src="recipe.imageUrl" :alt="recipe.name"
+              class="w-full h-full object-cover"
+              @error="hideImage" />
+            <span v-else class="text-4xl">🍽️</span>
           </div>
           <div class="p-4">
             <div class="flex items-start justify-between gap-2 mb-2">
@@ -72,8 +75,14 @@
           <button @click="selectedRecipe = null" class="text-gray-400 hover:text-gray-600 flex-shrink-0">✕</button>
         </div>
 
+        <!-- Hero image -->
+        <div v-if="selectedRecipe.imageUrl" class="h-48 overflow-hidden">
+          <img :src="selectedRecipe.imageUrl" :alt="selectedRecipe.name"
+            class="w-full h-full object-cover" @error="hideImage" />
+        </div>
+
         <div class="p-5 space-y-5">
-          <!-- Stats -->
+          <!-- Time / servings stats -->
           <div class="grid grid-cols-4 gap-3 text-center">
             <div class="bg-gray-50 rounded-xl p-3">
               <p class="font-bold text-gray-900">{{ selectedRecipe.prepTimeMinutes }}m</p>
@@ -90,6 +99,24 @@
             <div class="bg-gray-50 rounded-xl p-3">
               <p class="font-bold text-gray-900">{{ Math.round(selectedRecipe.nutritionalInfoPerServing.calories) }}</p>
               <p class="text-xs text-gray-500">kcal/srv</p>
+            </div>
+          </div>
+
+          <!-- Nutrition per serving -->
+          <div>
+            <h3 class="font-bold text-gray-900 mb-3">Nutrition per serving</h3>
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div v-for="macro in [
+                { label: 'Calories', value: Math.round(selectedRecipe.nutritionalInfoPerServing.calories), unit: 'kcal', color: 'text-green-600' },
+                { label: 'Protein',  value: Math.round(selectedRecipe.nutritionalInfoPerServing.protein),  unit: 'g', color: 'text-blue-600' },
+                { label: 'Carbs',    value: Math.round(selectedRecipe.nutritionalInfoPerServing.carbohydrates), unit: 'g', color: 'text-orange-500' },
+                { label: 'Fat',      value: Math.round(selectedRecipe.nutritionalInfoPerServing.fat),      unit: 'g', color: 'text-yellow-600' },
+                { label: 'Fiber',    value: Math.round(selectedRecipe.nutritionalInfoPerServing.fiber),    unit: 'g', color: 'text-teal-600' },
+                { label: 'Sugar',    value: Math.round(selectedRecipe.nutritionalInfoPerServing.sugar),    unit: 'g', color: 'text-pink-500' },
+              ]" :key="macro.label" class="bg-gray-50 rounded-xl p-3">
+                <p class="font-bold text-lg" :class="macro.color">{{ macro.value }}<span class="text-xs font-normal text-gray-500 ml-0.5">{{ macro.unit }}</span></p>
+                <p class="text-xs text-gray-500 mt-0.5">{{ macro.label }}</p>
+              </div>
             </div>
           </div>
 
@@ -126,30 +153,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { recipeService } from '@/services/recipeService';
 import type { Recipe } from '@foodeez/shared';
 
+const route = useRoute();
 const recipes = ref<Recipe[]>([]);
 const selectedRecipe = ref<Recipe | null>(null);
-const searchQuery = ref('');
+const searchQuery = ref((route.query.q as string) ?? '');
 const activeTags = ref(new Set<string>());
 const isLoading = ref(true);
 
 const FILTER_TAGS = ['Vegetarian', 'Vegan', 'High-Protein', 'Low-Carb', 'Quick', 'Gluten-Free', 'Dairy-Free'];
 
+// Tag filter applied client-side on top of server results
 const filteredRecipes = computed(() => {
-  const q = searchQuery.value.toLowerCase();
   const tags = Array.from(activeTags.value);
-  return recipes.value.filter(r => {
-    const matchSearch = !q || r.name.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q);
-    const matchTags = tags.length === 0 || tags.every(t => r.tags?.toLowerCase().includes(t.toLowerCase()));
-    return matchSearch && matchTags;
-  });
+  if (tags.length === 0) return recipes.value;
+  return recipes.value.filter(r =>
+    tags.every(t => r.tags?.toLowerCase().includes(t.toLowerCase()))
+  );
 });
+
+function hideImage(e: Event) {
+  (e.target as HTMLImageElement).style.display = 'none';
+}
 
 function toggleTag(tag: string) {
   const next = new Set(activeTags.value);
@@ -157,11 +189,31 @@ function toggleTag(tag: string) {
   activeTags.value = next;
 }
 
-onMounted(async () => {
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function fetchRecipes(query?: string) {
+  isLoading.value = true;
   try {
-    recipes.value = await recipeService.getRecipes();
+    const q = (query ?? searchQuery.value).trim();
+    recipes.value = q
+      ? await recipeService.searchRecipes(q)
+      : await recipeService.getRecipes();
   } finally {
     isLoading.value = false;
   }
+}
+
+// Re-fetch when route query changes (navigated from dashboard)
+watch(() => route.query.q, (q) => {
+  searchQuery.value = (q as string) ?? '';
+  fetchRecipes(searchQuery.value);
 });
+
+// Debounced re-fetch on manual search input
+watch(searchQuery, () => {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => fetchRecipes(), 400);
+});
+
+onMounted(() => fetchRecipes());
 </script>

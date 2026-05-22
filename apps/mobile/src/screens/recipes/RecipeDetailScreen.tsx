@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ import { Colors, Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/
 
 type Props = NativeStackScreenProps<RecipesStackParamList, 'RecipeDetail'>;
 
-export default function RecipeDetailScreen({ route, navigation }: Props) {
+export function RecipeDetailScreen({ route, navigation }: Props) {
   const { recipeId } = route.params;
   const [recipe, setRecipe] = useState<RecipeDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,9 +61,10 @@ export default function RecipeDetailScreen({ route, navigation }: Props) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={Colors.surface} />
           </TouchableOpacity>
-          <View style={styles.heroImagePlaceholder}>
-            <Ionicons name="restaurant" size={64} color={Colors.primaryLight} />
-          </View>
+          {recipe.imageUrl
+            ? <Image source={{ uri: recipe.imageUrl }} style={styles.heroImage} resizeMode="cover" />
+            : <View style={styles.heroImagePlaceholder}><Ionicons name="restaurant" size={64} color={Colors.primaryLight} /></View>
+          }
           {recipe.isAIGenerated && (
             <View style={styles.aiBadge}>
               <Ionicons name="sparkles" size={14} color={Colors.secondary} />
@@ -197,6 +199,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     padding: Spacing.sm,
   },
+  heroImage: { width: '100%', height: '100%' },
   heroImagePlaceholder: { alignItems: 'center', justifyContent: 'center' },
   aiBadge: {
     position: 'absolute',

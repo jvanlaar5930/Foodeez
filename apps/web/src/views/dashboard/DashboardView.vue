@@ -7,6 +7,25 @@
         <p class="text-gray-500 mt-1">{{ todayDisplay }}</p>
       </div>
 
+      <!-- Recipe search -->
+      <form class="mb-6" @submit.prevent="goToRecipes">
+        <div class="relative">
+          <span class="absolute left-4 top-1/2 -translate-y-1/2 text-green-500 text-lg pointer-events-none">🔍</span>
+          <input
+            v-model="recipeSearch"
+            type="search"
+            placeholder="Search recipes to start meal prepping…"
+            class="w-full pl-11 pr-32 py-3.5 bg-white border-2 border-green-200 rounded-2xl text-sm shadow-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all placeholder-gray-400"
+          />
+          <button
+            type="submit"
+            class="absolute right-2 top-1/2 -translate-y-1/2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+          >
+            Find Recipes
+          </button>
+        </div>
+      </form>
+
       <!-- Main grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <!-- Calorie & Macros card -->
@@ -62,14 +81,15 @@
       </div>
 
       <!-- AI Tip -->
-      <div v-if="aiTip" class="bg-green-50 border border-green-200 rounded-2xl p-5 mb-6 flex gap-4">
-        <span class="text-2xl flex-shrink-0">💡</span>
-        <div>
-          <p class="font-semibold text-green-800 text-sm mb-1">AI Nutrition Tip</p>
-          <p class="text-green-700 text-sm">{{ aiTip }}</p>
-        </div>
-        <button @click="aiTip = ''" class="ml-auto text-green-400 hover:text-green-600 flex-shrink-0">✕</button>
-      </div>
+      <AppAlert
+        v-if="aiTip"
+        variant="tip"
+        title="AI Nutrition Tip"
+        :message="aiTip"
+        dismissible
+        class="mb-6"
+        @dismiss="aiTip = ''"
+      />
 
       <!-- Quick actions -->
       <div class="grid grid-cols-3 gap-4">
@@ -103,21 +123,30 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { RouterLink } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { format } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import CalorieDonut from '@/components/nutrition/CalorieDonut.vue';
 import MacroBar from '@/components/nutrition/MacroBar.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import AppAlert from '@/components/ui/AppAlert.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useMealStore } from '@/stores/meal';
 import { MealType } from '@foodeez/shared';
 
+const router = useRouter();
 const authStore = useAuthStore();
 const mealStore = useMealStore();
 
 const isLoading = ref(false);
 const aiTip = ref('Consider adding more leafy greens to boost your iron and vitamin K intake.');
+const recipeSearch = ref('');
+
+function goToRecipes() {
+  const q = recipeSearch.value.trim();
+  router.push({ path: '/recipes', query: q ? { q } : undefined });
+  recipeSearch.value = '';
+}
 
 const today = new Date();
 const todayDisplay = format(today, 'EEEE, MMMM d, yyyy');

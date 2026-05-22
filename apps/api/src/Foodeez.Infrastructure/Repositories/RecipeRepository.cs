@@ -46,4 +46,14 @@ public class RecipeRepository : BaseRepository<Recipe>, IRecipeRepository
                 .ThenInclude(i => i.FoodItem)
             .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<Recipe>> GetBySpoonacularIdsAsync(IEnumerable<int> spoonacularIds)
+    {
+        var ids = spoonacularIds.ToList();
+        return await _dbSet
+            .Where(r => r.SpoonacularId != null && ids.Contains(r.SpoonacularId.Value))
+            .Include(r => r.Ingredients)
+                .ThenInclude(i => i.FoodItem)
+            .ToListAsync();
+    }
 }

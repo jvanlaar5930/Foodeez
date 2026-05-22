@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -21,40 +23,64 @@ type Props = NativeStackScreenProps<RecipesStackParamList, 'RecipesList'>;
 
 const FILTER_TAGS = ['Vegetarian', 'Vegan', 'High-Protein', 'Low-Carb', 'Quick', 'Gluten-Free', 'Dairy-Free'];
 
-export default function RecipesScreen({ navigation }: Props) {
+export function RecipesScreen({ navigation, route }: Props) {
   const [recipes, setRecipes] = useState<RecipeDto[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<RecipeDto[]>([]);
   const [search, setSearch] = useState('');
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const searchRef = useRef<TextInput>(null);
 
-  const loadRecipes = useCallback(async (tags?: string[]) => {
+  // Apply initialSearch whenever the screen comes into focus with a new query
+  useFocusEffect(
+    useCallback(() => {
+      const q = route.params?.initialSearch ?? '';
+      setSearch(q);
+      if (q) {
+        // Brief delay so the list has rendered before focusing
+        setTimeout(() => searchRef.current?.focus(), 150);
+      }
+    }, [route.params?.initialSearch])
+  );
+
+  const loadRecipes = useCallback(async (query?: string) => {
     try {
-      const data = await recipeService.getRecipes(tags);
+      const data = query?.trim()
+        ? await recipeService.searchRecipes(query.trim())
+        : await recipeService.getRecipes();
       setRecipes(data);
-      setFilteredRecipes(data);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     loadRecipes();
   }, []);
 
+  // Debounced server search when text changes
   useEffect(() => {
-    const query = search.toLowerCase();
+    const timer = setTimeout(() => {
+      setIsLoading(true);
+      loadRecipes(search);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Client-side tag filter on top of server results
+  useEffect(() => {
     const tags = Array.from(activeTags);
     setFilteredRecipes(
-      recipes.filter(r => {
-        const matchesSearch = !query || r.name.toLowerCase().includes(query) || r.description?.toLowerCase().includes(query);
-        const matchesTags = tags.length === 0 || tags.every(t => r.tags?.toLowerCase().includes(t.toLowerCase()));
-        return matchesSearch && matchesTags;
-      })
+      tags.length === 0
+        ? recipes
+        : recipes.filter(r =>
+            tags.every(t => r.tags?.toLowerCase().includes(t.toLowerCase()))
+          )
     );
-  }, [search, activeTags, recipes]);
+  }, [activeTags, recipes]);
 
   const toggleTag = (tag: string) => {
     setActiveTags(prev => {
@@ -71,7 +97,10 @@ export default function RecipesScreen({ navigation }: Props) {
       onPress={() => navigation.navigate('RecipeDetail', { recipeId: item.id })}
     >
       <View style={styles.recipeImage}>
-        <Ionicons name="restaurant" size={32} color={Colors.primary} />
+        {item.imageUrl
+          ? <Image source={{ uri: item.imageUrl }} style={styles.recipeImagePhoto} resizeMode="cover" />
+          : <Ionicons name="restaurant" size={32} color={Colors.primary} />
+        }
       </View>
       <View style={styles.recipeInfo}>
         <Text style={styles.recipeName}>{item.name}</Text>
@@ -118,11 +147,13 @@ export default function RecipesScreen({ navigation }: Props) {
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color={Colors.textSecondary} style={styles.searchIcon} />
         <TextInput
+          ref={searchRef}
           style={styles.searchInput}
           placeholder="Search recipes..."
           placeholderTextColor={Colors.textHint}
           value={search}
           onChangeText={setSearch}
+          returnKeyType="search"
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch('')}>
@@ -214,6 +245,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  recipeImagePhoto: {
+    width: 88,
+    height: '100%',
   },
   recipeInfo: { flex: 1, padding: Spacing.md },
   recipeName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.text },

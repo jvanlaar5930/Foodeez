@@ -1,3 +1,4 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import { MealType } from '@/types';
 
 export type RootStackParamList = {
@@ -16,7 +17,7 @@ export type MainTabParamList = {
   Dashboard: undefined;
   MealLog: undefined;
   MealPlan: undefined;
-  Recipes: undefined;
+  Recipes: NavigatorScreenParams<RecipesStackParamList> | undefined;
   Profile: undefined;
 };
 
@@ -32,6 +33,6 @@ export type MealPlanStackParamList = {
 };
 
 export type RecipesStackParamList = {
-  RecipesList: undefined;
+  RecipesList: { initialSearch?: string } | undefined;
   RecipeDetail: { recipeId: string };
 };

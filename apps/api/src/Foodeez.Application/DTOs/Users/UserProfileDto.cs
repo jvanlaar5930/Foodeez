@@ -18,4 +18,5 @@ public class UserProfileDto
     public float DailyFatTargetG { get; set; }
     public string? Notes { get; set; }
     public bool ProfileCompleted { get; set; }
+    public bool DarkMode { get; set; }
 }

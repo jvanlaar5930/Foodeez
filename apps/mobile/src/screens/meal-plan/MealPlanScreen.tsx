@@ -46,7 +46,7 @@ const MEAL_TYPES = [
   MealType.EveningSnack,
 ];
 
-export default function MealPlanScreen({ navigation }: Props) {
+export function MealPlanScreen({ navigation }: Props) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [showGenerateModal, setShowGenerateModal] = useState(false);

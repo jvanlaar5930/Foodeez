@@ -9,5 +9,7 @@ public interface IUnitOfWork
     IFoodItemRepository FoodItems { get; }
     IMealPlanRepository MealPlans { get; }
     IRecipeRepository Recipes { get; }
+    IAppSettingRepository AppSettings { get; }
+    IAppLogRepository AppLogs { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

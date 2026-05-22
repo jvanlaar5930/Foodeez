@@ -102,8 +102,13 @@ export function RegisterScreen() {
         password: form.password,
       });
       navigation.navigate('ProfileSetup');
-    } catch {
-      Alert.alert('Registration Failed', 'An account with this email may already exist.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string; code?: string };
+      const detail = axiosErr?.response?.data?.detail;
+      const networkHint = axiosErr?.code === 'ERR_NETWORK' || axiosErr?.code === 'ECONNREFUSED'
+        ? `\n\n(Network error: ${axiosErr.message})`
+        : axiosErr?.message ? `\n\n(${axiosErr.message})` : '';
+      Alert.alert('Registration Failed', (detail ?? 'Something went wrong. Please try again.') + networkHint);
     }
   };
 

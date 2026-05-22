@@ -34,7 +34,7 @@ const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
   [ActivityLevel.ExtraActive]: 'Extra Active',
 };
 
-export default function ProfileScreen() {
+export function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const { profile, fetchProfile } = useProfileStore();
   const [weightReminderEnabled, setWeightReminderEnabled] = useState(true);

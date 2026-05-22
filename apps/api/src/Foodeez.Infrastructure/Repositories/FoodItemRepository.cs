@@ -24,4 +24,12 @@ public class FoodItemRepository : BaseRepository<FoodItem>, IFoodItemRepository
         return await _dbSet
             .FirstOrDefaultAsync(f => f.Barcode == barcode);
     }
+
+    public async Task<IReadOnlyList<FoodItem>> GetByFdcIdsAsync(IEnumerable<int> fdcIds)
+    {
+        var ids = fdcIds.ToList();
+        return await _dbSet
+            .Where(f => f.FdcId != null && ids.Contains(f.FdcId.Value))
+            .ToListAsync();
+    }
 }

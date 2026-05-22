@@ -2,6 +2,7 @@ using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.DTOs.Recipes;
 using Foodeez.Application.Interfaces.Repositories;
+using Foodeez.Application.UseCases.Recipes;
 using Foodeez.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,10 +13,24 @@ namespace Foodeez.API.Controllers;
 public class RecipesController : ControllerBase
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly SearchRecipesUseCase _searchUseCase;
 
-    public RecipesController(IUnitOfWork unitOfWork)
+    public RecipesController(IUnitOfWork unitOfWork, SearchRecipesUseCase searchUseCase)
     {
         _unitOfWork = unitOfWork;
+        _searchUseCase = searchUseCase;
+    }
+
+    /// <summary>Search recipes by name/description with DB-first → Spoonacular fallback.</summary>
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(List<RecipeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchRecipes([FromQuery] string q, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return BadRequest("Query parameter 'q' is required.");
+
+        var results = await _searchUseCase.ExecuteAsync(q, ct);
+        return Ok(results);
     }
 
     /// <summary>Get recipes filtered by comma-separated tags.</summary>
@@ -77,7 +92,7 @@ public class RecipesController : ControllerBase
         Ingredients = recipe.Ingredients.Select(i => new RecipeIngredientDto
         {
             FoodItemId = i.FoodItemId,
-            FoodItemName = i.FoodItem?.Name ?? string.Empty,
+            FoodItemName = i.FoodItem?.Name ?? i.IngredientName ?? string.Empty,
             Quantity = i.Quantity,
             Unit = i.Unit,
             Notes = i.Notes

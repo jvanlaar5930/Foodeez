@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -31,6 +32,8 @@ export function DashboardScreen() {
     useMealStore();
   const { macrosSummary } = useNutrition();
   const [refreshing, setRefreshing] = useState(false);
+  const [recipeSearch, setRecipeSearch] = useState('');
+  const searchRef = useRef<TextInput>(null);
 
   const today = formatApiDate(new Date());
   const displayDate = formatDisplayDate(new Date());
@@ -56,6 +59,15 @@ export function DashboardScreen() {
 
   const consumed = nutritionSummary?.totalCalories ?? 0;
   const target = nutritionSummary?.targetCalories ?? 2000;
+
+  const goToRecipes = (query?: string) => {
+    searchRef.current?.blur();
+    navigation.navigate('Recipes', {
+      screen: 'RecipesList',
+      params: { initialSearch: query?.trim() ?? '' },
+    });
+    setRecipeSearch('');
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -83,6 +95,34 @@ export function DashboardScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Recipe Search */}
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.searchBar}
+          onPress={() => searchRef.current?.focus()}
+        >
+          <Ionicons name="search" size={20} color={Colors.primary} style={styles.searchIcon} />
+          <TextInput
+            ref={searchRef}
+            style={styles.searchInput}
+            placeholder="Search recipes to start meal prepping..."
+            placeholderTextColor={Colors.textHint}
+            value={recipeSearch}
+            onChangeText={setRecipeSearch}
+            returnKeyType="search"
+            onSubmitEditing={() => goToRecipes(recipeSearch)}
+          />
+          {recipeSearch.length > 0 ? (
+            <TouchableOpacity onPress={() => setRecipeSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={18} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => goToRecipes()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="arrow-forward-circle" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
 
         {/* Calorie Ring */}
         <Card style={styles.ringCard}>
@@ -207,6 +247,32 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.md,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 2,
+    marginBottom: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryLight,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    minHeight: 52,
+  },
+  searchIcon: {
+    marginRight: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FontSize.md,
+    color: Colors.text,
+    paddingVertical: Spacing.sm,
   },
   ringCard: {
     marginBottom: Spacing.md,

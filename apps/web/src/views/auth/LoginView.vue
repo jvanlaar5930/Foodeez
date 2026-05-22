@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import AppButton from '@/components/ui/AppButton.vue';
 import AppInput from '@/components/ui/AppInput.vue';
+import AppAlert from '@/components/ui/AppAlert.vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -62,13 +63,7 @@ async function handleSubmit() {
         <h1 class="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
         <p class="text-sm text-gray-500 mb-6">Sign in to your account</p>
 
-        <!-- Error alert -->
-        <div
-          v-if="authStore.error"
-          class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"
-        >
-          {{ authStore.error }}
-        </div>
+        <AppAlert v-if="authStore.error" variant="error" :message="authStore.error" class="mb-4" />
 
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <AppInput

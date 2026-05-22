@@ -1,6 +1,7 @@
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.Interfaces.Repositories;
+using Foodeez.Application.UseCases.FoodItems;
 using Foodeez.Domain.Entities;
 using Foodeez.Domain.ValueObjects;
 using Microsoft.AspNetCore.Authorization;
@@ -13,22 +14,23 @@ namespace Foodeez.API.Controllers;
 public class FoodItemsController : ControllerBase
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly SearchFoodItemsUseCase _searchUseCase;
 
-    public FoodItemsController(IUnitOfWork unitOfWork)
+    public FoodItemsController(IUnitOfWork unitOfWork, SearchFoodItemsUseCase searchUseCase)
     {
         _unitOfWork = unitOfWork;
+        _searchUseCase = searchUseCase;
     }
 
-    /// <summary>Search food items by name or brand.</summary>
+    /// <summary>Search food items by name or brand (DB-first, falls back to USDA FoodData Central).</summary>
     [HttpGet("search")]
     [ProducesResponseType(typeof(List<FoodItemDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Search([FromQuery] string query)
+    public async Task<IActionResult> Search([FromQuery] string? q, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(query))
+        if (string.IsNullOrWhiteSpace(q))
             return BadRequest("Search query is required.");
 
-        var items = await _unitOfWork.FoodItems.SearchAsync(query);
-        var dtos = items.Select(MapToDto).ToList();
+        var dtos = await _searchUseCase.ExecuteAsync(q, ct);
         return Ok(dtos);
     }
 
@@ -62,7 +64,7 @@ public class FoodItemsController : ControllerBase
         await _unitOfWork.FoodItems.AddAsync(foodItem);
         await _unitOfWork.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(Search), new { query = foodItem.Name }, MapToDto(foodItem));
+        return CreatedAtAction(nameof(Search), new { q = foodItem.Name }, MapToDto(foodItem));
     }
 
     private static FoodItemDto MapToDto(FoodItem item) => new FoodItemDto

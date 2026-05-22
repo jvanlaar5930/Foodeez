@@ -9,6 +9,9 @@ public class User : BaseEntity
     public string FirstName { get; private set; } = string.Empty;
     public string LastName { get; private set; } = string.Empty;
 
+    public bool IsAdmin { get; set; }
+    public bool IsActive { get; set; } = true;
+
     public UserProfile? Profile { get; set; }
     public ICollection<MealLog> MealLogs { get; set; } = new List<MealLog>();
     public ICollection<MealPlan> MealPlans { get; set; } = new List<MealPlan>();

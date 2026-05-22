@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using System.Text.Json;
+using Foodeez.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Foodeez.API.Middleware;
@@ -8,11 +10,16 @@ public class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly IAppLogger _appLogger;
 
-    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+    public ExceptionHandlingMiddleware(
+        RequestDelegate next,
+        ILogger<ExceptionHandlingMiddleware> logger,
+        IAppLogger appLogger)
     {
-        _next = next;
-        _logger = logger;
+        _next      = next;
+        _logger    = logger;
+        _appLogger = appLogger;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -23,39 +30,51 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unhandled exception occurred while processing the request.");
-            await HandleExceptionAsync(context, ex);
+            _logger.LogError(ex, "Unhandled exception on {Method} {Path}",
+                context.Request.Method, context.Request.Path);
+
+            var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var (statusCode, _) = Classify(ex);
+
+            _appLogger.LogError(
+                ex.Message,
+                exception:     ex,
+                source:        nameof(ExceptionHandlingMiddleware),
+                requestMethod: context.Request.Method,
+                requestPath:   context.Request.Path,
+                userId:        userId,
+                statusCode:    statusCode);
+
+            await WriteResponseAsync(context, ex);
         }
     }
 
-    private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private static async Task WriteResponseAsync(HttpContext context, Exception exception)
     {
-        var (statusCode, title) = exception switch
-        {
-            KeyNotFoundException => (StatusCodes.Status404NotFound, "Resource Not Found"),
-            UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
-            ValidationException => (StatusCodes.Status400BadRequest, "Validation Error"),
-            ArgumentException => (StatusCodes.Status400BadRequest, "Invalid Argument"),
-            InvalidOperationException => (StatusCodes.Status400BadRequest, "Invalid Operation"),
-            _ => (StatusCodes.Status500InternalServerError, "Internal Server Error")
-        };
+        var (statusCode, title) = Classify(exception);
 
         var problemDetails = new ProblemDetails
         {
-            Status = statusCode,
-            Title = title,
-            Detail = exception.Message,
+            Status   = statusCode,
+            Title    = title,
+            Detail   = exception.Message,
             Instance = context.Request.Path
         };
 
         context.Response.ContentType = "application/problem+json";
-        context.Response.StatusCode = statusCode;
+        context.Response.StatusCode  = statusCode;
 
-        var json = JsonSerializer.Serialize(problemDetails, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
-
-        await context.Response.WriteAsync(json);
+        await context.Response.WriteAsync(JsonSerializer.Serialize(problemDetails,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
     }
+
+    private static (int statusCode, string title) Classify(Exception ex) => ex switch
+    {
+        KeyNotFoundException       => (StatusCodes.Status404NotFound,            "Resource Not Found"),
+        UnauthorizedAccessException=> (StatusCodes.Status401Unauthorized,        "Unauthorized"),
+        ValidationException        => (StatusCodes.Status400BadRequest,          "Validation Error"),
+        ArgumentException          => (StatusCodes.Status400BadRequest,          "Invalid Argument"),
+        InvalidOperationException  => (StatusCodes.Status400BadRequest,          "Invalid Operation"),
+        _                          => (StatusCodes.Status500InternalServerError, "Internal Server Error"),
+    };
 }

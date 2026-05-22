@@ -22,6 +22,57 @@ namespace Foodeez.Infrastructure.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
+            modelBuilder.Entity("Foodeez.Domain.Entities.AppLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AdditionalData")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ExceptionMessage")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ExceptionType")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("RequestMethod")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("RequestPath")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Source")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("StackTrace")
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppLogs");
+                });
+
             modelBuilder.Entity("Foodeez.Domain.Entities.FoodItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -45,6 +96,12 @@ namespace Foodeez.Infrastructure.Migrations
 
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("char(36)");
+
+                    b.Property<int?>("FdcId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FdcSyncedAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("IsCustom")
                         .HasColumnType("tinyint(1)");
@@ -261,6 +318,12 @@ namespace Foodeez.Infrastructure.Migrations
                     b.Property<int>("Servings")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SpoonacularId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("SpoonacularSyncedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("Tags")
                         .HasMaxLength(500)
                         .HasColumnType("varchar(500)");
@@ -282,8 +345,11 @@ namespace Foodeez.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<Guid>("FoodItemId")
+                    b.Property<Guid?>("FoodItemId")
                         .HasColumnType("char(36)");
+
+                    b.Property<string>("IngredientName")
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(200)
@@ -624,8 +690,7 @@ namespace Foodeez.Infrastructure.Migrations
                     b.HasOne("Foodeez.Domain.Entities.FoodItem", "FoodItem")
                         .WithMany()
                         .HasForeignKey("FoodItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Foodeez.Domain.Entities.Recipe", "Recipe")
                         .WithMany("Ingredients")

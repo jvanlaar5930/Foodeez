@@ -7,6 +7,7 @@ using Foodeez.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Foodeez.Infrastructure;
 
@@ -38,11 +39,22 @@ public static class DependencyInjection
         // ── AI Service (typed HttpClient) ────────────────────────────────
         services.AddHttpClient<IAIService, ClaudeAIService>();
 
+        // ── Spoonacular Service (typed HttpClient) ────────────────────────
+        services.AddHttpClient<ISpoonacularService, SpoonacularService>();
+
+        // ── USDA FoodData Service (typed HttpClient) ──────────────────────
+        services.AddHttpClient<IFoodDataService, UsdaFoodDataService>();
+
         // ── JWT Service ───────────────────────────────────────────────────
         services.AddSingleton<IJwtService, JwtService>();
 
         // ── Notification Service ──────────────────────────────────────────
         services.AddScoped<INotificationService, NotificationService>();
+
+        // ── Database Logging ──────────────────────────────────────────────
+        services.AddSingleton<LogQueue>();
+        services.AddSingleton<IAppLogger, DbAppLogger>();
+        services.AddHostedService<LogWriterService>();
 
         return services;
     }

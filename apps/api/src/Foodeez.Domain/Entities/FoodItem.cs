@@ -13,6 +13,8 @@ public class FoodItem : BaseEntity
     public string? Barcode { get; set; }
     public bool IsCustom { get; set; }
     public Guid? CreatedByUserId { get; set; }
+    public int? FdcId { get; set; }
+    public DateTime? FdcSyncedAt { get; set; }
 
     public NutritionalInfo NutritionalInfo { get; set; } = NutritionalInfo.Empty;
 }

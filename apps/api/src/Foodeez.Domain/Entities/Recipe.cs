@@ -15,6 +15,8 @@ public class Recipe : BaseEntity
     public string? ImageUrl { get; set; }
     public bool IsAIGenerated { get; set; }
     public Guid? CreatedByUserId { get; set; }
+    public int? SpoonacularId { get; set; }
+    public DateTime? SpoonacularSyncedAt { get; set; }
 
     public NutritionalInfo NutritionalInfoPerServing { get; set; } = NutritionalInfo.Empty;
 

@@ -1,6 +1,10 @@
 using System.Text;
 using Foodeez.API.Middleware;
 using Foodeez.Application.UseCases.AI;
+using Foodeez.Application.UseCases.FoodItems;
+using Foodeez.Application.UseCases.Recipes;
+using Foodeez.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Foodeez.Application.UseCases.Auth;
 using Foodeez.Application.UseCases.MealLogs;
 using Foodeez.Application.UseCases.MealPlans;
@@ -28,6 +32,9 @@ builder.Services.AddScoped<GetMealPlanUseCase>();
 builder.Services.AddScoped<CreateMealPlanUseCase>();
 builder.Services.AddScoped<GenerateAIMealPlanUseCase>();
 builder.Services.AddScoped<GetDietaryRecommendationsUseCase>();
+builder.Services.AddScoped<AnalyzeMealUseCase>();
+builder.Services.AddScoped<SearchRecipesUseCase>();
+builder.Services.AddScoped<SearchFoodItemsUseCase>();
 
 // ── JWT Authentication ────────────────────────────────────────────────────────
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -103,6 +110,13 @@ builder.Services.AddHealthChecks();
 // ═════════════════════════════════════════════════════════════════════════════
 var app = builder.Build();
 // ═════════════════════════════════════════════════════════════════════════════
+
+// ── Auto-migrate on startup ───────────────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 
 // ── Middleware pipeline ───────────────────────────────────────────────────────
 app.UseMiddleware<ExceptionHandlingMiddleware>();

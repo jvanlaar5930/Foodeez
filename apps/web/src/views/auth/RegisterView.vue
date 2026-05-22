@@ -85,9 +85,7 @@
             <p v-if="errors.confirmPassword" class="text-red-500 text-xs mt-1">{{ errors.confirmPassword }}</p>
           </div>
 
-          <div v-if="apiError" class="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p class="text-red-600 text-sm">{{ apiError }}</p>
-          </div>
+          <AppAlert v-if="apiError" variant="error" :message="apiError" />
 
           <button
             type="submit"
@@ -112,6 +110,7 @@
 import { ref, computed } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import AppAlert from '@/components/ui/AppAlert.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();

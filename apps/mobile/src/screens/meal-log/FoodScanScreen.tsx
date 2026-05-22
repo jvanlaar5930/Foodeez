@@ -21,7 +21,7 @@ type Props = NativeStackScreenProps<MealLogStackParamList, 'FoodScan'>;
 
 type ScanState = 'camera' | 'analyzing' | 'results';
 
-export default function FoodScanScreen({ navigation }: Props) {
+export function FoodScanScreen({ navigation }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [scanState, setScanState] = useState<ScanState>('camera');
