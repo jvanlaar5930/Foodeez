@@ -1,3 +1,4 @@
+using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealPlans;
 using Foodeez.Application.UseCases.MealPlans;
 using Microsoft.AspNetCore.Authorization;
@@ -48,9 +49,19 @@ public class MealPlansController : ControllerBase
     [ProducesResponseType(typeof(MealPlanDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GenerateMealPlan([FromBody] GenerateMealPlanRequest request)
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> GenerateMealPlan([FromBody] GenerateMealPlanRequest request, CancellationToken ct)
     {
-        var plan = await _generateAIMealPlanUseCase.ExecuteAsync(request);
-        return CreatedAtAction(nameof(GetMealPlans), new { userId = request.UserId }, plan);
+        try
+        {
+            var plan = await _generateAIMealPlanUseCase.ExecuteAsync(request, ct);
+            return CreatedAtAction(nameof(GetMealPlans), new { userId = request.UserId }, plan);
+        }
+        catch (AIGenerationFailedException ex)
+        {
+            // 503, not 500: the request was fine and retrying is the right response. Nothing
+            // was saved, so there is no half-made plan for the client to reconcile.
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
+        }
     }
 }

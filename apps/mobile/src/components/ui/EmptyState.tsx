@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
-import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 interface EmptyStateProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -13,10 +14,12 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ icon, title, description, actionLabel, onAction }: EmptyStateProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
       <View style={styles.iconContainer}>
-        <Ionicons name={icon} size={56} color={Colors.textHint} />
+        <Ionicons name={icon} size={56} color={C.textHint} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {description && <Text style={styles.description}>{description}</Text>}
@@ -29,7 +32,7 @@ export function EmptyState({ icon, title, description, actionLabel, onAction }: 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -43,13 +46,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.xl,
     fontWeight: FontWeight.semibold,
-    color: Colors.text,
+    color: C.text,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   description: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: Spacing.lg,

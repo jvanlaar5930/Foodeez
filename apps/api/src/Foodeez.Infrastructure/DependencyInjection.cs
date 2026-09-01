@@ -29,15 +29,28 @@ public static class DependencyInjection
         // ── Repositories ──────────────────────────────────────────────────
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IMealLogRepository, MealLogRepository>();
+        services.AddScoped<IDayAnalysisRepository, DayAnalysisRepository>();
         services.AddScoped<IFoodItemRepository, FoodItemRepository>();
         services.AddScoped<IMealPlanRepository, MealPlanRepository>();
         services.AddScoped<IRecipeRepository, RecipeRepository>();
+        services.AddScoped<ISavedRecipeRepository, SavedRecipeRepository>();
+        services.AddScoped<IAppSettingRepository, AppSettingRepository>();
+        services.AddScoped<IAppLogRepository, AppLogRepository>();
 
         // ── Unit of Work ──────────────────────────────────────────────────
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-        // ── AI Service (typed HttpClient) ────────────────────────────────
-        services.AddHttpClient<IAIService, ClaudeAIService>();
+        // ── AI Services ──────────────────────────────────────────────────
+        // Concrete implementations registered directly (DynamicAIService resolves by name)
+        services.AddHttpClient<ClaudeAIService>();
+        services.AddHttpClient<GeminiAIService>();
+        services.AddHttpClient<GroqAIService>();
+        services.AddHttpClient<OllamaAIService>();
+        // Self-hosted OpenAI-compatible servers (LM Studio, llama.cpp, vLLM, LocalAI, …). They can
+        // spend minutes on one prompt, so the deadline is set per request instead of by HttpClient.
+        services.AddHttpClient<LocalAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        // DynamicAIService is the active IAIService — reads provider from AppSettings at runtime
+        services.AddScoped<IAIService, DynamicAIService>();
 
         // ── Spoonacular Service (typed HttpClient) ────────────────────────
         services.AddHttpClient<ISpoonacularService, SpoonacularService>();

@@ -26,7 +26,8 @@ import {
   formatCalories,
   formatMacro,
 } from '@/utils/nutritionUtils';
-import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 const TOTAL_STEPS = 4;
 
@@ -108,6 +109,8 @@ const GENDER_OPTIONS = [
 ];
 
 export function ProfileSetupScreen() {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const user = useAuthStore((state) => state.user);
   const { updateProfile, isLoading } = useProfileStore();
 
@@ -368,8 +371,8 @@ export function ProfileSetupScreen() {
                 <View style={styles.macroDivider} />
                 <View style={styles.macroGrid}>
                   {[
-                    { label: 'Protein', value: targets.protein, color: Colors.info },
-                    { label: 'Carbs', value: targets.carbs, color: Colors.secondary },
+                    { label: 'Protein', value: targets.protein, color: C.info },
+                    { label: 'Carbs', value: targets.carbs, color: C.secondary },
                     { label: 'Fat', value: targets.fat, color: '#FFC107' },
                   ].map((macro) => (
                     <View key={macro.label} style={styles.macroItem}>
@@ -424,10 +427,10 @@ export function ProfileSetupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.background,
   },
   flex: {
     flex: 1,
@@ -443,19 +446,19 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.divider,
+    backgroundColor: C.divider,
   },
   stepDotActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     width: 24,
   },
   stepDotCompleted: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: C.primaryDark,
   },
   stepLabel: {
     textAlign: 'center',
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginTop: Spacing.xs,
     marginBottom: Spacing.md,
   },
@@ -469,19 +472,19 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: FontSize.xxl,
     fontWeight: FontWeight.bold,
-    color: Colors.text,
+    color: C.text,
     marginBottom: Spacing.xs,
   },
   stepSubtitle: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginBottom: Spacing.xl,
     lineHeight: 22,
   },
   fieldLabel: {
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium,
-    color: Colors.text,
+    color: C.text,
     marginBottom: Spacing.sm,
   },
   genderRow: {
@@ -495,20 +498,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
     borderWidth: 1.5,
-    borderColor: Colors.divider,
-    backgroundColor: Colors.surface,
+    borderColor: C.divider,
+    backgroundColor: C.surface,
   },
   genderBtnActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
+    borderColor: C.primary,
+    backgroundColor: C.primaryLight,
   },
   genderBtnText: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     fontWeight: FontWeight.medium,
   },
   genderBtnTextActive: {
-    color: Colors.primaryDark,
+    color: C.primaryDark,
   },
   goalList: {
     gap: Spacing.sm,
@@ -516,16 +519,16 @@ const styles = StyleSheet.create({
   goalCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     borderWidth: 1.5,
-    borderColor: Colors.divider,
+    borderColor: C.divider,
     gap: Spacing.md,
   },
   goalCardActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
+    borderColor: C.primary,
+    backgroundColor: C.primaryLight,
   },
   goalEmoji: {
     fontSize: 28,
@@ -538,32 +541,32 @@ const styles = StyleSheet.create({
   goalTitle: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold,
-    color: Colors.text,
+    color: C.text,
     marginBottom: 2,
   },
   goalTitleActive: {
-    color: Colors.primaryDark,
+    color: C.primaryDark,
   },
   goalDesc: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     lineHeight: 18,
   },
   checkCircle: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkMark: {
-    color: Colors.surface,
+    color: C.surface,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.bold,
   },
   targetCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.xl,
     alignItems: 'center',
@@ -576,16 +579,16 @@ const styles = StyleSheet.create({
   calorieValue: {
     fontSize: 36,
     fontWeight: FontWeight.bold,
-    color: Colors.primary,
+    color: C.primary,
   },
   calorieLabel: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   macroDivider: {
     width: '80%',
     height: 1,
-    backgroundColor: Colors.divider,
+    backgroundColor: C.divider,
     marginBottom: Spacing.lg,
   },
   macroGrid: {
@@ -602,18 +605,18 @@ const styles = StyleSheet.create({
   },
   macroLabel: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginTop: 2,
   },
   noteCard: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: C.primaryLight,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.lg,
   },
   noteText: {
     fontSize: FontSize.sm,
-    color: Colors.primaryDark,
+    color: C.primaryDark,
     lineHeight: 20,
     textAlign: 'center',
   },

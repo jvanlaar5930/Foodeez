@@ -12,8 +12,8 @@ public class ParseFoodImageUseCase
         _aiService = aiService;
     }
 
-    public async Task<ParsedFoodDto> ExecuteAsync(byte[] imageData, string? mimeType = "image/jpeg")
+    public async Task<ParsedFoodDto> ExecuteAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
-        return await _aiService.ParseFoodImageAsync(imageData, mimeType);
+        return await _aiService.ParseFoodImageAsync(imageData, mimeType, ct);
     }
 }

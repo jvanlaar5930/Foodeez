@@ -17,6 +17,24 @@ public class MealLogConfiguration : IEntityTypeConfiguration<MealLog>
 
         builder.HasIndex(m => new { m.UserId, m.LogDate });
 
+        // The AI analysis lives on the meal_logs row: nullable until a score has been
+        // generated, and the two string lists round-trip as JSON in a single text column each.
+        builder.OwnsOne(m => m.Analysis, a =>
+        {
+            a.Property(x => x.Score).HasColumnName("analysis_score");
+            a.Property(x => x.Completeness).HasColumnName("analysis_completeness").HasMaxLength(500);
+            a.Property(x => x.Missing)
+                .HasColumnName("analysis_missing")
+                .HasColumnType("text")
+                .HasConversion(JsonStringList.Converter, JsonStringList.Comparer);
+            a.Property(x => x.Suggestions)
+                .HasColumnName("analysis_suggestions")
+                .HasColumnType("text")
+                .HasConversion(JsonStringList.Converter, JsonStringList.Comparer);
+            a.Property(x => x.Fingerprint).HasColumnName("analysis_fingerprint").HasMaxLength(64);
+            a.Property(x => x.GeneratedAt).HasColumnName("analysis_generated_at");
+        });
+
         builder.HasMany(m => m.Items)
             .WithOne(i => i.MealLog)
             .HasForeignKey(i => i.MealLogId)

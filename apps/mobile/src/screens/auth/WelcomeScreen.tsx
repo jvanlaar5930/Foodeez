@@ -5,7 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
-import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 import type { AuthStackParamList } from '@/navigation/types';
 
 type WelcomeNav = NativeStackNavigationProp<AuthStackParamList, 'Welcome'>;
@@ -29,6 +30,8 @@ const FEATURES = [
 ];
 
 export function WelcomeScreen() {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<WelcomeNav>();
 
   return (
@@ -48,7 +51,7 @@ export function WelcomeScreen() {
           {FEATURES.map((feature) => (
             <View key={feature.title} style={styles.featureRow}>
               <View style={styles.featureIcon}>
-                <Ionicons name={feature.icon} size={24} color={Colors.primary} />
+                <Ionicons name={feature.icon} size={24} color={C.primary} />
               </View>
               <View style={styles.featureText}>
                 <Text style={styles.featureTitle}>{feature.title}</Text>
@@ -78,10 +81,10 @@ export function WelcomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.background,
   },
   container: {
     flex: 1,
@@ -97,7 +100,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: C.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.md,
@@ -108,12 +111,12 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 42,
     fontWeight: FontWeight.bold,
-    color: Colors.primary,
+    color: C.primary,
     letterSpacing: -1,
   },
   tagline: {
     fontSize: FontSize.lg,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginTop: Spacing.xs,
     textAlign: 'center',
   },
@@ -130,7 +133,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 14,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: C.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -141,12 +144,12 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: FontSize.lg,
     fontWeight: FontWeight.semibold,
-    color: Colors.text,
+    color: C.text,
     marginBottom: 2,
   },
   featureDesc: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     lineHeight: 20,
   },
   buttons: {
@@ -159,7 +162,7 @@ const styles = StyleSheet.create({
   },
   loginLinkText: {
     fontSize: FontSize.md,
-    color: Colors.primary,
+    color: C.primary,
     fontWeight: FontWeight.medium,
   },
 });

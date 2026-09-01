@@ -76,6 +76,8 @@ public class AuthController : ControllerBase
             FirstName = user.FirstName,
             LastName = user.LastName,
             ProfileCompleted = user.Profile?.ProfileCompleted ?? false,
+            IsAdmin = user.IsAdmin,
+            IsActive = user.IsActive
         });
     }
 }

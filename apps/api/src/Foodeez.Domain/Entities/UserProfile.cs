@@ -20,6 +20,7 @@ public class UserProfile : BaseEntity
     public string? Notes { get; set; }
     public bool ProfileCompleted { get; set; }
     public bool DarkMode { get; set; }
+    public UnitSystem UnitSystem { get; set; } = UnitSystem.US;
 
     public User User { get; set; } = null!;
 

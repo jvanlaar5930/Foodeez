@@ -22,7 +22,7 @@ public class JwtService : IJwtService
         var key = GetSecurityKey();
         var expiryHours = int.TryParse(_configuration["Jwt:ExpiryHours"], out var h) ? h : 24;
 
-        var claims = new[]
+        var claimList = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
@@ -31,6 +31,11 @@ public class JwtService : IJwtService
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
         };
+
+        if (user.IsAdmin)
+            claimList.Add(new Claim(ClaimTypes.Role, "Admin"));
+
+        var claims = claimList.ToArray();
 
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],

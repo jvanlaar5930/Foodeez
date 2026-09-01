@@ -22,13 +22,24 @@ export enum DietaryGoal {
   GeneralHealth = 'general_health',
 }
 
+export enum UnitSystem {
+  US = 'US',
+  Metric = 'Metric',
+}
+
+/**
+ * Values are the API's own enum member names. The server serialises MealType with
+ * JsonStringEnumConverter and no naming policy, so it emits "MorningSnack", not
+ * "morning_snack" - and a mismatch here silently empties every meal slot rather than
+ * failing loudly.
+ */
 export enum MealType {
-  Breakfast = 'breakfast',
-  MorningSnack = 'morning_snack',
-  Lunch = 'lunch',
-  AfternoonSnack = 'afternoon_snack',
-  Dinner = 'dinner',
-  EveningSnack = 'evening_snack',
+  Breakfast = 'Breakfast',
+  MorningSnack = 'MorningSnack',
+  Lunch = 'Lunch',
+  AfternoonSnack = 'AfternoonSnack',
+  Dinner = 'Dinner',
+  EveningSnack = 'EveningSnack',
 }
 
 // Core types
@@ -65,6 +76,8 @@ export interface UserProfileDto {
   dailyFatTargetG: number;
   notes?: string;
   profileCompleted: boolean;
+  darkMode: boolean;
+  unitSystem: UnitSystem;
 }
 
 export interface FoodItemDto {
@@ -122,15 +135,17 @@ export interface MealPlanEntryDto {
 
 export interface MealPlanDto {
   id: string;
+  userId: string;
   name: string;
   startDate: string;
   endDate: string;
   isAIGenerated: boolean;
-  entries: MealPlanEntryDto[];
+  /** Entries grouped by 'yyyy-MM-dd'. The API has never sent a flat `entries` array. */
+  entriesByDate: Record<string, MealPlanEntryDto[]>;
 }
 
 export interface RecipeIngredientDto {
-  foodItemId: string;
+  foodItemId?: string;
   foodItemName: string;
   quantity: number;
   unit: string;
@@ -141,13 +156,23 @@ export interface RecipeDto {
   id: string;
   name: string;
   description?: string;
-  instructions: string[];
+  /** Newline-separated steps, each already prefixed with its number by the API. */
+  instructions: string;
   prepTimeMinutes: number;
   cookTimeMinutes: number;
   servings: number;
-  tags: string[];
+  /** Comma-joined tag list. */
+  tags?: string;
   imageUrl?: string;
   isAIGenerated: boolean;
+  /** Where the recipe was published, shown when we have no method of our own. */
+  sourceUrl?: string;
+  sourceName?: string;
+  /** False when the upstream source has no method for this recipe at all. */
+  hasInstructions?: boolean;
+  /** True when the method could not be fetched this time - worth retrying, unlike the above. */
+  detailUnavailable?: boolean;
+  createdByUserId?: string;
   ingredients: RecipeIngredientDto[];
   nutritionalInfoPerServing: NutritionalInfo;
 }
@@ -209,6 +234,8 @@ export interface UpdateProfileRequest {
   activityLevel?: ActivityLevel;
   dietaryGoal?: DietaryGoal;
   notes?: string;
+  darkMode?: boolean;
+  unitSystem?: UnitSystem;
 }
 
 export interface GenerateMealPlanRequest {

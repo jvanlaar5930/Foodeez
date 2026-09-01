@@ -23,8 +23,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
 import { useAuthStore } from '@/store/authStore';
-import { MealPlanEntry, MealType } from '@/types';
-import { Colors, Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { MealPlanEntryDto, MealType } from '@/types';
+import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealPlanStackParamList, 'MealPlanHome'>;
 
@@ -46,7 +47,18 @@ const MEAL_TYPES = [
   MealType.EveningSnack,
 ];
 
+/**
+ * What to call a planned meal. AI-generated entries have no Recipe or FoodItem row behind
+ * them, so both names are null and the meal's own name is in `notes` - without this every
+ * generated slot read "Custom meal".
+ */
+function entryLabel(entry: MealPlanEntryDto): string {
+  return entry.recipeName ?? entry.foodItemName ?? entry.notes ?? 'Custom meal';
+}
+
 export function MealPlanScreen({ navigation }: Props) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -61,15 +73,16 @@ export function MealPlanScreen({ navigation }: Props) {
   }, [user?.id]);
 
   const getEntriesForDay = useCallback(
-    (date: Date): MealPlanEntry[] => {
-      if (!activePlan) return [];
+    (date: Date): MealPlanEntryDto[] => {
+      // Already grouped by date on the server, so this is a lookup rather than a scan.
+      // The ?? [] matters: a day with no meals simply has no key.
       const dateStr = format(date, 'yyyy-MM-dd');
-      return activePlan.entries.filter(e => e.entryDate === dateStr);
+      return activePlan?.entriesByDate?.[dateStr] ?? [];
     },
     [activePlan]
   );
 
-  const getEntryForDayAndMeal = (date: Date, mealType: MealType): MealPlanEntry | undefined => {
+  const getEntryForDayAndMeal = (date: Date, mealType: MealType): MealPlanEntryDto | undefined => {
     return getEntriesForDay(date).find(e => e.mealType === mealType);
   };
 
@@ -95,13 +108,13 @@ export function MealPlanScreen({ navigation }: Props) {
       {/* Week navigation */}
       <View style={styles.weekHeader}>
         <TouchableOpacity onPress={() => setWeekStart(d => addDays(d, -7))}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={C.text} />
         </TouchableOpacity>
         <Text style={styles.weekLabel}>
           {format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d, yyyy')}
         </Text>
         <TouchableOpacity onPress={() => setWeekStart(d => addDays(d, 7))}>
-          <Ionicons name="chevron-forward" size={24} color={Colors.text} />
+          <Ionicons name="chevron-forward" size={24} color={C.text} />
         </TouchableOpacity>
       </View>
 
@@ -137,14 +150,14 @@ export function MealPlanScreen({ navigation }: Props) {
             style={styles.addDayButton}
             onPress={() => navigation.navigate('CalendarDay', { date: format(selectedDay, 'yyyy-MM-dd') })}
           >
-            <Ionicons name="create-outline" size={18} color={Colors.primary} />
+            <Ionicons name="create-outline" size={18} color={C.primary} />
             <Text style={styles.addDayButtonText}>Edit Day</Text>
           </TouchableOpacity>
         </View>
 
         {/* Meal slots for selected day */}
         {isLoading ? (
-          <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: Spacing.xl }} />
+          <ActivityIndicator size="large" color={C.primary} style={{ marginTop: Spacing.xl }} />
         ) : (
           MEAL_TYPES.map(mealType => {
             const entry = getEntryForDayAndMeal(selectedDay, mealType);
@@ -157,15 +170,15 @@ export function MealPlanScreen({ navigation }: Props) {
                 <View style={styles.mealSlotLeft}>
                   <Text style={styles.mealSlotType}>{MEAL_TYPE_LABELS[mealType]}</Text>
                   {entry ? (
-                    <Text style={styles.mealSlotName}>{entry.recipeName ?? entry.foodItemName ?? 'Custom meal'}</Text>
+                    <Text style={styles.mealSlotName} numberOfLines={2}>{entryLabel(entry)}</Text>
                   ) : (
                     <Text style={styles.mealSlotEmpty}>Not planned</Text>
                   )}
                 </View>
                 {entry ? (
-                  <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
+                  <Ionicons name="checkmark-circle" size={22} color={C.primary} />
                 ) : (
-                  <Ionicons name="add-circle-outline" size={22} color={Colors.textSecondary} />
+                  <Ionicons name="add-circle-outline" size={22} color={C.textSecondary} />
                 )}
               </TouchableOpacity>
             );
@@ -175,13 +188,13 @@ export function MealPlanScreen({ navigation }: Props) {
         {/* AI generate section */}
         {!isGenerating && !hasEntriesThisWeek && (
           <View style={styles.generateBanner}>
-            <Ionicons name="sparkles" size={32} color={Colors.secondary} />
+            <Ionicons name="sparkles" size={32} color={C.secondary} />
             <Text style={styles.generateTitle}>Let AI plan your week</Text>
             <Text style={styles.generateSubtitle}>
               Get a personalized meal plan based on your dietary goals and preferences.
             </Text>
             <TouchableOpacity style={styles.generateButton} onPress={() => setShowGenerateModal(true)}>
-              <Ionicons name="sparkles" size={18} color={Colors.surface} />
+              <Ionicons name="sparkles" size={18} color={C.surface} />
               <Text style={styles.generateButtonText}>Generate AI Meal Plan</Text>
             </TouchableOpacity>
           </View>
@@ -189,7 +202,7 @@ export function MealPlanScreen({ navigation }: Props) {
 
         {isGenerating && (
           <View style={styles.generatingState}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={C.primary} />
             <Text style={styles.generatingText}>AI is crafting your meal plan...</Text>
             <Text style={styles.generatingSubText}>This may take a moment</Text>
           </View>
@@ -200,7 +213,7 @@ export function MealPlanScreen({ navigation }: Props) {
       <Modal visible={showGenerateModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Ionicons name="sparkles" size={40} color={Colors.secondary} />
+            <Ionicons name="sparkles" size={40} color={C.secondary} />
             <Text style={styles.modalTitle}>Generate AI Meal Plan</Text>
             <Text style={styles.modalText}>
               AI will create a complete meal plan for the week of{' '}
@@ -222,20 +235,20 @@ export function MealPlanScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (C: Palette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
   weekHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: C.divider,
   },
-  weekLabel: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.text },
-  daysRow: { backgroundColor: Colors.surface, maxHeight: 88 },
+  weekLabel: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: C.text },
+  daysRow: { backgroundColor: C.surface, maxHeight: 88 },
   daysRowContent: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm },
   dayPill: {
     alignItems: 'center',
@@ -244,14 +257,14 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     minWidth: 52,
     borderWidth: 1,
-    borderColor: Colors.divider,
+    borderColor: C.divider,
   },
-  dayPillSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  dayPillName: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
-  dayPillNumber: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.text, marginTop: 2 },
-  dayPillTextSelected: { color: Colors.surface },
-  dayDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary, marginTop: 2 },
-  dayDotSelected: { backgroundColor: Colors.surface },
+  dayPillSelected: { backgroundColor: C.primary, borderColor: C.primary },
+  dayPillName: { fontSize: FontSize.xs, color: C.textSecondary, fontWeight: FontWeight.medium },
+  dayPillNumber: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text, marginTop: 2 },
+  dayPillTextSelected: { color: C.surface },
+  dayDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary, marginTop: 2 },
+  dayDotSelected: { backgroundColor: C.surface },
   todayIndicator: {
     position: 'absolute',
     top: 4,
@@ -259,29 +272,29 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.secondary,
+    backgroundColor: C.secondary,
   },
   content: { flex: 1 },
   contentPadding: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: Spacing.xl },
   dayHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
-  dayTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.text },
+  dayTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text },
   addDayButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  addDayButtonText: { color: Colors.primary, fontWeight: FontWeight.medium },
+  addDayButtonText: { color: C.primary, fontWeight: FontWeight.medium },
   mealSlot: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     ...Shadows.sm,
   },
   mealSlotLeft: { flex: 1 },
-  mealSlotType: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
-  mealSlotName: { fontSize: FontSize.md, color: Colors.text, fontWeight: FontWeight.semibold, marginTop: 2 },
-  mealSlotEmpty: { fontSize: FontSize.md, color: Colors.textHint, fontStyle: 'italic', marginTop: 2 },
+  mealSlotType: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
+  mealSlotName: { fontSize: FontSize.md, color: C.text, fontWeight: FontWeight.semibold, marginTop: 2 },
+  mealSlotEmpty: { fontSize: FontSize.md, color: C.textHint, fontStyle: 'italic', marginTop: 2 },
   generateBanner: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     alignItems: 'center',
@@ -289,31 +302,31 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     ...Shadows.md,
     borderWidth: 1,
-    borderColor: Colors.primaryLight,
+    borderColor: C.primaryLight,
   },
-  generateTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.text },
-  generateSubtitle: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center' },
+  generateTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: C.text },
+  generateSubtitle: { fontSize: FontSize.md, color: C.textSecondary, textAlign: 'center' },
   generateButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.secondary,
+    backgroundColor: C.secondary,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
     marginTop: Spacing.sm,
   },
-  generateButtonText: { color: Colors.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  generateButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
   generatingState: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
-  generatingText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.text },
-  generatingSubText: { fontSize: FontSize.md, color: Colors.textSecondary },
-  modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
-  modalContent: { backgroundColor: Colors.surface, borderRadius: BorderRadius.xl, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md, width: '100%' },
-  modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.text },
-  modalText: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  generatingText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: C.text },
+  generatingSubText: { fontSize: FontSize.md, color: C.textSecondary },
+  modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
+  modalContent: { backgroundColor: C.surface, borderRadius: BorderRadius.xl, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md, width: '100%' },
+  modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: C.text },
+  modalText: { fontSize: FontSize.md, color: C.textSecondary, textAlign: 'center', lineHeight: 22 },
   modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm, width: '100%' },
-  modalCancel: { flex: 1, borderWidth: 2, borderColor: Colors.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalCancelText: { color: Colors.textSecondary, fontWeight: FontWeight.semibold },
-  modalConfirm: { flex: 1, backgroundColor: Colors.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalConfirmText: { color: Colors.surface, fontWeight: FontWeight.semibold },
+  modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
+  modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
+  modalConfirm: { flex: 1, backgroundColor: C.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
+  modalConfirmText: { color: C.surface, fontWeight: FontWeight.semibold },
 });

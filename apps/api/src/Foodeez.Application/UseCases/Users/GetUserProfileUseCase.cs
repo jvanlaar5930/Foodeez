@@ -37,7 +37,9 @@ public class GetUserProfileUseCase
             DailyCarbTargetG = profile.DailyCarbTargetG,
             DailyFatTargetG = profile.DailyFatTargetG,
             Notes = profile.Notes,
-            ProfileCompleted = profile.ProfileCompleted
+            ProfileCompleted = profile.ProfileCompleted,
+            DarkMode = profile.DarkMode,
+            UnitSystem = profile.UnitSystem
         };
     }
 }

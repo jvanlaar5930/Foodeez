@@ -9,6 +9,14 @@ public class MealLogRepository : BaseRepository<MealLog>, IMealLogRepository
 {
     public MealLogRepository(AppDbContext context) : base(context) { }
 
+    public async Task<MealLog?> GetDetailedByIdAsync(Guid id)
+    {
+        return await _dbSet
+            .Include(m => m.Items)
+                .ThenInclude(i => i.FoodItem)
+            .FirstOrDefaultAsync(m => m.Id == id);
+    }
+
     public async Task<IReadOnlyList<MealLog>> GetByUserAndDateAsync(Guid userId, DateOnly date)
     {
         return await _dbSet

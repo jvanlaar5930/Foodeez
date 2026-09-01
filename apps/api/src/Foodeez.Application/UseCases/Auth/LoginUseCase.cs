@@ -21,6 +21,9 @@ public class LoginUseCase
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedAccessException("Invalid email or password.");
 
+        if (!user.IsActive)
+            throw new UnauthorizedAccessException("Your account has been disabled. Please contact an administrator.");
+
         var token = jwt.GenerateToken(user);
 
         return new AuthResponse
@@ -33,7 +36,9 @@ public class LoginUseCase
                 Email = user.Email,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
-                ProfileCompleted = user.Profile?.ProfileCompleted ?? false
+                ProfileCompleted = user.Profile?.ProfileCompleted ?? false,
+                IsAdmin = user.IsAdmin,
+                IsActive = user.IsActive
             }
         };
     }

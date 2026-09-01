@@ -7,7 +7,8 @@ import {
   View,
   type TouchableOpacityProps,
 } from 'react-native';
-import { BorderRadius, Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -32,6 +33,8 @@ export function Button({
   onPress,
   ...props
 }: ButtonProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const isDisabled = disabled || loading;
 
   return (
@@ -51,7 +54,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'outline' || variant === 'ghost' ? Colors.primary : Colors.surface}
+          color={variant === 'outline' || variant === 'ghost' ? C.primary : C.surface}
         />
       ) : (
         <View style={styles.content}>
@@ -65,7 +68,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   base: {
     borderRadius: BorderRadius.md,
     alignItems: 'center',
@@ -89,21 +92,21 @@ const styles = StyleSheet.create({
 
   // Variants
   primary: {
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
   },
   secondary: {
-    backgroundColor: Colors.secondary,
+    backgroundColor: C.secondary,
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: C.primary,
   },
   ghost: {
     backgroundColor: 'transparent',
   },
   danger: {
-    backgroundColor: Colors.error,
+    backgroundColor: C.error,
   },
 
   // Sizes
@@ -129,19 +132,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   primaryText: {
-    color: Colors.surface,
+    color: C.surface,
   },
   secondaryText: {
-    color: Colors.surface,
+    color: C.surface,
   },
   outlineText: {
-    color: Colors.primary,
+    color: C.primary,
   },
   ghostText: {
-    color: Colors.primary,
+    color: C.primary,
   },
   dangerText: {
-    color: Colors.surface,
+    color: C.surface,
   },
   smText: {
     fontSize: FontSize.sm,

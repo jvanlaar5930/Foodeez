@@ -15,3 +15,37 @@ export async function updateUserProfile(userId: string, data: Record<string, unk
   const response = await api.put(`/users/${userId}/profile`, data);
   return response.data;
 }
+
+/** A home-cooked dish described in the cook's own terms. */
+export interface EstimateNutritionRequest {
+  name: string;
+  ingredients?: string;
+  servings: number;
+  servingDescription?: string;
+}
+
+export interface EstimatedNutrition {
+  perServing: {
+    calories: number;
+    protein: number;
+    carbohydrates: number;
+    fat: number;
+    fiber: number;
+    sugar: number;
+    sodium: number;
+  };
+  servingSize: number;
+  servingUnit: string;
+  confidence: 'low' | 'medium' | 'high';
+  assumptions?: string;
+  assumedIngredients: string[];
+  /** False when no estimate could be produced; fall back to manual entry. */
+  succeeded: boolean;
+}
+
+export async function estimateNutrition(
+  data: EstimateNutritionRequest,
+): Promise<EstimatedNutrition> {
+  const response = await api.post<EstimatedNutrition>('/ai/estimate-nutrition', data);
+  return response.data;
+}

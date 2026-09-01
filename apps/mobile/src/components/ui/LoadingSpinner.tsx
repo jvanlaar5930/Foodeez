@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { Colors, FontSize, Spacing } from '@/constants/theme';
+import { FontSize, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 interface LoadingSpinnerProps {
   message?: string;
@@ -8,20 +9,19 @@ interface LoadingSpinnerProps {
   color?: string;
 }
 
-export function LoadingSpinner({
-  message,
-  size = 'large',
-  color = Colors.primary,
-}: LoadingSpinnerProps) {
+export function LoadingSpinner({ message, size = 'large', color }: LoadingSpinnerProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const spinnerColor = color ?? C.primary;
   return (
     <View style={styles.container}>
-      <ActivityIndicator size={size} color={color} />
+      <ActivityIndicator size={size} color={spinnerColor} />
       {message && <Text style={styles.message}>{message}</Text>}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
   message: {
     marginTop: Spacing.md,
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textAlign: 'center',
   },
 });

@@ -1,3 +1,4 @@
+using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.UseCases.MealLogs;
@@ -15,17 +16,29 @@ public class MealLogsController : ControllerBase
     private readonly ParseFoodImageUseCase _parseFoodImageUseCase;
     private readonly GetDailyLogsUseCase _getDailyLogsUseCase;
     private readonly GetNutritionSummaryUseCase _getNutritionSummaryUseCase;
+    private readonly UpdateMealLogUseCase _updateMealLogUseCase;
+    private readonly DeleteMealLogUseCase _deleteMealLogUseCase;
+    private readonly AnalyzeMealLogUseCase _analyzeMealLogUseCase;
+    private readonly AnalyzeDayUseCase _analyzeDayUseCase;
 
     public MealLogsController(
         LogMealUseCase logMealUseCase,
         ParseFoodImageUseCase parseFoodImageUseCase,
         GetDailyLogsUseCase getDailyLogsUseCase,
-        GetNutritionSummaryUseCase getNutritionSummaryUseCase)
+        GetNutritionSummaryUseCase getNutritionSummaryUseCase,
+        UpdateMealLogUseCase updateMealLogUseCase,
+        DeleteMealLogUseCase deleteMealLogUseCase,
+        AnalyzeMealLogUseCase analyzeMealLogUseCase,
+        AnalyzeDayUseCase analyzeDayUseCase)
     {
         _logMealUseCase = logMealUseCase;
         _parseFoodImageUseCase = parseFoodImageUseCase;
         _getDailyLogsUseCase = getDailyLogsUseCase;
         _getNutritionSummaryUseCase = getNutritionSummaryUseCase;
+        _updateMealLogUseCase = updateMealLogUseCase;
+        _deleteMealLogUseCase = deleteMealLogUseCase;
+        _analyzeMealLogUseCase = analyzeMealLogUseCase;
+        _analyzeDayUseCase = analyzeDayUseCase;
     }
 
     /// <summary>Log a meal with food items and quantities.</summary>
@@ -39,21 +52,56 @@ public class MealLogsController : ControllerBase
         return CreatedAtAction(nameof(LogMeal), new { id = result.Id }, result);
     }
 
+    /// <summary>Update an existing meal log and replace its items.</summary>
+    [HttpPut("{mealLogId:guid}")]
+    [ProducesResponseType(typeof(MealLogDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateMealLog(Guid mealLogId, [FromBody] LogMealRequest request)
+    {
+        var result = await _updateMealLogUseCase.ExecuteAsync(mealLogId, request);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get the AI analysis of a logged meal. The analysis is generated and stored on first
+    /// request and served from storage afterwards; pass refresh=true to force a new one, and
+    /// note that editing the meal's items discards the old score by itself.
+    /// </summary>
+    [HttpPost("{mealLogId:guid}/analysis")]
+    [ProducesResponseType(typeof(MealAnalysisDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AnalyzeMealLog(Guid mealLogId, [FromQuery] bool refresh, CancellationToken ct)
+    {
+        var analysis = await _analyzeMealLogUseCase.ExecuteAsync(mealLogId, refresh, ct);
+        return Ok(analysis);
+    }
+
+    /// <summary>Delete an existing meal log.</summary>
+    [HttpDelete("{mealLogId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteMealLog(Guid mealLogId)
+    {
+        await _deleteMealLogUseCase.ExecuteAsync(mealLogId);
+        return NoContent();
+    }
+
     /// <summary>Parse a food image using AI to extract nutritional information.</summary>
     [HttpPost("parse-image")]
     [ProducesResponseType(typeof(ParsedFoodDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ParseFoodImage(IFormFile image)
+    public async Task<IActionResult> ParseFoodImage(IFormFile image, CancellationToken ct)
     {
         if (image == null || image.Length == 0)
             return BadRequest("No image file provided.");
 
         using var ms = new MemoryStream();
-        await image.CopyToAsync(ms);
+        await image.CopyToAsync(ms, ct);
         var imageData = ms.ToArray();
         var mimeType = image.ContentType;
 
-        var result = await _parseFoodImageUseCase.ExecuteAsync(imageData, mimeType);
+        var result = await _parseFoodImageUseCase.ExecuteAsync(imageData, mimeType, ct);
         return Ok(result);
     }
 
@@ -67,6 +115,56 @@ public class MealLogsController : ControllerBase
 
         var logs = await _getDailyLogsUseCase.ExecuteAsync(userId, parsedDate);
         return Ok(logs);
+    }
+
+    /// <summary>
+    /// The stored AI analysis of a day, or 204 when there is none yet for the day as it now
+    /// stands. Never calls the AI provider, so a page can ask for it on every load.
+    /// </summary>
+    [HttpGet("day-analysis")]
+    [ProducesResponseType(typeof(DayAnalysisDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> GetDayAnalysis([FromQuery] Guid userId, [FromQuery] string date)
+    {
+        if (!DateOnly.TryParse(date, out var parsedDate))
+            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
+
+        var analysis = await _analyzeDayUseCase.PeekAsync(userId, parsedDate);
+        return analysis == null ? NoContent() : Ok(analysis);
+    }
+
+    /// <summary>
+    /// Analyze a whole day of meals: how it stands against the user's targets and what to eat
+    /// to round it out. The result is stored and reused until the day's meals or targets
+    /// change; pass refresh=true to spend another AI call on a fresh one.
+    /// </summary>
+    [HttpPost("day-analysis")]
+    [ProducesResponseType(typeof(DayAnalysisDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> AnalyzeDay(
+        [FromQuery] Guid userId,
+        [FromQuery] string date,
+        [FromQuery] bool refresh,
+        CancellationToken ct)
+    {
+        if (!DateOnly.TryParse(date, out var parsedDate))
+            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
+
+        try
+        {
+            return Ok(await _analyzeDayUseCase.ExecuteAsync(userId, parsedDate, refresh, ct));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (AIGenerationFailedException ex)
+        {
+            // 503, not 500: the request was fine and retrying is the right response. Nothing
+            // was stored, so there is no half-made analysis for the client to reconcile.
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
+        }
     }
 
     /// <summary>Get nutritional summary for a user on a specific date, including progress toward targets.</summary>

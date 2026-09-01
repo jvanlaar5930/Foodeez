@@ -1,4 +1,10 @@
-export const Colors = {
+/**
+ * Two palettes with identical keys, so a screen can swap between them without knowing which
+ * one it has. Dark values follow the same rules used on the web side: surfaces step by
+ * elevation, text never gets darker than its light-mode counterpart, and saturated accents
+ * move to a lighter step so they still clear AA against a dark ground.
+ */
+export const LightColors = {
   primary: '#4CAF50',
   primaryDark: '#388E3C',
   primaryLight: '#C8E6C9',
@@ -6,6 +12,7 @@ export const Colors = {
   secondaryDark: '#F57C00',
   background: '#F5F5F5',
   surface: '#FFFFFF',
+  surfaceAlt: '#EEEEEE',
   text: '#212121',
   textSecondary: '#757575',
   textHint: '#BDBDBD',
@@ -16,6 +23,37 @@ export const Colors = {
   divider: '#E0E0E0',
   overlay: 'rgba(0,0,0,0.5)',
 };
+
+export type Palette = typeof LightColors;
+
+export const DarkColors: Palette = {
+  // Brightened one step: #4CAF50 on a dark card is dim, #66BB6A reads at ~7.9:1.
+  primary: '#66BB6A',
+  // Used as text on primaryLight tints, so on dark it has to be the light end.
+  primaryDark: '#A5D6A7',
+  // Used as a tint fill behind text, so on dark it has to be the dark end.
+  primaryLight: '#1F3D26',
+  secondary: '#FFB74D',
+  secondaryDark: '#FFA726',
+  background: '#121212',
+  surface: '#1E1E1E',
+  surfaceAlt: '#2A2A2A',
+  text: '#ECEDEE',
+  textSecondary: '#A1A5AB',
+  textHint: '#868B94',
+  error: '#EF5350',
+  success: '#66BB6A',
+  warning: '#FFB74D',
+  info: '#64B5F6',
+  divider: '#2C2F33',
+  overlay: 'rgba(0,0,0,0.7)',
+};
+
+/**
+ * @deprecated Static light palette. Use `useTheme()` from '@/theme' so the value follows the
+ * active colour scheme; this export only remains for code that cannot use hooks.
+ */
+export const Colors = LightColors;
 
 export const Spacing = {
   xs: 4,

@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BorderRadius, Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 interface NutritionBarProps {
   label: string;
@@ -11,6 +12,8 @@ interface NutritionBarProps {
 }
 
 export function NutritionBar({ label, current, target, color, unit }: NutritionBarProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const percentage = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
 
   return (
@@ -38,7 +41,7 @@ export function NutritionBar({ label, current, target, color, unit }: NutritionB
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
     marginBottom: Spacing.sm,
   },
@@ -51,7 +54,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium,
-    color: Colors.text,
+    color: C.text,
   },
   values: {
     fontSize: FontSize.sm,
@@ -60,14 +63,14 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.semibold,
   },
   separator: {
-    color: Colors.textHint,
+    color: C.textHint,
   },
   target: {
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   track: {
     height: 8,
-    backgroundColor: Colors.divider,
+    backgroundColor: C.divider,
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
   },

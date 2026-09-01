@@ -4,8 +4,10 @@ using Foodeez.Application.Interfaces.Repositories;
 using Foodeez.Application.UseCases.FoodItems;
 using Foodeez.Domain.Entities;
 using Foodeez.Domain.ValueObjects;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Foodeez.API.Controllers;
 
@@ -50,7 +52,9 @@ public class FoodItemsController : ControllerBase
             Category = request.Category,
             Barcode = request.Barcode,
             IsCustom = true,
-            CreatedByUserId = request.CreatedByUserId,
+            // Ownership comes from the token, never the request body: a client should not be
+            // able to file its custom foods under somebody else's account.
+            CreatedByUserId = CurrentUserId(),
             NutritionalInfo = new NutritionalInfo(
                 request.Calories,
                 request.Protein,
@@ -65,6 +69,14 @@ public class FoodItemsController : ControllerBase
         await _unitOfWork.SaveChangesAsync();
 
         return CreatedAtAction(nameof(Search), new { q = foodItem.Name }, MapToDto(foodItem));
+    }
+
+    /// <summary>The authenticated user's id, from the token's subject claim.</summary>
+    private Guid? CurrentUserId()
+    {
+        var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                  ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        return Guid.TryParse(raw, out var id) ? id : null;
     }
 
     private static FoodItemDto MapToDto(FoodItem item) => new FoodItemDto
@@ -96,7 +108,6 @@ public class CreateFoodItemRequest
     public string ServingUnit { get; set; } = string.Empty;
     public string? Category { get; set; }
     public string? Barcode { get; set; }
-    public Guid? CreatedByUserId { get; set; }
     public float Calories { get; set; }
     public float Protein { get; set; }
     public float Carbohydrates { get; set; }

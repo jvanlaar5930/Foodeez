@@ -13,8 +13,9 @@ import { format, parseISO } from 'date-fns';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
-import { MealPlanEntry, MealType } from '@/types';
-import { Colors, Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { MealPlanEntryDto, MealType } from '@/types';
+import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealPlanStackParamList, 'CalendarDay'>;
 
@@ -45,18 +46,31 @@ const ALL_MEAL_TYPES = [
   MealType.EveningSnack,
 ];
 
+/**
+ * What to call a planned meal. AI-generated entries have no Recipe or FoodItem row behind
+ * them, so both names are null and the meal's own name is in `notes` - without this every
+ * generated slot read "Custom meal".
+ */
+function entryLabel(entry: MealPlanEntryDto): string {
+  return entry.recipeName ?? entry.foodItemName ?? entry.notes ?? 'Custom meal';
+}
+
 export function CalendarDayScreen({ route, navigation }: Props) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { date } = route.params;
   const parsedDate = parseISO(date);
   const { activePlan } = useMealPlanStore();
 
-  const dayEntries = activePlan?.entries.filter(e => e.entryDate === date) ?? [];
+  // `?.` on activePlan alone was not enough - `entries` does not exist on the payload, so
+  // the optional chain resolved to undefined and .filter threw.
+  const dayEntries = activePlan?.entriesByDate?.[date] ?? [];
 
-  const getEntryForMeal = (mealType: MealType): MealPlanEntry | undefined =>
+  const getEntryForMeal = (mealType: MealType): MealPlanEntryDto | undefined =>
     dayEntries.find(e => e.mealType === mealType);
 
-  const handleDeleteEntry = (entry: MealPlanEntry) => {
-    Alert.alert('Remove Meal', `Remove ${entry.recipeName ?? entry.foodItemName} from this slot?`, [
+  const handleDeleteEntry = (entry: MealPlanEntryDto) => {
+    Alert.alert('Remove Meal', `Remove ${entryLabel(entry)} from this slot?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -79,7 +93,7 @@ export function CalendarDayScreen({ route, navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={C.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{format(parsedDate, 'EEEE, MMMM d')}</Text>
         <View style={{ width: 24 }} />
@@ -95,7 +109,7 @@ export function CalendarDayScreen({ route, navigation }: Props) {
             <View style={styles.slotCard}>
               <View style={styles.slotHeader}>
                 <View style={styles.slotTypeRow}>
-                  <Ionicons name={MEAL_TYPE_ICONS[mealType] as any} size={18} color={Colors.primary} />
+                  <Ionicons name={MEAL_TYPE_ICONS[mealType] as any} size={18} color={C.primary} />
                   <Text style={styles.slotTypeName}>{MEAL_TYPE_LABELS[mealType]}</Text>
                 </View>
               </View>
@@ -103,24 +117,26 @@ export function CalendarDayScreen({ route, navigation }: Props) {
               {entry ? (
                 <View style={styles.entryContent}>
                   <View style={styles.entryInfo}>
-                    <Text style={styles.entryName}>{entry.recipeName ?? entry.foodItemName ?? 'Custom meal'}</Text>
+                    <Text style={styles.entryName}>{entryLabel(entry)}</Text>
                     {entry.servings > 1 && (
                       <Text style={styles.entryServings}>{entry.servings} servings</Text>
                     )}
-                    {entry.notes && <Text style={styles.entryNotes}>{entry.notes}</Text>}
+                    {entry.notes && entry.notes !== entryLabel(entry) && (
+                      <Text style={styles.entryNotes}>{entry.notes}</Text>
+                    )}
                   </View>
                   <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteEntry(entry)}>
-                    <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                    <Ionicons name="trash-outline" size={18} color={C.error} />
                   </TouchableOpacity>
                 </View>
               ) : (
                 <View style={styles.emptySlot}>
                   <TouchableOpacity style={styles.addButton}>
-                    <Ionicons name="add" size={16} color={Colors.primary} />
+                    <Ionicons name="add" size={16} color={C.primary} />
                     <Text style={styles.addButtonText}>Add Meal</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.aiButton} onPress={() => handleAISuggest(mealType)}>
-                    <Ionicons name="sparkles" size={16} color={Colors.secondary} />
+                    <Ionicons name="sparkles" size={16} color={C.secondary} />
                     <Text style={styles.aiButtonText}>Ask AI</Text>
                   </TouchableOpacity>
                 </View>
@@ -133,22 +149,22 @@ export function CalendarDayScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (C: Palette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: C.divider,
   },
-  headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.text },
+  headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text },
   list: { padding: Spacing.md, gap: Spacing.md },
   slotCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
     ...Shadows.sm,
@@ -159,19 +175,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: C.divider,
   },
   slotTypeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  slotTypeName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.text },
+  slotTypeName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: C.text },
   entryContent: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.md,
   },
   entryInfo: { flex: 1 },
-  entryName: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.text },
-  entryServings: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
-  entryNotes: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2, fontStyle: 'italic' },
+  entryName: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: C.text },
+  entryServings: { fontSize: FontSize.sm, color: C.textSecondary, marginTop: 2 },
+  entryNotes: { fontSize: FontSize.sm, color: C.textSecondary, marginTop: 2, fontStyle: 'italic' },
   deleteButton: { padding: Spacing.sm },
   emptySlot: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md },
   addButton: {
@@ -179,21 +195,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: C.primary,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
-  addButtonText: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
+  addButtonText: { color: C.primary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
   aiButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
     borderWidth: 1,
-    borderColor: Colors.secondary,
+    borderColor: C.secondary,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
-  aiButtonText: { color: Colors.secondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
+  aiButtonText: { color: C.secondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
 });

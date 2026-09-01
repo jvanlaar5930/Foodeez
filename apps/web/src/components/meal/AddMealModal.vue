@@ -1,153 +1,217 @@
 <template>
-  <div class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
-      <!-- Header -->
-      <div class="flex items-center justify-between p-5 border-b">
-        <h2 class="text-lg font-bold text-gray-900">Log a Meal</h2>
-        <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+  <div class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+    <div class="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white dark:bg-gray-900">
+      <div class="flex items-center justify-between border-b p-5">
+        <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ isEditing ? 'Edit Meal' : 'Log a Meal' }}</h2>
+        <button class="text-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" @click="$emit('close')">x</button>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-5 space-y-4">
-        <!-- Meal type selector -->
+      <div class="flex-1 space-y-4 overflow-y-auto p-5">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Meal Type</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Meal Type</label>
           <div class="flex flex-wrap gap-2">
-            <button v-for="mt in MEAL_TYPES" :key="mt.value" type="button"
-              class="px-3 py-1.5 rounded-full border text-sm font-medium transition-colors"
-              :class="selectedMealType === mt.value ? 'bg-green-600 border-green-600 text-white' : 'border-gray-300 text-gray-600 hover:border-green-400'"
-              @click="selectedMealType = mt.value">
-              {{ mt.label }}
+            <button
+              v-for="mealTypeOption in mealTypes"
+              :key="mealTypeOption.value"
+              type="button"
+              class="rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
+              :class="
+                selectedMealType === mealTypeOption.value
+                  ? 'border-green-600 bg-green-600 text-white'
+                  : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-green-400'
+              "
+              @click="setMealType(mealTypeOption.value)"
+            >
+              {{ mealTypeOption.label }}
             </button>
           </div>
         </div>
 
-        <!-- Food search -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Search Food</label>
-          <input v-model="searchQuery" type="text" placeholder="e.g. chicken breast, oatmeal..."
-            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Search Food</label>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="e.g. chicken breast, oatmeal..."
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
         </div>
 
-        <!-- Search results -->
-        <div v-if="searchResults.length > 0" class="border border-gray-200 rounded-lg overflow-hidden">
-          <button v-for="item in searchResults" :key="item.id" type="button"
-            class="w-full text-left p-3 hover:bg-gray-50 transition-colors border-b last:border-b-0 flex items-center justify-between"
-            @click="selectItem(item)">
+        <!-- Nothing matched: the item probably isn't in any database, so let them enter it. -->
+        <button
+          v-if="!showCustomForm && searchQuery.trim().length > 1 && searchResults.length === 0"
+          type="button"
+          class="flex w-full items-center gap-2 rounded-lg border border-dashed border-green-400 px-3 py-2.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/30"
+          @click="showCustomForm = true"
+        >
+          <span class="text-base leading-none">+</span>
+          Can't find "{{ searchQuery.trim() }}"? Add it as a homemade food
+        </button>
+
+        <CustomFoodForm
+          v-if="showCustomForm"
+          @created="onCustomFoodCreated"
+          @cancel="showCustomForm = false"
+        />
+
+        <div v-if="searchResults.length > 0" class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+          <button
+            v-for="item in searchResults"
+            :key="item.id"
+            type="button"
+            class="flex w-full items-center justify-between border-b p-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800"
+            @click="selectItem(item)"
+          >
             <div>
-              <p class="font-medium text-sm text-gray-900">{{ item.name }}</p>
-              <p class="text-xs text-gray-500">
-                {{ item.brand ? item.brand + ' · ' : '' }}{{ item.servingSize }}{{ item.servingUnit }} per serving
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ item.name }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                {{ item.brand ? `${item.brand} · ` : '' }}{{ item.servingSize }}{{ item.servingUnit }} per serving
               </p>
             </div>
-            <span class="text-sm text-gray-500 ml-3 flex-shrink-0">{{ Math.round(item.nutritionalInfo.calories) }} kcal</span>
+            <span class="ml-3 shrink-0 text-sm text-gray-500 dark:text-gray-400">
+              {{ Math.round(item.nutritionalInfo.calories) }} kcal
+            </span>
           </button>
         </div>
 
-        <!-- Selected items -->
+        <button
+          v-if="!showCustomForm && searchResults.length > 0"
+          type="button"
+          class="text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+          @click="showCustomForm = true"
+        >
+          None of these? Add a homemade food instead
+        </button>
+
         <div v-if="selectedItems.length > 0">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Selected Items</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Selected Items</label>
           <div class="space-y-2">
-            <div v-for="(entry, i) in selectedItems" :key="i"
-              class="bg-gray-50 rounded-lg p-3 space-y-2">
-              <!-- Item name + remove -->
+            <div
+              v-for="(entry, index) in selectedItems"
+              :key="`${entry.item.id}-${index}`"
+              class="space-y-2 rounded-lg bg-gray-50 dark:bg-gray-800 p-3"
+            >
               <div class="flex items-start justify-between gap-2">
                 <div>
-                  <p class="text-sm font-medium text-gray-900">{{ entry.item.name }}</p>
-                  <p class="text-xs text-gray-400">1 serving = {{ entry.item.servingSize }}{{ entry.item.servingUnit }}</p>
+                  <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ entry.item.name }}</p>
+                  <p class="text-xs text-gray-400">
+                    1 serving = {{ entry.item.servingSize }}{{ entry.item.servingUnit }}
+                  </p>
                 </div>
-                <button @click="selectedItems.splice(i, 1)" class="text-red-400 hover:text-red-600 flex-shrink-0 mt-0.5">✕</button>
+                <button
+                  class="mt-0.5 shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-400"
+                  @click="removeItem(index)"
+                >
+                  x
+                </button>
               </div>
-              <!-- Amount controls -->
+
               <div class="flex items-center gap-2">
                 <button
-                  class="w-7 h-7 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center justify-center text-base leading-none"
-                  @click="adjustAmount(entry, -stepFor(entry.item))">−</button>
+                  class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-base leading-none text-gray-700 dark:text-gray-200 hover:bg-gray-300"
+                  @click="adjustAmount(entry, -stepFor(entry.item))"
+                >
+                  -
+                </button>
                 <input
-                  type="number"
+                  :value="entry.amount"
                   :min="stepFor(entry.item)"
                   :step="stepFor(entry.item)"
-                  :value="entry.amount"
+                  type="number"
+                  class="w-20 rounded-lg border border-gray-300 dark:border-gray-600 py-1 text-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500"
                   @change="onAmountChange(entry, $event)"
-                  class="w-20 text-center text-sm font-semibold border border-gray-300 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-green-500" />
+                />
                 <button
-                  class="w-7 h-7 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center justify-center text-base leading-none"
-                  @click="adjustAmount(entry, stepFor(entry.item))">+</button>
-                <span class="text-sm text-gray-500">{{ entry.item.servingUnit }}</span>
-                <span class="ml-auto text-sm text-gray-400 tabular-nums">
+                  class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-base leading-none text-gray-700 dark:text-gray-200 hover:bg-gray-300"
+                  @click="adjustAmount(entry, stepFor(entry.item))"
+                >
+                  +
+                </button>
+                <span class="text-sm text-gray-500 dark:text-gray-400">{{ entry.item.servingUnit }}</span>
+                <span class="ml-auto tabular-nums text-sm text-gray-400">
                   {{ Math.round(entry.item.nutritionalInfo.calories * multiplier(entry)) }} kcal
                 </span>
               </div>
             </div>
           </div>
 
-          <!-- Nutrition totals -->
-          <div class="mt-3 bg-white border border-gray-100 rounded-xl shadow-sm p-4">
-            <p class="text-sm font-semibold text-gray-800 mb-3">Meal Totals</p>
+          <div class="mt-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm">
+            <p class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">Meal Totals</p>
             <div class="grid grid-cols-4 gap-2 text-center">
-              <div v-for="macro in [
-                { label: 'Calories', value: Math.round(totalCalories), unit: 'kcal', color: 'text-green-600' },
-                { label: 'Protein',  value: Math.round(totalProtein),  unit: 'g',    color: 'text-blue-600' },
-                { label: 'Carbs',    value: Math.round(totalCarbs),    unit: 'g',    color: 'text-orange-500' },
-                { label: 'Fat',      value: Math.round(totalFat),      unit: 'g',    color: 'text-amber-500' },
-              ]" :key="macro.label">
+              <div
+                v-for="macro in macros"
+                :key="macro.label"
+              >
                 <p class="text-xl font-bold" :class="macro.color">
-                  {{ macro.value }}<span class="text-xs font-normal text-gray-400 ml-0.5">{{ macro.unit }}</span>
+                  {{ macro.value }}<span class="ml-0.5 text-xs font-normal text-gray-400">{{ macro.unit }}</span>
                 </p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ macro.label }}</p>
+                <p class="mt-0.5 text-xs text-gray-400">{{ macro.label }}</p>
               </div>
             </div>
 
-            <!-- AI analyse button -->
             <button
-              class="mt-4 w-full flex items-center justify-center gap-2 py-2 rounded-xl border-2 border-dashed border-purple-300 text-purple-600 text-sm font-semibold hover:bg-purple-50 transition-colors disabled:opacity-50"
+              class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-purple-300 py-2 text-sm font-semibold text-purple-600 dark:text-purple-400 transition-colors hover:bg-purple-50 dark:hover:bg-purple-950/40 disabled:opacity-50"
               :disabled="isAnalyzing"
-              @click="analyzeMeal">
-              <span v-if="isAnalyzing" class="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-              <span v-else>✨</span>
-              {{ isAnalyzing ? 'Analysing…' : 'AI Meal Analysis' }}
+              @click="analyzeMeal"
+            >
+              <span
+                v-if="isAnalyzing"
+                class="h-4 w-4 animate-spin rounded-full border-2 border-purple-400 border-t-transparent"
+              />
+              <span v-else>*</span>
+              {{ analyzeLabel }}
             </button>
           </div>
 
-          <!-- AI analysis result -->
-          <div v-if="analysis" class="mt-3 rounded-xl border border-purple-200 bg-purple-50 p-4 space-y-3">
-            <!-- Score -->
+          <div v-if="analysis" class="mt-3 space-y-3 rounded-xl border border-purple-200 bg-purple-50 dark:bg-purple-950/40 p-4">
             <div class="flex items-center gap-3">
-              <div class="relative w-14 h-14 flex-shrink-0">
-                <svg class="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+              <div class="relative h-14 w-14 shrink-0">
+                <svg class="h-14 w-14 -rotate-90" viewBox="0 0 56 56">
                   <circle cx="28" cy="28" r="24" fill="none" stroke="#e9d5ff" stroke-width="5" />
-                  <circle cx="28" cy="28" r="24" fill="none"
+                  <circle
+                    cx="28"
+                    cy="28"
+                    r="24"
+                    fill="none"
                     :stroke="scoreColor"
                     stroke-width="5"
                     stroke-linecap="round"
-                    :stroke-dasharray="`${(analysis.score / 100) * 150.8} 150.8`" />
+                    :stroke-dasharray="`${(analysis.score / 100) * 150.8} 150.8`"
+                  />
                 </svg>
                 <span class="absolute inset-0 flex items-center justify-center text-sm font-bold" :class="scoreTextColor">
                   {{ analysis.score }}
                 </span>
               </div>
               <div>
-                <p class="text-xs font-semibold text-purple-700 uppercase tracking-wide">Meal Score</p>
-                <p class="text-sm text-gray-700 leading-snug">{{ analysis.completeness }}</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">Meal Score</p>
+                <p class="text-sm leading-snug text-gray-700 dark:text-gray-200">{{ analysis.completeness }}</p>
+                <p v-if="analyzedOn" class="mt-0.5 text-xs text-gray-400">Analyzed {{ analyzedOn }}</p>
               </div>
             </div>
 
-            <!-- Missing -->
             <div v-if="analysis.missing.length > 0">
-              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Missing</p>
+              <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Missing</p>
               <div class="flex flex-wrap gap-1.5">
-                <span v-for="m in analysis.missing" :key="m"
-                  class="text-xs bg-red-100 text-red-700 font-medium px-2 py-0.5 rounded-full">
-                  {{ m }}
+                <span
+                  v-for="missingItem in analysis.missing"
+                  :key="missingItem"
+                  class="rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300"
+                >
+                  {{ missingItem }}
                 </span>
               </div>
             </div>
 
-            <!-- Suggestions -->
             <div v-if="analysis.suggestions.length > 0">
-              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Suggestions</p>
+              <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Suggestions</p>
               <ul class="space-y-1">
-                <li v-for="s in analysis.suggestions" :key="s" class="flex items-start gap-1.5 text-sm text-gray-700">
-                  <span class="text-green-500 mt-0.5 flex-shrink-0">→</span>{{ s }}
+                <li
+                  v-for="suggestion in analysis.suggestions"
+                  :key="suggestion"
+                  class="flex items-start gap-1.5 text-sm text-gray-700 dark:text-gray-200"
+                >
+                  <span class="mt-0.5 shrink-0 text-green-500">></span>{{ suggestion }}
                 </li>
               </ul>
             </div>
@@ -155,17 +219,23 @@
         </div>
       </div>
 
-      <!-- Footer -->
-      <div class="p-5 border-t flex gap-3">
-        <button @click="$emit('close')" class="flex-1 py-2.5 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:border-gray-300">
+      <div class="flex gap-3 border-t p-5">
+        <button
+          class="flex-1 rounded-xl border-2 border-gray-200 dark:border-gray-700 py-2.5 font-semibold text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+          @click="$emit('close')"
+        >
           Cancel
         </button>
         <button
           :disabled="selectedItems.length === 0 || isSaving"
-          class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
-          @click="handleSave">
-          <span v-if="isSaving" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          {{ isSaving ? 'Saving...' : 'Save Meal' }}
+          class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 font-semibold text-white disabled:bg-green-300 hover:bg-green-700"
+          @click="handleSave"
+        >
+          <span
+            v-if="isSaving"
+            class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+          />
+          {{ isSaving ? 'Saving...' : isEditing ? 'Update Meal' : 'Save Meal' }}
         </button>
       </div>
     </div>
@@ -173,29 +243,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import CustomFoodForm from '@/components/meal/CustomFoodForm.vue';
+import { computed, ref, watch } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
 import { foodItemService } from '@/services/foodItemService';
 import { aiService, type MealAnalysisResult } from '@/services/aiService';
 import { useMealStore } from '@/stores/meal';
 import { useAuthStore } from '@/stores/auth';
-import { MealType, type FoodItem } from '@foodeez/shared';
+import { MealType, type FoodItem, type MealLog } from '@foodeez/shared';
 
-const props = defineProps<{ selectedDate: string }>();
+interface SelectedItem {
+  item: FoodItem;
+  amount: number;
+}
+
+const props = defineProps<{
+  selectedDate: string;
+  mealLog?: MealLog | null;
+}>();
 const emit = defineEmits<{ close: []; saved: [] }>();
 
 const mealStore = useMealStore();
 const authStore = useAuthStore();
 
 const selectedMealType = ref<MealType>(MealType.Lunch);
+const showCustomForm = ref(false);
 const searchQuery = ref('');
 const searchResults = ref<FoodItem[]>([]);
-const selectedItems = ref<{ item: FoodItem; amount: number }[]>([]);
+const selectedItems = ref<SelectedItem[]>([]);
 const isSaving = ref(false);
 const isAnalyzing = ref(false);
 const analysis = ref<MealAnalysisResult | null>(null);
+/** True once the meal has been changed here, so the saved meal's stored score no longer applies. */
+const mealEdited = ref(false);
 
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
+const isEditing = computed(() => Boolean(props.mealLog));
+
+const mealTypeLabels: Record<MealType, string> = {
   [MealType.Breakfast]: 'Breakfast',
   [MealType.MorningSnack]: 'AM Snack',
   [MealType.Lunch]: 'Lunch',
@@ -204,7 +288,7 @@ const MEAL_TYPE_LABELS: Record<MealType, string> = {
   [MealType.EveningSnack]: 'Evening Snack',
 };
 
-const MEAL_TYPES = [
+const mealTypes = [
   { value: MealType.Breakfast, label: 'Breakfast' },
   { value: MealType.MorningSnack, label: 'AM Snack' },
   { value: MealType.Lunch, label: 'Lunch' },
@@ -213,124 +297,228 @@ const MEAL_TYPES = [
   { value: MealType.EveningSnack, label: 'Evening' },
 ];
 
-// ── Unit helpers ─────────────────────────────────────────────────────────────
-
 function stepFor(item: FoodItem): number {
   switch (item.servingUnit.toLowerCase()) {
-    case 'g': case 'gram': case 'grams': return 25;
-    case 'ml': case 'milliliter': case 'milliliters': return 25;
-    case 'oz': case 'ounce': case 'ounces': return 0.5;
-    default: return 0.5;
+    case 'g':
+    case 'gram':
+    case 'grams':
+    case 'ml':
+    case 'milliliter':
+    case 'milliliters':
+      return 25;
+    case 'oz':
+    case 'ounce':
+    case 'ounces':
+      return 0.5;
+    default:
+      return 0.5;
   }
 }
 
-function multiplier(entry: { item: FoodItem; amount: number }): number {
+function multiplier(entry: SelectedItem): number {
   const size = entry.item.servingSize;
-  if (!size || size <= 0) return entry.amount;
+  if (!size || size <= 0) {
+    return entry.amount;
+  }
+
   return entry.amount / size;
 }
 
-function adjustAmount(entry: { item: FoodItem; amount: number }, delta: number) {
+/** Any change to the meal makes the current score stale - drop it rather than show a wrong one. */
+function invalidateAnalysis() {
+  analysis.value = null;
+  mealEdited.value = true;
+}
+
+function setMealType(mealType: MealType) {
+  selectedMealType.value = mealType;
+  invalidateAnalysis();
+}
+
+function removeItem(index: number) {
+  selectedItems.value.splice(index, 1);
+  invalidateAnalysis();
+}
+
+function adjustAmount(entry: SelectedItem, delta: number) {
   const step = stepFor(entry.item);
   const next = Math.round((entry.amount + delta) * 100) / 100;
   entry.amount = Math.max(step, next);
-  analysis.value = null;
+  invalidateAnalysis();
 }
 
-function onAmountChange(entry: { item: FoodItem; amount: number }, event: Event) {
-  const val = parseFloat((event.target as HTMLInputElement).value);
-  if (!isNaN(val) && val > 0) {
-    entry.amount = val;
-    analysis.value = null;
+function onAmountChange(entry: SelectedItem, event: Event) {
+  const value = parseFloat((event.target as HTMLInputElement).value);
+  if (!Number.isNaN(value) && value > 0) {
+    entry.amount = value;
+    invalidateAnalysis();
   }
 }
 
-// ── Totals ───────────────────────────────────────────────────────────────────
-
 const totalCalories = computed(() =>
-  selectedItems.value.reduce((s, e) => s + e.item.nutritionalInfo.calories * multiplier(e), 0));
+  selectedItems.value.reduce((sum, entry) => sum + entry.item.nutritionalInfo.calories * multiplier(entry), 0),
+);
 const totalProtein = computed(() =>
-  selectedItems.value.reduce((s, e) => s + e.item.nutritionalInfo.protein * multiplier(e), 0));
+  selectedItems.value.reduce((sum, entry) => sum + entry.item.nutritionalInfo.protein * multiplier(entry), 0),
+);
 const totalCarbs = computed(() =>
-  selectedItems.value.reduce((s, e) => s + e.item.nutritionalInfo.carbohydrates * multiplier(e), 0));
+  selectedItems.value.reduce((sum, entry) => sum + entry.item.nutritionalInfo.carbohydrates * multiplier(entry), 0),
+);
 const totalFat = computed(() =>
-  selectedItems.value.reduce((s, e) => s + e.item.nutritionalInfo.fat * multiplier(e), 0));
-const totalFiber = computed(() =>
-  selectedItems.value.reduce((s, e) => s + (e.item.nutritionalInfo.fiber ?? 0) * multiplier(e), 0));
+  selectedItems.value.reduce((sum, entry) => sum + entry.item.nutritionalInfo.fat * multiplier(entry), 0),
+);
 
-// ── Search ───────────────────────────────────────────────────────────────────
+const macros = computed(() => [
+  { label: 'Calories', value: Math.round(totalCalories.value), unit: 'kcal', color: 'text-green-600 dark:text-green-400' },
+  { label: 'Protein', value: Math.round(totalProtein.value), unit: 'g', color: 'text-blue-600 dark:text-blue-400' },
+  { label: 'Carbs', value: Math.round(totalCarbs.value), unit: 'g', color: 'text-orange-500 dark:text-orange-400' },
+  { label: 'Fat', value: Math.round(totalFat.value), unit: 'g', color: 'text-amber-500' },
+]);
 
-const doSearch = useDebounceFn(async (q: string) => {
-  if (q.trim().length < 2) { searchResults.value = []; return; }
-  searchResults.value = await foodItemService.searchFoodItems(q);
+const doSearch = useDebounceFn(async (query: string) => {
+  if (query.trim().length < 2) {
+    searchResults.value = [];
+    return;
+  }
+
+  searchResults.value = await foodItemService.searchFoodItems(query);
 }, 300);
 
 watch(searchQuery, doSearch);
+watch(
+  () => props.mealLog,
+  (mealLog) => {
+    selectedMealType.value = mealLog?.mealType ?? MealType.Lunch;
+    selectedItems.value = mealLog?.items.map((item) => ({
+      item: item.foodItem,
+      amount: item.quantity,
+    })) ?? [];
+    searchQuery.value = '';
+    searchResults.value = [];
+    analysis.value = mealLog?.analysis ?? null;
+    mealEdited.value = false;
+  },
+  { immediate: true },
+);
+
+/** A freshly created homemade food goes straight into the meal. */
+function onCustomFoodCreated(item: FoodItem) {
+  showCustomForm.value = false;
+  selectItem(item);
+}
 
 function selectItem(item: FoodItem) {
   const initialAmount = item.servingSize > 0 ? item.servingSize : 1;
   selectedItems.value.push({ item, amount: initialAmount });
   searchQuery.value = '';
   searchResults.value = [];
-  analysis.value = null;
+  invalidateAnalysis();
 }
 
-// ── AI analysis ──────────────────────────────────────────────────────────────
-
 const scoreColor = computed(() => {
-  const s = analysis.value?.score ?? 0;
-  if (s >= 75) return '#16a34a';
-  if (s >= 50) return '#f59e0b';
+  const score = analysis.value?.score ?? 0;
+  if (score >= 75) {
+    return '#16a34a';
+  }
+  if (score >= 50) {
+    return '#f59e0b';
+  }
   return '#ef4444';
 });
 
 const scoreTextColor = computed(() => {
-  const s = analysis.value?.score ?? 0;
-  if (s >= 75) return 'text-green-600';
-  if (s >= 50) return 'text-amber-600';
-  return 'text-red-600';
+  const score = analysis.value?.score ?? 0;
+  if (score >= 75) {
+    return 'text-green-600 dark:text-green-400';
+  }
+  if (score >= 50) {
+    return 'text-amber-600';
+  }
+  return 'text-red-600 dark:text-red-400';
 });
 
+const analyzeLabel = computed(() => {
+  if (isAnalyzing.value) {
+    return 'Analyzing...';
+  }
+
+  return analysis.value ? 'Re-run AI Analysis' : 'AI Meal Analysis';
+});
+
+const analyzedOn = computed(() =>
+  analysis.value?.generatedAt
+    ? new Date(analysis.value.generatedAt).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+      })
+    : null,
+);
+
+/**
+ * For a saved meal that hasn't been touched here, the server answers from the score stored on
+ * the meal - only a click on an already-scored meal asks it to spend another AI call.
+ */
 async function analyzeMeal() {
+  const storedMealLogId = props.mealLog && !mealEdited.value ? props.mealLog.id : null;
+  const refresh = analysis.value !== null;
+
   isAnalyzing.value = true;
   analysis.value = null;
+
   try {
-    const mealLabel = MEAL_TYPE_LABELS[selectedMealType.value] ?? 'Meal';
-    const items = selectedItems.value.map(e => ({
-      name: e.item.name,
-      amount: e.amount,
-      unit: e.item.servingUnit,
-      calories: e.item.nutritionalInfo.calories * multiplier(e),
-      protein: e.item.nutritionalInfo.protein * multiplier(e),
-      carbs: e.item.nutritionalInfo.carbohydrates * multiplier(e),
-      fat: e.item.nutritionalInfo.fat * multiplier(e),
-      fiber: (e.item.nutritionalInfo.fiber ?? 0) * multiplier(e),
-    }));
-    analysis.value = await aiService.analyzeMeal(mealLabel, items);
+    if (storedMealLogId) {
+      analysis.value = await aiService.analyzeMealLog(storedMealLogId, refresh);
+      return;
+    }
+
+    const mealLabel = mealTypeLabels[selectedMealType.value] ?? 'Meal';
+    analysis.value = await aiService.analyzeMeal(
+      mealLabel,
+      selectedItems.value.map((entry) => ({
+        name: entry.item.name,
+        amount: entry.amount,
+        unit: entry.item.servingUnit,
+        calories: entry.item.nutritionalInfo.calories * multiplier(entry),
+        protein: entry.item.nutritionalInfo.protein * multiplier(entry),
+        carbs: entry.item.nutritionalInfo.carbohydrates * multiplier(entry),
+        fat: entry.item.nutritionalInfo.fat * multiplier(entry),
+        fiber: (entry.item.nutritionalInfo.fiber ?? 0) * multiplier(entry),
+      })),
+    );
   } finally {
     isAnalyzing.value = false;
   }
 }
 
-// ── Save ─────────────────────────────────────────────────────────────────────
-
 async function handleSave() {
-  if (!authStore.user?.id || selectedItems.value.length === 0) return;
+  if (!authStore.user?.id || selectedItems.value.length === 0) {
+    return;
+  }
+
   isSaving.value = true;
+
   try {
-    await mealStore.logMeal({
+    const payload = {
       userId: authStore.user.id,
       logDate: props.selectedDate,
       mealType: selectedMealType.value,
-      items: selectedItems.value.map(e => ({
-        foodItemId: e.item.id,
-        quantity: multiplier(e),
-        unit: e.item.servingUnit,
+      items: selectedItems.value.map((entry) => ({
+        foodItemId: entry.item.id,
+        quantity: entry.amount,
+        unit: entry.item.servingUnit,
       })),
-    });
-    isSaving.value = false;
+      // Carry the score just generated onto the saved meal so it is never paid for twice.
+      analysis: analysis.value ?? undefined,
+    };
+
+    if (props.mealLog) {
+      await mealStore.updateMealLog(props.mealLog.id, payload);
+    } else {
+      await mealStore.logMeal(payload);
+    }
+
     emit('saved');
-  } catch {
+  } finally {
     isSaving.value = false;
   }
 }

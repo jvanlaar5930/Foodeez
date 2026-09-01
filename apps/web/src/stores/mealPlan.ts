@@ -47,20 +47,44 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     }
   }
 
+  // Held outside the action so cancelGeneration can reach the in-flight request.
+  let generateController: AbortController | null = null;
+
   async function generatePlan(data: GenerateMealPlanRequest): Promise<MealPlan> {
+    // A second click should replace the first request, not race it.
+    generateController?.abort();
+    generateController = new AbortController();
+    const controller = generateController;
+
     isGenerating.value = true;
     error.value = null;
     try {
-      const plan = await mealPlanService.generateAIMealPlan(data);
+      const plan = await mealPlanService.generateAIMealPlan(data, controller.signal);
       plans.value.unshift(plan);
       activePlan.value = plan;
       return plan;
     } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
+      // A cancel is not a failure and must not leave an error banner behind.
+      if (controller.signal.aborted) {
+        error.value = null;
+      } else {
+        error.value = extractErrorMessage(err);
+      }
       throw err;
     } finally {
-      isGenerating.value = false;
+      // Only the request that is still current owns the flag; an aborted older one does not.
+      if (generateController === controller) {
+        generateController = null;
+        isGenerating.value = false;
+      }
     }
+  }
+
+  /** Stops an in-flight generation. Closing the connection is what stops the model call. */
+  function cancelGeneration(): void {
+    generateController?.abort();
+    generateController = null;
+    isGenerating.value = false;
   }
 
   function setActivePlan(plan: MealPlan): void {
@@ -69,8 +93,17 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
 
   function extractErrorMessage(err: unknown): string {
     if (err && typeof err === 'object' && 'response' in err) {
-      const e = err as { response?: { data?: { detail?: string; title?: string } } };
-      return e.response?.data?.detail ?? e.response?.data?.title ?? 'An error occurred';
+      // `message` covers the plain-object errors this API returns (the 503 when the AI
+      // provider is unavailable); detail/title cover the ProblemDetails responses.
+      const e = err as {
+        response?: { data?: { message?: string; detail?: string; title?: string } };
+      };
+      return (
+        e.response?.data?.message ??
+        e.response?.data?.detail ??
+        e.response?.data?.title ??
+        'An error occurred'
+      );
     }
     return 'An error occurred';
   }
@@ -78,6 +111,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
   return {
     plans,
     activePlan,
+    cancelGeneration,
     sortedPlans,
     isLoading,
     isGenerating,

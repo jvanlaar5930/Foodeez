@@ -12,6 +12,6 @@ public class AnalyzeMealUseCase
         _aiService = aiService;
     }
 
-    public Task<MealAnalysisDto> ExecuteAsync(MealAnalysisRequest request) =>
-        _aiService.AnalyzeMealAsync(request);
+    public Task<MealAnalysisDto> ExecuteAsync(MealAnalysisRequest request, CancellationToken ct = default) =>
+        _aiService.AnalyzeMealAsync(request, ct);
 }

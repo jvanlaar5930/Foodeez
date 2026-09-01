@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
+const HomeView = () => import('@/views/home/HomeView.vue');
+const SearchResultsView = () => import('@/views/search/SearchResultsView.vue');
 const LoginView = () => import('@/views/auth/LoginView.vue');
 const RegisterView = () => import('@/views/auth/RegisterView.vue');
 const ProfileSetupView = () => import('@/views/auth/ProfileSetupView.vue');
@@ -9,9 +11,20 @@ const MealLogView = () => import('@/views/meal-log/MealLogView.vue');
 const MealPlanView = () => import('@/views/meal-plan/MealPlanView.vue');
 const RecipesView = () => import('@/views/recipes/RecipesView.vue');
 const ProfileView = () => import('@/views/profile/ProfileView.vue');
+const AdminLogsView = () => import('@/views/admin/AdminLogsView.vue');
+const AdminUsersView = () => import('@/views/admin/AdminUsersView.vue');
+const AdminSettingsView = () => import('@/views/admin/AdminSettingsView.vue');
 
 const routes = [
-  { path: '/', redirect: '/dashboard' },
+  // Recipe discovery is public: the landing page and search results never require an account.
+  {
+    path: '/',
+    component: HomeView,
+  },
+  {
+    path: '/search',
+    component: SearchResultsView,
+  },
   {
     path: '/auth/login',
     component: LoginView,
@@ -52,20 +65,44 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/admin',
+    redirect: '/admin/logs',
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/logs',
+    component: AdminLogsView,
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/users',
+    component: AdminUsersView,
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/settings',
+    component: AdminSettingsView,
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
-    redirect: '/dashboard',
+    redirect: '/',
   },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) return savedPosition;
+    if (to.hash) return { el: to.hash, behavior: 'smooth' };
+    return { top: 0 };
+  },
 });
 
 router.beforeEach(async (to) => {
   const authStore = useAuthStore();
 
-  // If we have a token but no user loaded yet, try to fetch user
   if (authStore.token && !authStore.user) {
     try {
       await authStore.fetchCurrentUser();
@@ -81,6 +118,10 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresGuest && isAuthenticated) {
+    return { path: '/dashboard' };
+  }
+
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
     return { path: '/dashboard' };
   }
 

@@ -1,62 +1,62 @@
 <template>
-  <div class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-800 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-green-600">Foodeez</h1>
-        <p class="text-gray-500 mt-1">Create your account</p>
+        <h1 class="text-3xl font-bold text-green-600 dark:text-green-400">Foodeez</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Create your account</p>
       </div>
 
-      <div class="bg-white rounded-2xl shadow-sm p-8">
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-8">
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">First Name</label>
               <input
                 v-model="form.firstName"
                 type="text"
                 autocomplete="given-name"
                 class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                :class="errors.firstName ? 'border-red-400' : 'border-gray-300'"
+                :class="errors.firstName ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
                 placeholder="Jane"
               />
-              <p v-if="errors.firstName" class="text-red-500 text-xs mt-1">{{ errors.firstName }}</p>
+              <p v-if="errors.firstName" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.firstName }}</p>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Last Name</label>
               <input
                 v-model="form.lastName"
                 type="text"
                 autocomplete="family-name"
                 class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                :class="errors.lastName ? 'border-red-400' : 'border-gray-300'"
+                :class="errors.lastName ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
                 placeholder="Doe"
               />
-              <p v-if="errors.lastName" class="text-red-500 text-xs mt-1">{{ errors.lastName }}</p>
+              <p v-if="errors.lastName" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.lastName }}</p>
             </div>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Email</label>
             <input
               v-model="form.email"
               type="email"
               autocomplete="email"
               class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              :class="errors.email ? 'border-red-400' : 'border-gray-300'"
+              :class="errors.email ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
               placeholder="jane@example.com"
             />
-            <p v-if="errors.email" class="text-red-500 text-xs mt-1">{{ errors.email }}</p>
+            <p v-if="errors.email" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.email }}</p>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password</label>
             <div class="relative">
               <input
                 v-model="form.password"
                 :type="showPassword ? 'text' : 'password'"
                 autocomplete="new-password"
                 class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 pr-10"
-                :class="errors.password ? 'border-red-400' : 'border-gray-300'"
+                :class="errors.password ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
                 placeholder="Min. 8 characters"
               />
               <button type="button" class="absolute right-3 top-2.5 text-gray-400" @click="showPassword = !showPassword">
@@ -65,24 +65,24 @@
             </div>
             <div v-if="form.password" class="mt-1">
               <div class="flex gap-1">
-                <div v-for="i in 4" :key="i" class="h-1 flex-1 rounded" :class="passwordStrength >= i ? strengthColor : 'bg-gray-200'" />
+                <div v-for="i in 4" :key="i" class="h-1 flex-1 rounded" :class="passwordStrength >= i ? strengthColor : 'bg-gray-200 dark:bg-gray-700'" />
               </div>
               <p class="text-xs mt-1" :class="strengthTextColor">{{ strengthLabel }}</p>
             </div>
-            <p v-if="errors.password" class="text-red-500 text-xs mt-1">{{ errors.password }}</p>
+            <p v-if="errors.password" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.password }}</p>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Confirm Password</label>
             <input
               v-model="form.confirmPassword"
               :type="showPassword ? 'text' : 'password'"
               autocomplete="new-password"
               class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              :class="errors.confirmPassword ? 'border-red-400' : 'border-gray-300'"
+              :class="errors.confirmPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
               placeholder="Repeat password"
             />
-            <p v-if="errors.confirmPassword" class="text-red-500 text-xs mt-1">{{ errors.confirmPassword }}</p>
+            <p v-if="errors.confirmPassword" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.confirmPassword }}</p>
           </div>
 
           <AppAlert v-if="apiError" variant="error" :message="apiError" />
@@ -97,9 +97,9 @@
           </button>
         </form>
 
-        <p class="text-center text-sm text-gray-500 mt-6">
+        <p class="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
           Already have an account?
-          <RouterLink to="/auth/login" class="text-green-600 font-semibold ml-1">Sign in</RouterLink>
+          <RouterLink to="/auth/login" class="text-green-600 dark:text-green-400 font-semibold ml-1">Sign in</RouterLink>
         </p>
       </div>
     </div>
@@ -138,10 +138,10 @@ const strengthColor = computed(() => {
   return 'bg-green-500';
 });
 const strengthTextColor = computed(() => {
-  if (passwordStrength.value <= 1) return 'text-red-500';
-  if (passwordStrength.value === 2) return 'text-yellow-600';
+  if (passwordStrength.value <= 1) return 'text-red-500 dark:text-red-400';
+  if (passwordStrength.value === 2) return 'text-yellow-600 dark:text-yellow-400';
   if (passwordStrength.value === 3) return 'text-blue-500';
-  return 'text-green-600';
+  return 'text-green-600 dark:text-green-400';
 });
 const strengthLabel = computed(() => ['', 'Weak', 'Fair', 'Good', 'Strong'][passwordStrength.value]);
 

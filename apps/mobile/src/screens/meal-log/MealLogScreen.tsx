@@ -1,14 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { addDays, subDays } from 'date-fns';
@@ -16,29 +9,44 @@ import { MealSection } from '@/components/meal/MealSection';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuthStore } from '@/store/authStore';
 import { useMealStore } from '@/store/mealStore';
-import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
-import { formatDisplayDate, formatApiDate, isToday, parseApiDate } from '@/utils/dateUtils';
+import { FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
+import { formatApiDate, formatDisplayDate, isToday, parseApiDate } from '@/utils/dateUtils';
 import type { MealLogStackParamList } from '@/navigation/types';
+import type { MealLogDto } from '@/types';
 
 type MealLogNav = NativeStackNavigationProp<MealLogStackParamList, 'MealLogHome'>;
 
 export function MealLogScreen() {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<MealLogNav>();
   const user = useAuthStore((state) => state.user);
-  const { dailyLogs, selectedDate, isLoading, setSelectedDate, fetchDailyLogs, deleteMealLog } =
-    useMealStore();
+  const {
+    dailyLogs,
+    selectedDate,
+    isLoading,
+    setSelectedDate,
+    refreshDay,
+    deleteMealLog,
+  } = useMealStore();
   const [refreshing, setRefreshing] = useState(false);
 
   const currentDate = parseApiDate(selectedDate);
 
   const loadData = useCallback(async () => {
-    if (!user) return;
-    await fetchDailyLogs(user.id, selectedDate);
-  }, [user, selectedDate, fetchDailyLogs]);
+    if (!user) {
+      return;
+    }
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+    await refreshDay(user.id, selectedDate);
+  }, [refreshDay, selectedDate, user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -62,28 +70,39 @@ export function MealLogScreen() {
     setSelectedDate(formatApiDate(new Date()));
   };
 
-  const handleDeleteItem = async (mealLogId: string) => {
-    await deleteMealLog(mealLogId);
+  const handleEditMeal = (mealLog: MealLogDto) => {
+    navigation.navigate('AddMeal', { mealLog });
   };
 
-  const displayDate = isToday(currentDate)
-    ? 'Today'
-    : formatDisplayDate(currentDate);
+  const handleDeleteMeal = (mealLog: MealLogDto) => {
+    if (!user) {
+      return;
+    }
 
+    Alert.alert('Delete Meal', `Delete ${mealLog.items.length} item meal log?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteMealLog(mealLog.id, user.id);
+        },
+      },
+    ]);
+  };
+
+  const displayDate = isToday(currentDate) ? 'Today' : formatDisplayDate(currentDate);
   const canGoNext = !isToday(currentDate);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      {/* Date Navigation */}
       <View style={styles.dateNav}>
         <TouchableOpacity style={styles.dateNavBtn} onPress={goToPrevDay}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={C.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.dateCenter} onPress={goToToday}>
           <Text style={styles.dateText}>{displayDate}</Text>
-          {!isToday(currentDate) && (
-            <Text style={styles.dateSub}>Tap to go to today</Text>
-          )}
+          {!isToday(currentDate) && <Text style={styles.dateSub}>Tap to go to today</Text>}
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.dateNavBtn, !canGoNext && styles.dateNavBtnDisabled]}
@@ -93,7 +112,7 @@ export function MealLogScreen() {
           <Ionicons
             name="chevron-forward"
             size={24}
-            color={canGoNext ? Colors.text : Colors.textHint}
+            color={canGoNext ? C.text : C.textHint}
           />
         </TouchableOpacity>
       </View>
@@ -103,7 +122,7 @@ export function MealLogScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[C.primary]} />
         }
       >
         {dailyLogs.length === 0 && !isLoading ? (
@@ -119,45 +138,42 @@ export function MealLogScreen() {
             <MealSection
               key={log.id}
               mealLog={log}
-              onDeleteItem={(mealLogId) => handleDeleteItem(mealLogId)}
+              onEditMeal={handleEditMeal}
+              onDeleteMeal={handleDeleteMeal}
             />
           ))
         )}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* FABs */}
       <View style={styles.fabContainer}>
         <TouchableOpacity
           style={[styles.fab, styles.fabSecondary]}
           onPress={() => navigation.navigate('FoodScan')}
         >
-          <Ionicons name="camera-outline" size={22} color={Colors.secondary} />
+          <Ionicons name="camera-outline" size={22} color={C.secondary} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => navigation.navigate('AddMeal', {})}
-        >
-          <Ionicons name="add" size={28} color={Colors.surface} />
+        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('AddMeal', {})}>
+          <Ionicons name="add" size={28} color={C.surface} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.background,
   },
   dateNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: C.divider,
   },
   dateNavBtn: {
     width: 44,
@@ -175,11 +191,11 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: FontSize.lg,
     fontWeight: FontWeight.semibold,
-    color: Colors.text,
+    color: C.text,
   },
   dateSub: {
     fontSize: FontSize.xs,
-    color: Colors.primary,
+    color: C.primary,
     marginTop: 2,
   },
   scroll: {
@@ -202,7 +218,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -215,9 +231,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1.5,
-    borderColor: Colors.secondary,
+    borderColor: C.secondary,
   },
   bottomPadding: {
     height: 80,

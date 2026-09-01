@@ -18,7 +18,7 @@ public class GetDietaryRecommendationsUseCase
         _aiService = aiService;
     }
 
-    public async Task<DietaryRecommendationsDto> ExecuteAsync(Guid userId)
+    public async Task<DietaryRecommendationsDto> ExecuteAsync(Guid userId, CancellationToken ct = default)
     {
         var user = await _unitOfWork.Users.GetByIdAsync(userId);
         if (user == null)
@@ -93,6 +93,6 @@ public class GetDietaryRecommendationsUseCase
             };
         }
 
-        return await _aiService.GetDietaryRecommendationsAsync(profileDto, recentNutrition);
+        return await _aiService.GetDietaryRecommendationsAsync(profileDto, recentNutrition, ct);
     }
 }

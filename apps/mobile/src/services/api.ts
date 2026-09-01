@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { API_URL } from '@/constants/api';
 
+// Surface the resolved host in the Metro console - the usual cause of a failing dev login
+// is the device not being able to reach this address.
+if (__DEV__) console.log(`[api] base URL: ${API_URL}`);
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: {

@@ -20,6 +20,13 @@ export interface Recipe {
   tags?: string;
   imageUrl?: string;
   isAIGenerated: boolean;
+  /** Original publisher, for attribution and for recipes whose method lives off-site. */
+  sourceUrl?: string;
+  sourceName?: string;
+  /** False when the upstream source has no method for this recipe at all. */
+  hasInstructions?: boolean;
+  /** True when the method could not be fetched this time - worth retrying, unlike the above. */
+  detailUnavailable?: boolean;
   ingredients: RecipeIngredient[];
   nutritionalInfoPerServing: NutritionalInfo;
   createdAt: string;

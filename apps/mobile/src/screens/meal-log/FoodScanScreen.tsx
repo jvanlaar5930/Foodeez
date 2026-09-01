@@ -15,13 +15,16 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealLogStackParamList } from '@/navigation/types';
 import { mealService } from '@/services/mealService';
 import { ParsedFoodDto } from '@/types';
-import { Colors, Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealLogStackParamList, 'FoodScan'>;
 
 type ScanState = 'camera' | 'analyzing' | 'results';
 
 export function FoodScanScreen({ navigation }: Props) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [scanState, setScanState] = useState<ScanState>('camera');
@@ -35,7 +38,7 @@ export function FoodScanScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.permissionContainer}>
-          <Ionicons name="camera-outline" size={64} color={Colors.textSecondary} />
+          <Ionicons name="camera-outline" size={64} color={C.textSecondary} />
           <Text style={styles.permissionTitle}>Camera Access Required</Text>
           <Text style={styles.permissionText}>
             Foodeez needs camera access to scan and analyze your food.
@@ -81,7 +84,7 @@ export function FoodScanScreen({ navigation }: Props) {
   if (scanState === 'analyzing') {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={C.primary} />
         <Text style={styles.analyzingText}>Analyzing your food...</Text>
         <Text style={styles.analyzingSubText}>AI is identifying ingredients and nutrition</Text>
       </SafeAreaView>
@@ -106,7 +109,7 @@ export function FoodScanScreen({ navigation }: Props) {
             >
               <View style={styles.resultCheckbox}>
                 {selectedItems.has(index) && (
-                  <Ionicons name="checkmark" size={16} color={Colors.surface} />
+                  <Ionicons name="checkmark" size={16} color={C.surface} />
                 )}
               </View>
               <View style={styles.resultContent}>
@@ -129,7 +132,7 @@ export function FoodScanScreen({ navigation }: Props) {
         />
         <View style={styles.resultsActions}>
           <TouchableOpacity style={styles.retryButton} onPress={() => setScanState('camera')}>
-            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+            <Ionicons name="camera-outline" size={20} color={C.primary} />
             <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -140,7 +143,7 @@ export function FoodScanScreen({ navigation }: Props) {
             <Text style={styles.confirmButtonText}>
               Add {selectedItems.size} Item{selectedItems.size !== 1 ? 's' : ''}
             </Text>
-            <Ionicons name="arrow-forward" size={20} color={Colors.surface} />
+            <Ionicons name="arrow-forward" size={20} color={C.surface} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -152,7 +155,7 @@ export function FoodScanScreen({ navigation }: Props) {
       <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
         <SafeAreaView style={styles.cameraOverlay}>
           <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={28} color={Colors.surface} />
+            <Ionicons name="close" size={28} color={C.surface} />
           </TouchableOpacity>
           <View style={styles.scanFrame} />
           <Text style={styles.scanHint}>Center your food in the frame</Text>
@@ -161,7 +164,7 @@ export function FoodScanScreen({ navigation }: Props) {
               style={styles.flipButton}
               onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
             >
-              <Ionicons name="camera-reverse-outline" size={28} color={Colors.surface} />
+              <Ionicons name="camera-reverse-outline" size={28} color={C.surface} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.captureButton} onPress={handleCapture}>
               <View style={styles.captureButtonInner} />
@@ -174,8 +177,8 @@ export function FoodScanScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (C: Palette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
   centered: { justifyContent: 'center', alignItems: 'center', gap: Spacing.md },
   camera: { flex: 1 },
   cameraOverlay: {
@@ -195,13 +198,13 @@ const styles = StyleSheet.create({
     height: 280,
     alignSelf: 'center',
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: C.surface,
     borderRadius: BorderRadius.lg,
     backgroundColor: 'transparent',
   },
   scanHint: {
     textAlign: 'center',
-    color: Colors.surface,
+    color: C.surface,
     fontSize: FontSize.md,
     backgroundColor: 'rgba(0,0,0,0.4)',
     paddingHorizontal: Spacing.md,
@@ -232,88 +235,88 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: Colors.surface,
+    borderColor: C.surface,
   },
   captureButtonInner: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
   },
   permissionContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
-  permissionTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, marginTop: Spacing.md, color: Colors.text },
-  permissionText: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', marginTop: Spacing.sm },
+  permissionTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, marginTop: Spacing.md, color: C.text },
+  permissionText: { fontSize: FontSize.md, color: C.textSecondary, textAlign: 'center', marginTop: Spacing.sm },
   permissionButton: {
     marginTop: Spacing.xl,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
   },
-  permissionButtonText: { color: Colors.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
-  analyzingText: { fontSize: FontSize.xl, fontWeight: FontWeight.semibold, color: Colors.text },
-  analyzingSubText: { fontSize: FontSize.md, color: Colors.textSecondary },
-  resultsHeader: { padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: Colors.divider },
-  resultsTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.text },
-  resultsSubtitle: { fontSize: FontSize.md, color: Colors.textSecondary, marginTop: Spacing.xs },
+  permissionButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  analyzingText: { fontSize: FontSize.xl, fontWeight: FontWeight.semibold, color: C.text },
+  analyzingSubText: { fontSize: FontSize.md, color: C.textSecondary },
+  resultsHeader: { padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: C.divider },
+  resultsTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: C.text },
+  resultsSubtitle: { fontSize: FontSize.md, color: C.textSecondary, marginTop: Spacing.xs },
   resultsList: { padding: Spacing.md, gap: Spacing.sm },
   resultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     borderWidth: 2,
     borderColor: 'transparent',
     ...Shadows.sm,
   },
-  resultItemSelected: { borderColor: Colors.primary },
+  resultItemSelected: { borderColor: C.primary },
   resultCheckbox: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
+    borderColor: C.primary,
+    backgroundColor: C.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
   },
   resultContent: { flex: 1 },
-  resultName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.text },
-  resultBrand: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  resultServing: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  resultName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: C.text },
+  resultBrand: { fontSize: FontSize.sm, color: C.textSecondary },
+  resultServing: { fontSize: FontSize.sm, color: C.textSecondary, marginTop: 2 },
   resultNutrition: { alignItems: 'flex-end' },
-  resultCalories: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.text },
-  resultConfidence: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  resultCalories: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: C.text },
+  resultConfidence: { fontSize: FontSize.xs, color: C.textSecondary },
   resultsActions: {
     flexDirection: 'row',
     gap: Spacing.md,
     padding: Spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.divider,
+    borderTopColor: C.divider,
   },
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
     borderWidth: 2,
-    borderColor: Colors.primary,
+    borderColor: C.primary,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  retryButtonText: { color: Colors.primary, fontWeight: FontWeight.semibold },
+  retryButtonText: { color: C.primary, fontWeight: FontWeight.semibold },
   confirmButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xs,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     borderRadius: BorderRadius.lg,
     paddingVertical: Spacing.md,
   },
-  confirmButtonDisabled: { backgroundColor: Colors.textHint },
-  confirmButtonText: { color: Colors.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  confirmButtonDisabled: { backgroundColor: C.textHint },
+  confirmButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
 });

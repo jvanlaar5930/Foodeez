@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Foodeez.Application.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+32ef055463babe2b0879526763987f94444951cc")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4efdd4a0910d95673cfd538de99d2cf728ecd0f9")]
 [assembly: System.Reflection.AssemblyProductAttribute("Foodeez.Application.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Foodeez.Application.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

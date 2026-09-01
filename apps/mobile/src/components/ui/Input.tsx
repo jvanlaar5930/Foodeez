@@ -6,7 +6,8 @@ import {
   View,
   type TextInputProps,
 } from 'react-native';
-import { BorderRadius, Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -15,6 +16,8 @@ interface InputProps extends TextInputProps {
 }
 
 export function Input({ label, error, hint, style, ...props }: InputProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -27,7 +30,7 @@ export function Input({ label, error, hint, style, ...props }: InputProps) {
           error ? styles.inputError : null,
           style,
         ]}
-        placeholderTextColor={Colors.textHint}
+        placeholderTextColor={C.textHint}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         {...props}
@@ -41,40 +44,40 @@ export function Input({ label, error, hint, style, ...props }: InputProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
     marginBottom: Spacing.md,
   },
   label: {
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium,
-    color: Colors.text,
+    color: C.text,
     marginBottom: Spacing.xs,
   },
   input: {
     height: 48,
     borderWidth: 1.5,
-    borderColor: Colors.divider,
+    borderColor: C.divider,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     fontSize: FontSize.md,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    color: C.text,
+    backgroundColor: C.surface,
   },
   inputFocused: {
-    borderColor: Colors.primary,
+    borderColor: C.primary,
   },
   inputError: {
-    borderColor: Colors.error,
+    borderColor: C.error,
   },
   error: {
     fontSize: FontSize.sm,
-    color: Colors.error,
+    color: C.error,
     marginTop: Spacing.xs,
   },
   hint: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginTop: Spacing.xs,
   },
 });

@@ -26,10 +26,14 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 // Response interceptor — handle 401
+// Only redirect to login for auth-endpoint failures (token expired/missing),
+// not for role-permission failures on other endpoints (that would log out mid-session).
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url: string = error.config?.url ?? '';
+    const isAuthEndpoint = url.includes('/auth/');
+    if (error.response?.status === 401 && isAuthEndpoint) {
       authStore?.logout();
       window.location.href = '/auth/login';
     }

@@ -11,6 +11,12 @@ public class MealLog : BaseEntity
     public MealType MealType { get; set; }
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// The stored AI analysis of this meal, or null while none has been generated for the
+    /// meal in its current form.
+    /// </summary>
+    public MealAnalysis? Analysis { get; set; }
+
     public User User { get; set; } = null!;
     public ICollection<MealLogItem> Items { get; set; } = new List<MealLogItem>();
 

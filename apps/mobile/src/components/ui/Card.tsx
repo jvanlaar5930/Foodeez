@@ -6,7 +6,8 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { BorderRadius, Colors, Shadows, Spacing } from '@/constants/theme';
+import { BorderRadius, Shadows, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 interface CardProps {
   children: React.ReactNode;
@@ -15,6 +16,8 @@ interface CardProps {
 }
 
 export function Card({ children, style, onPress }: CardProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   if (onPress) {
     return (
       <TouchableOpacity
@@ -30,9 +33,9 @@ export function Card({ children, style, onPress }: CardProps) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     ...Shadows.md,

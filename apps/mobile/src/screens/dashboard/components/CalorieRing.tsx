@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { Colors, FontSize, FontWeight } from '@/constants/theme';
+import { FontSize, FontWeight } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 interface CalorieRingProps {
   consumed: number;
@@ -16,6 +17,8 @@ export function CalorieRing({
   size = 180,
   strokeWidth = 16,
 }: CalorieRingProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const percentage = target > 0 ? Math.min(1, consumed / target) : 0;
@@ -24,9 +27,9 @@ export function CalorieRing({
 
   const getColor = () => {
     const pct = target > 0 ? consumed / target : 0;
-    if (pct >= 1) return Colors.error;
-    if (pct >= 0.8) return Colors.warning;
-    return Colors.primary;
+    if (pct >= 1) return C.error;
+    if (pct >= 0.8) return C.warning;
+    return C.primary;
   };
 
   const ringColor = getColor();
@@ -40,7 +43,7 @@ export function CalorieRing({
           cx={center}
           cy={center}
           r={radius}
-          stroke={Colors.divider}
+          stroke={C.divider}
           strokeWidth={strokeWidth}
           fill="transparent"
         />
@@ -70,7 +73,7 @@ export function CalorieRing({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
     position: 'relative',
     alignItems: 'center',
@@ -84,26 +87,26 @@ const styles = StyleSheet.create({
   consumed: {
     fontSize: FontSize.xxl,
     fontWeight: FontWeight.bold,
-    color: Colors.text,
+    color: C.text,
   },
   unit: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginBottom: 4,
   },
   divider: {
     width: 40,
     height: 1,
-    backgroundColor: Colors.divider,
+    backgroundColor: C.divider,
     marginVertical: 4,
   },
   remaining: {
     fontSize: FontSize.lg,
     fontWeight: FontWeight.semibold,
-    color: Colors.text,
+    color: C.text,
   },
   target: {
     fontSize: FontSize.xs,
-    color: Colors.textHint,
+    color: C.textHint,
   },
 });

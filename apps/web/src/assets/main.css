@@ -1,1 +1,157 @@
 @import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  /*
+   * Tailwind v4's preflight sets `cursor: default` on buttons to match the browser
+   * default. Restore the pointer so every clickable control reads as clickable.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for],
+  select:not(:disabled),
+  a[href] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
+
+  /*
+   * `color-scheme` is what makes the browser's own chrome follow the theme: scrollbars,
+   * the caret, date pickers, select dropdowns and autofill backgrounds. Without it those
+   * stay light and punch white holes in a dark page. The theme store also sets this
+   * inline so it applies before the stylesheet loads.
+   */
+  :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+  }
+
+  /*
+   * A visible focus ring is the only way a keyboard user can tell where they are. Every
+   * control gets one by default, sized to stay clear of the 3:1 non-text contrast floor
+   * against both the light and dark page grounds.
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-green-600);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  :root.dark
+    :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline-color: var(--color-green-400);
+  }
+
+  /* Chrome renders autofilled inputs with a hard-coded pale yellow; repaint it. */
+  :root.dark input:-webkit-autofill,
+  :root.dark input:-webkit-autofill:hover,
+  :root.dark input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-gray-100);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-gray-800) inset;
+    caret-color: var(--color-gray-100);
+  }
+
+  /*
+   * Shadows carry no information on a dark ground, so raised surfaces lose their edge.
+   * Give them a hairline instead, which is what actually separates a card from the page.
+   */
+  :root.dark :where(.shadow-sm, .shadow, .shadow-md, .shadow-lg) {
+    box-shadow: 0 0 0 1px var(--color-gray-800);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * Printing a recipe.
+ *
+ * The recipe lives inside a modal over a full app shell, so the page cannot simply be
+ * sent to the printer. `visibility` rather than `display` does the hiding: it collapses
+ * the chrome without taking the modal's own ancestors out of the layout, which `display:
+ * none` on a parent would do - and the modal is nested several levels deep.
+ */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  /* Lift the panel out of the fixed, scrolling overlay so every page of it prints. */
+  .print-area {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Controls and decoration have no meaning on paper. */
+  .print-hide,
+  .print-hide * {
+    display: none !important;
+  }
+
+  /* The sticky header would repeat over the top of the content on every sheet. */
+  .print-area .sticky {
+    position: static !important;
+  }
+
+  /* Dark mode must not follow the recipe onto white paper. */
+  .print-area,
+  .print-area :where(div, p, li, span, h1, h2, h3, ol, ul) {
+    background: transparent !important;
+    color: #000 !important;
+  }
+
+  .print-area :where(.rounded-xl, .rounded-2xl, .rounded-full) {
+    border: 1px solid #ddd !important;
+  }
+
+  /* Never split a step or an ingredient across a page break. */
+  .print-area :where(li, .print-keep) {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-area h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}

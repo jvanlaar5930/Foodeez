@@ -11,6 +11,7 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null);
 
   const isAuthenticated = computed(() => !!token.value && !!user.value);
+  const isAdmin = computed(() => user.value?.isAdmin ?? false);
 
   // Wire up the api instance so it can read our token
   setAuthStore({
@@ -81,6 +82,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     token,
     isAuthenticated,
+    isAdmin,
     isLoading,
     error,
     login,

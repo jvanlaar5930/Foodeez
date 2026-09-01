@@ -25,6 +25,10 @@ builder.Services.AddScoped<LoginUseCase>();
 builder.Services.AddScoped<GetUserProfileUseCase>();
 builder.Services.AddScoped<UpdateUserProfileUseCase>();
 builder.Services.AddScoped<LogMealUseCase>();
+builder.Services.AddScoped<UpdateMealLogUseCase>();
+builder.Services.AddScoped<DeleteMealLogUseCase>();
+builder.Services.AddScoped<AnalyzeMealLogUseCase>();
+builder.Services.AddScoped<AnalyzeDayUseCase>();
 builder.Services.AddScoped<ParseFoodImageUseCase>();
 builder.Services.AddScoped<GetDailyLogsUseCase>();
 builder.Services.AddScoped<GetNutritionSummaryUseCase>();
@@ -33,7 +37,11 @@ builder.Services.AddScoped<CreateMealPlanUseCase>();
 builder.Services.AddScoped<GenerateAIMealPlanUseCase>();
 builder.Services.AddScoped<GetDietaryRecommendationsUseCase>();
 builder.Services.AddScoped<AnalyzeMealUseCase>();
+builder.Services.AddScoped<EstimateNutritionUseCase>();
 builder.Services.AddScoped<SearchRecipesUseCase>();
+builder.Services.AddScoped<AutocompleteRecipesUseCase>();
+builder.Services.AddScoped<GetRecipeDetailUseCase>();
+builder.Services.AddScoped<SavedRecipesUseCase>();
 builder.Services.AddScoped<SearchFoodItemsUseCase>();
 
 // ── JWT Authentication ────────────────────────────────────────────────────────

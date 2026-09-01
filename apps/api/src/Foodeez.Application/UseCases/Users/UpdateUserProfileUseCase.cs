@@ -30,6 +30,8 @@ public class UpdateUserProfileUseCase
         profile.ActivityLevel = request.ActivityLevel;
         profile.DietaryGoal = request.DietaryGoal;
         profile.Notes = request.Notes;
+        profile.DarkMode = request.DarkMode;
+        profile.UnitSystem = request.UnitSystem;
 
         profile.CalculateAndSetTargets();
 
@@ -51,7 +53,9 @@ public class UpdateUserProfileUseCase
             DailyCarbTargetG = profile.DailyCarbTargetG,
             DailyFatTargetG = profile.DailyFatTargetG,
             Notes = profile.Notes,
-            ProfileCompleted = profile.ProfileCompleted
+            ProfileCompleted = profile.ProfileCompleted,
+            DarkMode = profile.DarkMode,
+            UnitSystem = profile.UnitSystem
         };
     }
 }

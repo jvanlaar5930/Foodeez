@@ -3,17 +3,18 @@ import { WelcomeScreen } from '@/screens/auth/WelcomeScreen';
 import { LoginScreen } from '@/screens/auth/LoginScreen';
 import { RegisterScreen } from '@/screens/auth/RegisterScreen';
 import { ProfileSetupScreen } from '@/screens/auth/ProfileSetupScreen';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/theme';
 import type { AuthStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export function AuthNavigator() {
+  const C = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.surface },
-        headerTintColor: Colors.text,
+        headerStyle: { backgroundColor: C.surface },
+        headerTintColor: C.text,
         headerTitleStyle: { fontWeight: '600' },
       }}
     >

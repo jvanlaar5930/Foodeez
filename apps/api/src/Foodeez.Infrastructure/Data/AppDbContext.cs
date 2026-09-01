@@ -12,11 +12,14 @@ public class AppDbContext : DbContext
     public DbSet<FoodItem> FoodItems => Set<FoodItem>();
     public DbSet<MealLog> MealLogs => Set<MealLog>();
     public DbSet<MealLogItem> MealLogItems => Set<MealLogItem>();
+    public DbSet<DayAnalysis> DayAnalyses => Set<DayAnalysis>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
+    public DbSet<SavedRecipe> SavedRecipes => Set<SavedRecipe>();
     public DbSet<MealPlan> MealPlans => Set<MealPlan>();
     public DbSet<MealPlanEntry> MealPlanEntries => Set<MealPlanEntry>();
     public DbSet<AppLog> AppLogs => Set<AppLog>();
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

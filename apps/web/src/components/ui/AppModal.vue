@@ -66,13 +66,13 @@ const sizeClasses: Record<string, string> = {
         >
           <div
             v-if="modelValue"
-            :class="['relative z-10 w-full bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]', sizeClasses[size]]"
+            :class="['relative z-10 w-full bg-white dark:bg-gray-900 rounded-2xl shadow-xl flex flex-col max-h-[90vh]', sizeClasses[size]]"
           >
             <!-- Header -->
-            <div class="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 class="text-lg font-semibold text-gray-900">{{ title }}</h2>
+            <div class="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ title }}</h2>
               <button
-                class="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 @click="close"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,7 +87,7 @@ const sizeClasses: Record<string, string> = {
             </div>
 
             <!-- Footer -->
-            <div v-if="$slots.footer" class="p-6 border-t border-gray-100">
+            <div v-if="$slots.footer" class="p-6 border-t border-gray-100 dark:border-gray-800">
               <slot name="footer" />
             </div>
           </div>

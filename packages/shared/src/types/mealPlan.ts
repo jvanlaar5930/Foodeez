@@ -20,6 +20,7 @@ export interface MealPlan {
   startDate: string;
   endDate: string;
   isAIGenerated: boolean;
-  entries: MealPlanEntry[];
+  /** Entries grouped by 'yyyy-MM-dd'. The API has never sent a flat `entries` array. */
+  entriesByDate: Record<string, MealPlanEntry[]>;
   createdAt: string;
 }

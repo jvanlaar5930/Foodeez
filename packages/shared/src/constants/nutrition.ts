@@ -1,3 +1,4 @@
+import { MealType } from '../enums';
 export const ACTIVITY_LEVEL_MULTIPLIERS = {
   Sedentary: 1.2,
   LightlyActive: 1.375,
@@ -32,11 +33,11 @@ export const MACRO_GOAL_PERCENTAGES = {
   GeneralHealth: { protein: 0.25, carbs: 0.50, fat: 0.25 },
 } as const;
 
-export const MEAL_TYPE_LABELS: Record<number, string> = {
-  1: 'Breakfast',
-  2: 'Morning Snack',
-  3: 'Lunch',
-  4: 'Afternoon Snack',
-  5: 'Dinner',
-  6: 'Evening Snack',
+export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  [MealType.Breakfast]: 'Breakfast',
+  [MealType.MorningSnack]: 'Morning Snack',
+  [MealType.Lunch]: 'Lunch',
+  [MealType.AfternoonSnack]: 'Afternoon Snack',
+  [MealType.Dinner]: 'Dinner',
+  [MealType.EveningSnack]: 'Evening Snack',
 };

@@ -43,7 +43,7 @@ function isActive(path: string): boolean {
 </script>
 
 <template>
-  <div class="min-h-screen flex bg-gray-50">
+  <div class="min-h-screen flex bg-gray-50 dark:bg-gray-950">
     <!-- Desktop sidebar -->
     <AppSidebar />
 
@@ -54,7 +54,7 @@ function isActive(path: string): boolean {
       </main>
 
       <!-- Mobile bottom navigation -->
-      <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-40">
+      <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 z-40">
         <div class="flex">
           <RouterLink
             v-for="item in navItems"
@@ -63,8 +63,8 @@ function isActive(path: string): boolean {
             :class="[
               'flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors',
               isActive(item.path)
-                ? 'text-green-700'
-                : 'text-gray-400 hover:text-gray-600',
+                ? 'text-green-700 dark:text-green-400'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200',
             ]"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"

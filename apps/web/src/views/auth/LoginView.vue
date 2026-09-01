@@ -53,15 +53,15 @@ async function handleSubmit() {
       <div class="text-center mb-8">
         <div class="inline-flex items-center gap-2 mb-2">
           <span class="text-4xl">🥦</span>
-          <span class="text-3xl font-bold text-green-700">Foodeez</span>
+          <span class="text-3xl font-bold text-green-700 dark:text-green-400">Foodeez</span>
         </div>
-        <p class="text-gray-500 text-sm">Track your nutrition, reach your goals</p>
+        <p class="text-gray-500 dark:text-gray-400 text-sm">Track your nutrition, reach your goals</p>
       </div>
 
       <!-- Card -->
-      <div class="bg-white rounded-2xl shadow-lg p-8">
-        <h1 class="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
-        <p class="text-sm text-gray-500 mb-6">Sign in to your account</p>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-8">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Welcome back</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Sign in to your account</p>
 
         <AppAlert v-if="authStore.error" variant="error" :message="authStore.error" class="mb-4" />
 
@@ -93,9 +93,9 @@ async function handleSubmit() {
         </form>
       </div>
 
-      <p class="text-center text-sm text-gray-500 mt-4">
+      <p class="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
         Don't have an account?
-        <RouterLink to="/auth/register" class="text-green-600 font-medium hover:underline">
+        <RouterLink to="/auth/register" class="text-green-600 dark:text-green-400 font-medium hover:underline">
           Create one
         </RouterLink>
       </p>

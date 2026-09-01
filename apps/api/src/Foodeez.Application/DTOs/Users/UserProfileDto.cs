@@ -19,4 +19,5 @@ public class UserProfileDto
     public string? Notes { get; set; }
     public bool ProfileCompleted { get; set; }
     public bool DarkMode { get; set; }
+    public UnitSystem UnitSystem { get; set; }
 }

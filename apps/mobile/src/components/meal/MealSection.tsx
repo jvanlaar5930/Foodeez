@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MealLogItemRow } from './MealLogItemRow';
-import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
-import { MealType, type MealLogDto, type MealLogItemDto, type NutritionalInfo } from '@/types';
+import { FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
+import { MealType, type MealLogDto } from '@/types';
 
 interface MealSectionProps {
   mealLog: MealLogDto;
-  onDeleteItem?: (mealLogId: string, itemId: string) => void;
+  onEditMeal?: (mealLog: MealLogDto) => void;
+  onDeleteMeal?: (mealLog: MealLogDto) => void;
 }
 
 const MEAL_TYPE_LABELS: Record<MealType, string> = {
@@ -28,7 +30,9 @@ const MEAL_TYPE_ICONS: Record<MealType, keyof typeof Ionicons.glyphMap> = {
   [MealType.EveningSnack]: 'ice-cream-outline',
 };
 
-export function MealSection({ mealLog, onDeleteItem }: MealSectionProps) {
+export function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionProps) {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [isExpanded, setIsExpanded] = useState(true);
 
   const calories = Math.round(mealLog.totalNutrition.calories);
@@ -37,42 +41,46 @@ export function MealSection({ mealLog, onDeleteItem }: MealSectionProps) {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.header}
-        onPress={() => setIsExpanded((prev) => !prev)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.headerLeft}>
-          <View style={styles.iconBadge}>
-            <Ionicons name={icon} size={16} color={Colors.primary} />
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerMain}
+          onPress={() => setIsExpanded((prev) => !prev)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.headerLeft}>
+            <View style={styles.iconBadge}>
+              <Ionicons name={icon} size={16} color={C.primary} />
+            </View>
+            <View>
+              <Text style={styles.mealLabel}>{label}</Text>
+              <Text style={styles.itemCount}>
+                {mealLog.items.length} item{mealLog.items.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.mealLabel}>{label}</Text>
-            <Text style={styles.itemCount}>
-              {mealLog.items.length} item{mealLog.items.length !== 1 ? 's' : ''}
-            </Text>
+          <View style={styles.headerRight}>
+            <Text style={styles.calories}>{calories} kcal</Text>
+            <Ionicons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={C.textSecondary}
+            />
           </View>
+        </TouchableOpacity>
+        <View style={styles.actions}>
+          <TouchableOpacity onPress={() => onEditMeal?.(mealLog)} hitSlop={8}>
+            <Text style={styles.editAction}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onDeleteMeal?.(mealLog)} hitSlop={8}>
+            <Text style={styles.deleteAction}>Delete</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.calories}>{calories} kcal</Text>
-          <Ionicons
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={20}
-            color={Colors.textSecondary}
-          />
-        </View>
-      </TouchableOpacity>
+      </View>
 
       {isExpanded && (
         <View style={styles.itemsList}>
           {mealLog.items.map((item) => (
-            <MealLogItemRow
-              key={item.id}
-              item={item}
-              onDelete={
-                onDeleteItem ? () => onDeleteItem(mealLog.id, item.id) : undefined
-              }
-            />
+            <MealLogItemRow key={item.id} item={item} />
           ))}
         </View>
       )}
@@ -80,18 +88,22 @@ export function MealSection({ mealLog, onDeleteItem }: MealSectionProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 12,
     marginBottom: Spacing.sm,
     overflow: 'hidden',
   },
   header: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  headerMain: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.md,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -102,18 +114,18 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: C.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   mealLabel: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold,
-    color: Colors.text,
+    color: C.text,
   },
   itemCount: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -123,10 +135,26 @@ const styles = StyleSheet.create({
   calories: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold,
-    color: Colors.primary,
+    color: C.primary,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    justifyContent: 'flex-end',
+    marginTop: Spacing.sm,
+  },
+  editAction: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: C.primary,
+  },
+  deleteAction: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: C.error,
   },
   itemsList: {
     borderTopWidth: 1,
-    borderTopColor: Colors.divider,
+    borderTopColor: C.divider,
   },
 });

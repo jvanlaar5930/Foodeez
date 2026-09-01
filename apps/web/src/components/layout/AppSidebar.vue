@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useThemeStore } from '@/stores/theme';
 import { computed } from 'vue';
 
 const route = useRoute();
 const authStore = useAuthStore();
+const themeStore = useThemeStore();
 
 const navItems = [
   {
@@ -48,14 +50,15 @@ const userInitials = computed(() => {
 function isActive(path: string): boolean {
   return route.path.startsWith(path);
 }
+
 </script>
 
 <template>
-  <aside class="hidden lg:flex flex-col w-64 min-h-screen bg-white border-r border-gray-100 px-4 py-6">
+  <aside class="hidden lg:flex flex-col w-64 min-h-screen bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 px-4 py-6">
     <!-- Logo -->
     <div class="flex items-center gap-2 px-2 mb-8">
       <span class="text-2xl">🥦</span>
-      <span class="text-xl font-bold text-green-700 tracking-tight">Foodeez</span>
+      <span class="text-xl font-bold text-green-700 dark:text-green-400 tracking-tight">Foodeez</span>
     </div>
 
     <!-- Navigation -->
@@ -67,31 +70,73 @@ function isActive(path: string): boolean {
         :class="[
           'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
           isActive(item.path)
-            ? 'bg-green-50 text-green-700'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+            ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100',
         ]"
       >
         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
           v-html="item.icon" />
         {{ item.label }}
       </RouterLink>
+
+      <!-- Admin link (only visible to admins) -->
+      <RouterLink
+        v-if="authStore.isAdmin"
+        to="/admin/logs"
+        :class="[
+          'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+          isActive('/admin')
+            ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100',
+        ]"
+      >
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Admin
+      </RouterLink>
     </nav>
 
-    <!-- User section -->
-    <div class="border-t border-gray-100 pt-4 mt-4">
-      <div class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-50 transition-colors">
+    <!-- Bottom controls -->
+    <div class="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4 space-y-1">
+      <!-- Dark mode toggle -->
+      <button
+        class="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors"
+        @click="themeStore.toggleDarkMode()"
+      >
+        <span class="flex items-center gap-2">
+          <svg v-if="!themeStore.isDark" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          {{ themeStore.isDark ? 'Light mode' : 'Dark mode' }}
+        </span>
+        <div :class="['w-9 h-5 rounded-full transition-colors relative', themeStore.isDark ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600']">
+          <div :class="['absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform', themeStore.isDark ? 'translate-x-4' : 'translate-x-0.5']" />
+        </div>
+      </button>
+
+      <!-- User info -->
+      <div class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
         <div class="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
           {{ userInitials }}
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-gray-900 truncate">
+          <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
             {{ authStore.user?.firstName }} {{ authStore.user?.lastName }}
           </p>
-          <p class="text-xs text-gray-400 truncate">{{ authStore.user?.email }}</p>
+          <p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ authStore.user?.email }}</p>
         </div>
       </div>
+
       <button
-        class="mt-2 w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
         @click="$router.push('/auth/login'); authStore.logout()"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

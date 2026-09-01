@@ -48,7 +48,7 @@ function getEntry(date: Date, mealType: MealType): MealPlanEntry | undefined {
             'h-12 flex flex-col items-center justify-center text-xs font-semibold rounded-t-lg',
             isToday(day)
               ? 'bg-green-600 text-white'
-              : 'bg-gray-100 text-gray-600',
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
           ]"
         >
           <span>{{ format(day, 'EEE') }}</span>
@@ -62,12 +62,12 @@ function getEntry(date: Date, mealType: MealType): MealPlanEntry | undefined {
       <div
         v-for="mealType in mealTypes"
         :key="mealType"
-        class="grid gap-px border-t border-gray-100"
+        class="grid gap-px border-t border-gray-100 dark:border-gray-800"
         :style="{ gridTemplateColumns: '80px repeat(7, 1fr)' }"
       >
         <!-- Meal label -->
         <div class="py-2 pr-2 flex items-center">
-          <span class="text-xs font-medium text-gray-500 leading-tight">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 leading-tight">
             {{ MEAL_TYPE_LABELS[mealType] }}
           </span>
         </div>

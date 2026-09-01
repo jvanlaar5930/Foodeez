@@ -17,7 +17,7 @@ public class GenerateAIMealPlanUseCase
         _aiService = aiService;
     }
 
-    public async Task<MealPlanDto> ExecuteAsync(GenerateMealPlanRequest request)
+    public async Task<MealPlanDto> ExecuteAsync(GenerateMealPlanRequest request, CancellationToken ct = default)
     {
         var user = await _unitOfWork.Users.GetByIdAsync(request.UserId);
         if (user == null)
@@ -44,7 +44,15 @@ public class GenerateAIMealPlanUseCase
             ProfileCompleted = user.Profile.ProfileCompleted
         };
 
-        var generated = await _aiService.GenerateMealPlanAsync(request, profileDto);
+        var generated = await _aiService.GenerateMealPlanAsync(request, profileDto, ct);
+
+        // Providers swallow their own transport errors and hand back an empty result, so an
+        // outage arrives here looking exactly like a plan with no days in it. Saving that
+        // would hand the user a persisted, permanently blank week and report success -
+        // refusing is the only honest answer, and it leaves nothing to clean up.
+        if (generated.Days.Count == 0)
+            throw new AIGenerationFailedException(
+                "The AI service could not produce a meal plan right now. Please try again in a moment.");
 
         var plan = new MealPlan
         {
@@ -60,12 +68,23 @@ public class GenerateAIMealPlanUseCase
         {
             foreach (var meal in day.Meals)
             {
+                // The name is the only part of a generated meal a reader actually sees:
+                // these entries have no Recipe row behind them, so RecipeName on the DTO is
+                // always null and Notes is the one field that reaches the card. Taking only
+                // RecipeDescription - which most providers never even parse - left every
+                // generated plan showing seven blank slots.
+                var label = string.IsNullOrWhiteSpace(meal.RecipeName)
+                    ? meal.RecipeDescription
+                    : string.IsNullOrWhiteSpace(meal.RecipeDescription)
+                        ? meal.RecipeName
+                        : $"{meal.RecipeName} - {meal.RecipeDescription}";
+
                 var entry = new MealPlanEntry
                 {
                     MealPlanId = plan.Id,
                     EntryDate = day.Date,
                     MealType = meal.MealType,
-                    Notes = meal.RecipeDescription,
+                    Notes = label,
                     Servings = meal.Servings > 0 ? meal.Servings : 1f
                 };
                 plan.Entries.Add(entry);

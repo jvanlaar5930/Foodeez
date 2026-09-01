@@ -1,4 +1,5 @@
-import { ActivityLevel, DietaryGoal, Gender, MealType } from '../enums';
+import { ActivityLevel, DietaryGoal, Gender, MealType, UnitSystem } from '../enums';
+import { MealAnalysis } from './meal';
 import { NutritionalInfo } from './nutrition';
 import { User, UserProfile } from './user';
 
@@ -29,6 +30,8 @@ export interface UpdateProfileRequest {
   activityLevel: ActivityLevel;
   dietaryGoal: DietaryGoal;
   notes?: string;
+  darkMode?: boolean;
+  unitSystem?: UnitSystem;
 }
 
 // Meal Logs
@@ -43,6 +46,8 @@ export interface LogMealRequest {
   mealType: MealType;
   notes?: string;
   items: LogMealItemRequest[];
+  /** An analysis already generated for exactly these items, persisted with the meal. */
+  analysis?: MealAnalysis;
 }
 
 // Meal Plans

@@ -16,7 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/store/authStore';
-import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 import type { AuthStackParamList } from '@/navigation/types';
 
 type RegisterNav = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
@@ -33,8 +34,8 @@ function validateEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function getPasswordStrength(password: string): { level: number; label: string; color: string } {
-  if (password.length === 0) return { level: 0, label: '', color: Colors.divider };
+function getPasswordStrength(password: string, C: Palette): { level: number; label: string; color: string } {
+  if (password.length === 0) return { level: 0, label: '', color: C.divider };
   let score = 0;
   if (password.length >= 8) score++;
   if (password.length >= 12) score++;
@@ -42,13 +43,15 @@ function getPasswordStrength(password: string): { level: number; label: string; 
   if (/[0-9]/.test(password)) score++;
   if (/[^A-Za-z0-9]/.test(password)) score++;
 
-  if (score <= 1) return { level: 1, label: 'Weak', color: Colors.error };
-  if (score <= 2) return { level: 2, label: 'Fair', color: Colors.warning };
-  if (score <= 3) return { level: 3, label: 'Good', color: Colors.info };
-  return { level: 4, label: 'Strong', color: Colors.primary };
+  if (score <= 1) return { level: 1, label: 'Weak', color: C.error };
+  if (score <= 2) return { level: 2, label: 'Fair', color: C.warning };
+  if (score <= 3) return { level: 3, label: 'Good', color: C.info };
+  return { level: 4, label: 'Strong', color: C.primary };
 }
 
 export function RegisterScreen() {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<RegisterNav>();
   const { register, isLoading } = useAuthStore();
 
@@ -62,7 +65,7 @@ export function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
-  const strength = getPasswordStrength(form.password);
+  const strength = getPasswordStrength(form.password, C);
 
   const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -124,7 +127,7 @@ export function RegisterScreen() {
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={24} color={C.text} />
           </TouchableOpacity>
 
           <Text style={styles.title}>Create Account</Text>
@@ -192,7 +195,7 @@ export function RegisterScreen() {
                       styles.strengthBar,
                       {
                         backgroundColor:
-                          strength.level >= level ? strength.color : Colors.divider,
+                          strength.level >= level ? strength.color : C.divider,
                       },
                     ]}
                   />
@@ -223,7 +226,7 @@ export function RegisterScreen() {
             <Ionicons
               name={showPassword ? 'eye-off-outline' : 'eye-outline'}
               size={20}
-              color={Colors.textSecondary}
+              color={C.textSecondary}
             />
             <Text style={styles.showPasswordText}>
               {showPassword ? 'Hide' : 'Show'} passwords
@@ -253,10 +256,10 @@ export function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.background,
   },
   flex: {
     flex: 1,
@@ -275,12 +278,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.xxxl,
     fontWeight: FontWeight.bold,
-    color: Colors.text,
+    color: C.text,
     marginBottom: Spacing.xs,
   },
   subtitle: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginBottom: Spacing.xl,
   },
   nameRow: {
@@ -321,7 +324,7 @@ const styles = StyleSheet.create({
   },
   showPasswordText: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   loginLink: {
     marginTop: Spacing.xl,
@@ -330,10 +333,10 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   loginHighlight: {
-    color: Colors.primary,
+    color: C.primary,
     fontWeight: FontWeight.semibold,
   },
 });

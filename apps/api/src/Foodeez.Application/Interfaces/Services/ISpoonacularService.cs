@@ -3,6 +3,37 @@ namespace Foodeez.Application.Interfaces.Services;
 public interface ISpoonacularService
 {
     Task<IReadOnlyList<SpoonacularRecipeResult>> SearchRecipesAsync(string query, int number = 10, CancellationToken ct = default);
+
+    /// <summary>
+    /// A paged search. Uses the upstream's own offset so page N costs one call rather than
+    /// refetching everything before it.
+    /// </summary>
+    Task<SpoonacularSearchPage> SearchRecipesPagedAsync(string query, int offset, int number, CancellationToken ct = default);
+
+    /// <summary>Lightweight title-only suggestions for search-as-you-type.</summary>
+    Task<IReadOnlyList<SpoonacularAutocompleteResult>> AutocompleteAsync(string query, int number = 8, CancellationToken ct = default);
+
+    /// <summary>
+    /// Full information for one recipe. This is the only endpoint that returns
+    /// <c>extendedIngredients</c> and <c>analyzedInstructions</c> - a search response carries
+    /// neither - so it has to be called before a recipe can actually be cooked from.
+    /// </summary>
+    Task<SpoonacularRecipeResult?> GetRecipeInformationAsync(int spoonacularId, CancellationToken ct = default);
+}
+
+public class SpoonacularSearchPage
+{
+    public List<SpoonacularRecipeResult> Results { get; set; } = new();
+
+    /// <summary>How many matches exist upstream in total, for the client's "has more" check.</summary>
+    public int TotalResults { get; set; }
+}
+
+public class SpoonacularAutocompleteResult
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? ImageType { get; set; }
 }
 
 public class SpoonacularRecipeResult
@@ -16,6 +47,9 @@ public class SpoonacularRecipeResult
     public int Servings { get; set; }
     public string? Image { get; set; }
     public string? Instructions { get; set; }
+    public string? SourceUrl { get; set; }
+    public string? SourceName { get; set; }
+    public string? CreditsText { get; set; }
 
     // Dietary flags
     public bool Vegetarian { get; set; }
@@ -74,8 +108,23 @@ public class SpoonacularIngredient
 public class SpoonacularNutrition
 {
     public List<SpoonacularNutrient> Nutrients { get; set; } = new();
+
+    /// <summary>
+    /// A slimmer ingredient list (name/amount/unit only) that rides along with a search
+    /// response when nutrition is requested. It is the only ingredient data search gives us.
+    /// </summary>
+    public List<SpoonacularNutritionIngredient> Ingredients { get; set; } = new();
+
     public SpoonacularCaloricBreakdown? CaloricBreakdown { get; set; }
     public SpoonacularWeightPerServing? WeightPerServing { get; set; }
+}
+
+public class SpoonacularNutritionIngredient
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public double Amount { get; set; }
+    public string Unit { get; set; } = string.Empty;
 }
 
 public class SpoonacularNutrient

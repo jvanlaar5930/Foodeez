@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useSavedRecipeStore } from './savedRecipeStore';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import * as SecureStore from 'expo-secure-store';
 import * as authService from '@/services/authService';
@@ -84,6 +85,9 @@ export const useAuthStore = create<AuthState>()(
           isLoading: false,
           error: null,
         });
+        // Saved recipes belong to the account that just left; the next sign-in must not
+        // inherit them.
+        useSavedRecipeStore.getState().clear();
       },
 
       loadStoredAuth: async () => {

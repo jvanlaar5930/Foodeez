@@ -24,4 +24,7 @@ public class MealAnalysisDto
     public string Completeness { get; set; } = string.Empty;
     public List<string> Missing { get; set; } = new();
     public List<string> Suggestions { get; set; } = new();
+
+    /// <summary>When the model produced this analysis; null for one that has never been stored.</summary>
+    public DateTime? GeneratedAt { get; set; }
 }

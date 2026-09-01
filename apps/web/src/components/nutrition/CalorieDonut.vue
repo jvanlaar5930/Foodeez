@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Doughnut } from 'vue-chartjs';
+import { useThemeStore } from '@/stores/theme';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -22,17 +23,26 @@ const props = withDefaults(defineProps<Props>(), {
   target: 2000,
 });
 
+// Canvas colours can't come from CSS classes, so the theme has to be read directly.
+const themeStore = useThemeStore();
+
 const percentage = computed(() => {
   if (props.target <= 0) return 0;
   return Math.min((props.consumed / props.target) * 100, 150);
 });
 
+// The arc is canvas, but this same colour labels the percentage text on the card, so the
+// dark variants are the lighter 400 steps that clear AA against the dark surface.
 const fillColor = computed(() => {
   const pct = percentage.value;
-  if (pct > 100) return '#ef4444'; // red — over
-  if (pct >= 80) return '#f59e0b'; // amber — nearly there
-  return '#16a34a'; // green — on track / under
+  const dark = themeStore.isDark;
+  if (pct > 100) return dark ? '#f87171' : '#ef4444'; // red — over
+  if (pct >= 80) return dark ? '#fbbf24' : '#f59e0b'; // amber — nearly there
+  return dark ? '#4ade80' : '#16a34a'; // green — on track / under
 });
+
+/** The unfilled remainder of the ring: gray-200 on light, gray-700 on dark. */
+const trackColor = computed(() => (themeStore.isDark ? '#374151' : '#e5e7eb'));
 
 const chartData = computed<ChartData<'doughnut'>>(() => ({
   labels: ['Consumed', 'Remaining'],
@@ -42,7 +52,7 @@ const chartData = computed<ChartData<'doughnut'>>(() => ({
         Math.round(props.consumed),
         Math.max(0, Math.round(props.target - props.consumed)),
       ],
-      backgroundColor: [fillColor.value, '#e5e7eb'],
+      backgroundColor: [fillColor.value, trackColor.value],
       borderWidth: 0,
       hoverOffset: 4,
     },
@@ -71,8 +81,8 @@ const chartOptions = computed<ChartOptions<'doughnut'>>(() => ({
     </div>
     <!-- Center overlay text -->
     <div class="absolute flex flex-col items-center pointer-events-none">
-      <span class="text-2xl font-bold text-gray-900">{{ Math.round(consumed) }}</span>
-      <span class="text-xs text-gray-500">/ {{ Math.round(target) }} kcal</span>
+      <span class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ Math.round(consumed) }}</span>
+      <span class="text-xs text-gray-500 dark:text-gray-400">/ {{ Math.round(target) }} kcal</span>
       <span :style="{ color: fillColor }" class="text-xs font-semibold mt-0.5">
         {{ Math.round(percentage) }}%
       </span>

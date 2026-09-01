@@ -22,4 +22,7 @@ public class UpdateProfileRequest
 
     [MaxLength(1000)]
     public string? Notes { get; set; }
+
+    public bool DarkMode { get; set; }
+    public UnitSystem UnitSystem { get; set; }
 }

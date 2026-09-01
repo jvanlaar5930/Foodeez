@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.DTOs.MealPlans;
@@ -39,14 +40,20 @@ public class ClaudeAIService : IAIService
         _httpClient.DefaultRequestHeaders.Add("anthropic-version", AnthropicVersion);
     }
 
-    public async Task<DietaryRecommendationsDto> GetDietaryRecommendationsAsync(UserProfileDto profile, DailyNutritionDto? recentNutrition = null)
+    public async Task<DietaryRecommendationsDto> GetDietaryRecommendationsAsync(UserProfileDto profile, DailyNutritionDto? recentNutrition = null, CancellationToken ct = default)
     {
         var prompt = BuildRecommendationsPrompt(profile, recentNutrition);
 
         try
         {
-            var responseText = await SendMessageAsync(prompt);
+            var responseText = await SendMessageAsync(prompt, ct);
             return ParseRecommendationsResponse(responseText, profile);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
         }
         catch (Exception ex)
         {
@@ -55,14 +62,20 @@ public class ClaudeAIService : IAIService
         }
     }
 
-    public async Task<GeneratedMealPlanDto> GenerateMealPlanAsync(GenerateMealPlanRequest request, UserProfileDto profile)
+    public async Task<GeneratedMealPlanDto> GenerateMealPlanAsync(GenerateMealPlanRequest request, UserProfileDto profile, CancellationToken ct = default)
     {
         var prompt = BuildMealPlanPrompt(request, profile);
 
         try
         {
-            var responseText = await SendMessageAsync(prompt);
+            var responseText = await SendMessageAsync(prompt, ct);
             return ParseMealPlanResponse(responseText, request);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
         }
         catch (Exception ex)
         {
@@ -71,7 +84,7 @@ public class ClaudeAIService : IAIService
         }
     }
 
-    public async Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg")
+    public async Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
         var base64Image = Convert.ToBase64String(imageData);
 
@@ -110,12 +123,18 @@ public class ClaudeAIService : IAIService
         {
             var json = JsonSerializer.Serialize(requestBody, JsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(AnthropicBaseUrl, content);
+            var response = await _httpClient.PostAsync(AnthropicBaseUrl, content, ct);
             response.EnsureSuccessStatusCode();
 
-            var responseBody = await response.Content.ReadAsStringAsync();
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
             var responseText = ExtractTextFromResponse(responseBody);
             return ParseFoodImageResponse(responseText);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
         }
         catch (Exception ex)
         {
@@ -133,7 +152,7 @@ public class ClaudeAIService : IAIService
 
     // ────────────────────────── Private Helpers ──────────────────────────
 
-    private async Task<string> SendMessageAsync(string prompt)
+    private async Task<string> SendMessageAsync(string prompt, CancellationToken ct)
     {
         var model = _configuration["Claude:Model"] ?? "claude-sonnet-4-6";
         var requestBody = new
@@ -148,10 +167,10 @@ public class ClaudeAIService : IAIService
 
         var json = JsonSerializer.Serialize(requestBody, JsonOptions);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync(AnthropicBaseUrl, content);
+        var response = await _httpClient.PostAsync(AnthropicBaseUrl, content, ct);
         response.EnsureSuccessStatusCode();
 
-        var responseBody = await response.Content.ReadAsStringAsync();
+        var responseBody = await response.Content.ReadAsStringAsync(ct);
         return ExtractTextFromResponse(responseBody);
     }
 
@@ -372,7 +391,7 @@ public class ClaudeAIService : IAIService
                         var meal = new GeneratedMealEntryDto();
 
                         if (mealElement.TryGetProperty("mealType", out var mt))
-                            meal.MealType = (MealType)mt.GetInt32();
+                            meal.MealType = MealTypeParsing.Read(mt);
                         if (mealElement.TryGetProperty("recipeName", out var rn))
                             meal.RecipeName = rn.GetString() ?? string.Empty;
                         if (mealElement.TryGetProperty("recipeDescription", out var rd))
@@ -475,14 +494,20 @@ public class ClaudeAIService : IAIService
         }
     }
 
-    public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request)
+    public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
         var prompt = BuildMealAnalysisPrompt(request);
 
         try
         {
-            var responseText = await SendMessageAsync(prompt);
+            var responseText = await SendMessageAsync(prompt, ct);
             return ParseMealAnalysisResponse(responseText);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
         }
         catch (Exception ex)
         {
@@ -495,6 +520,31 @@ public class ClaudeAIService : IAIService
                 Suggestions = []
             };
         }
+    }
+
+    public async Task<DayAnalysisDto> AnalyzeDayAsync(DayAnalysisRequest request, CancellationToken ct = default)
+    {
+        try
+        {
+            var text = await SendMessageAsync(DayAnalysisPrompt.Build(request), ct);
+            var analysis = DayAnalysisPrompt.Parse(text);
+            if (analysis != null) return analysis;
+
+            _logger.LogWarning("Claude: returned no usable analysis for {Date}.", request.Date);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Claude: failed to analyze the day.");
+        }
+
+        // An empty analysis is how a provider outage reaches the caller; nothing is stored for it.
+        return new DayAnalysisDto();
     }
 
     private static string BuildMealAnalysisPrompt(MealAnalysisRequest request)
@@ -569,4 +619,33 @@ public class ClaudeAIService : IAIService
         Confidence = 0f,
         NutritionalInfo = new NutritionalInfoDto()
     };
+
+    public async Task<EstimatedNutritionDto> EstimateNutritionAsync(EstimateNutritionRequest request, CancellationToken ct = default)
+    {
+        try
+        {
+            var responseText = await SendMessageAsync(NutritionEstimation.BuildPrompt(request), ct);
+            var estimate = NutritionEstimation.Parse(responseText);
+            if (estimate != null) return estimate;
+
+            _logger.LogWarning("Claude returned no usable nutrition estimate for '{Dish}'.", request.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to estimate nutrition with Claude AI.");
+        }
+
+        return new EstimatedNutritionDto
+            {
+                Succeeded = false,
+                Confidence = "low",
+                Assumptions = "We could not estimate this one automatically. Enter the values you know.",
+            };
+    }
 }

@@ -21,11 +21,18 @@ export enum DietaryGoal {
   GeneralHealth = 'GeneralHealth',
 }
 
+/** Serialised by the API as the C# member name, so these values must match exactly. */
 export enum MealType {
-  Breakfast = 1,
-  MorningSnack = 2,
-  Lunch = 3,
-  AfternoonSnack = 4,
-  Dinner = 5,
-  EveningSnack = 6,
+  Breakfast = 'Breakfast',
+  MorningSnack = 'MorningSnack',
+  Lunch = 'Lunch',
+  AfternoonSnack = 'AfternoonSnack',
+  Dinner = 'Dinner',
+  EveningSnack = 'EveningSnack',
+}
+
+/** Serialised by the API as the C# member name, so these values must match exactly. */
+export enum UnitSystem {
+  US = 'US',
+  Metric = 'Metric',
 }

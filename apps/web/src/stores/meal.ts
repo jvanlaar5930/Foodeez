@@ -11,6 +11,10 @@ export const useMealStore = defineStore('meal', () => {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
+  async function refreshDay(userId: string, date: string): Promise<void> {
+    await Promise.all([fetchDailyLogs(userId, date), fetchNutritionSummary(userId, date)]);
+  }
+
   async function fetchDailyLogs(userId: string, date: string): Promise<void> {
     isLoading.value = true;
     error.value = null;
@@ -35,10 +39,22 @@ export const useMealStore = defineStore('meal', () => {
     isLoading.value = true;
     error.value = null;
     try {
-      const newLog = await mealService.logMeal(data);
-      dailyLogs.value.push(newLog);
-      // Refresh summary after logging
-      await fetchNutritionSummary(data.userId, data.logDate);
+      await mealService.logMeal(data);
+      await refreshDay(data.userId, data.logDate);
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err);
+      throw err;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function updateMealLog(mealLogId: string, data: LogMealRequest): Promise<void> {
+    isLoading.value = true;
+    error.value = null;
+    try {
+      await mealService.updateMealLog(mealLogId, data);
+      await refreshDay(data.userId, data.logDate);
     } catch (err: unknown) {
       error.value = extractErrorMessage(err);
       throw err;
@@ -50,8 +66,7 @@ export const useMealStore = defineStore('meal', () => {
   async function deleteMealLog(mealLogId: string, userId: string): Promise<void> {
     try {
       await mealService.deleteMealLog(mealLogId);
-      dailyLogs.value = dailyLogs.value.filter((log) => log.id !== mealLogId);
-      await fetchNutritionSummary(userId, selectedDate.value);
+      await refreshDay(userId, selectedDate.value);
     } catch (err: unknown) {
       error.value = extractErrorMessage(err);
       throw err;
@@ -78,7 +93,9 @@ export const useMealStore = defineStore('meal', () => {
     error,
     fetchDailyLogs,
     fetchNutritionSummary,
+    refreshDay,
     logMeal,
+    updateMealLog,
     deleteMealLog,
     setSelectedDate,
   };

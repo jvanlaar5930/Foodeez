@@ -8,15 +8,20 @@ export const mealService = {
   },
 
   async getDailyLogs(userId: string, date: string): Promise<MealLog[]> {
-    const response = await api.get<MealLog[]>(`/meal-logs/${userId}`, {
-      params: { date },
+    const response = await api.get<MealLog[]>('/meal-logs', {
+      params: { userId, date },
     });
     return response.data;
   },
 
+  async updateMealLog(mealLogId: string, data: LogMealRequest): Promise<MealLog> {
+    const response = await api.put<MealLog>(`/meal-logs/${mealLogId}`, data);
+    return response.data;
+  },
+
   async getNutritionSummary(userId: string, date: string): Promise<NutritionSummary> {
-    const response = await api.get<NutritionSummary>(`/nutrition/summary/${userId}`, {
-      params: { date },
+    const response = await api.get<NutritionSummary>('/meal-logs/nutrition-summary', {
+      params: { userId, date },
     });
     return response.data;
   },
@@ -28,7 +33,7 @@ export const mealService = {
   async parseFoodImage(imageFile: File): Promise<ParsedFoodDto> {
     const formData = new FormData();
     formData.append('image', imageFile);
-    const response = await api.post<ParsedFoodDto>('/ai/parse-food-image', formData, {
+    const response = await api.post<ParsedFoodDto>('/meal-logs/parse-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;

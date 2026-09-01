@@ -16,8 +16,10 @@ public class RecipeConfiguration : IEntityTypeConfiguration<Recipe>
             .IsRequired()
             .HasMaxLength(200);
 
+        // TEXT, not varchar: recipe summaries from upstream routinely run well past a
+        // thousand characters, and a varchar cap silently cuts them off mid-sentence.
         builder.Property(r => r.Description)
-            .HasMaxLength(1000);
+            .HasColumnType("text");
 
         builder.Property(r => r.Instructions)
             .IsRequired()
@@ -28,6 +30,12 @@ public class RecipeConfiguration : IEntityTypeConfiguration<Recipe>
 
         builder.Property(r => r.ImageUrl)
             .HasMaxLength(500);
+
+        builder.Property(r => r.SourceUrl)
+            .HasMaxLength(500);
+
+        builder.Property(r => r.SourceName)
+            .HasMaxLength(200);
 
         builder.HasMany(r => r.Ingredients)
             .WithOne(i => i.Recipe)

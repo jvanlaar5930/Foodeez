@@ -1,7 +1,8 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSize, Shadows } from '@/constants/theme';
+import { FontSize, Shadows } from '@/constants/theme';
+import { useTheme } from '@/theme';
 import { DashboardScreen } from '@/screens/dashboard/DashboardScreen';
 import { MealLogScreen } from '@/screens/meal-log/MealLogScreen';
 import { AddMealScreen } from '@/screens/meal-log/AddMealScreen';
@@ -11,24 +12,52 @@ import { CalendarDayScreen } from '@/screens/meal-plan/CalendarDayScreen';
 import { RecipesScreen } from '@/screens/recipes/RecipesScreen';
 import { RecipeDetailScreen } from '@/screens/recipes/RecipeDetailScreen';
 import { ProfileScreen } from '@/screens/profile/ProfileScreen';
+import { EditProfileScreen } from '@/screens/profile/EditProfileScreen';
 import type {
   MainTabParamList,
   MealLogStackParamList,
   MealPlanStackParamList,
   RecipesStackParamList,
+  ProfileStackParamList,
 } from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const MealLogStack = createNativeStackNavigator<MealLogStackParamList>();
 const MealPlanStack = createNativeStackNavigator<MealPlanStackParamList>();
 const RecipesStack = createNativeStackNavigator<RecipesStackParamList>();
+const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+
+function ProfileNavigator() {
+  const C = useTheme();
+  return (
+    <ProfileStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: C.surface },
+        headerTintColor: C.text,
+        headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
+      }}
+    >
+      <ProfileStack.Screen
+        name="ProfileHome"
+        component={ProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'Edit Profile' }}
+      />
+    </ProfileStack.Navigator>
+  );
+}
 
 function MealLogNavigator() {
+  const C = useTheme();
   return (
     <MealLogStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.surface },
-        headerTintColor: Colors.text,
+        headerStyle: { backgroundColor: C.surface },
+        headerTintColor: C.text,
         headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
       }}
     >
@@ -52,11 +81,12 @@ function MealLogNavigator() {
 }
 
 function MealPlanNavigator() {
+  const C = useTheme();
   return (
     <MealPlanStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.surface },
-        headerTintColor: Colors.text,
+        headerStyle: { backgroundColor: C.surface },
+        headerTintColor: C.text,
         headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
       }}
     >
@@ -75,11 +105,12 @@ function MealPlanNavigator() {
 }
 
 function RecipesNavigator() {
+  const C = useTheme();
   return (
     <RecipesStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.surface },
-        headerTintColor: Colors.text,
+        headerStyle: { backgroundColor: C.surface },
+        headerTintColor: C.text,
         headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
       }}
     >
@@ -98,6 +129,7 @@ function RecipesNavigator() {
 }
 
 export function MainTabNavigator() {
+  const C = useTheme();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -124,11 +156,11 @@ export function MainTabNavigator() {
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textSecondary,
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.textSecondary,
         tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.divider,
+          backgroundColor: C.surface,
+          borderTopColor: C.divider,
           ...Shadows.sm,
         },
         headerShown: false,
@@ -138,7 +170,7 @@ export function MainTabNavigator() {
       <Tab.Screen name="MealLog" component={MealLogNavigator} options={{ title: 'Meal Log' }} />
       <Tab.Screen name="MealPlan" component={MealPlanNavigator} options={{ title: 'Meal Plan' }} />
       <Tab.Screen name="Recipes" component={RecipesNavigator} options={{ title: 'Recipes' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Tab.Screen name="Profile" component={ProfileNavigator} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );
 }

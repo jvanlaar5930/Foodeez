@@ -14,6 +14,18 @@ public class RecipeDto
     public string? Tags { get; set; }
     public string? ImageUrl { get; set; }
     public bool IsAIGenerated { get; set; }
+    public string? SourceUrl { get; set; }
+    public string? SourceName { get; set; }
+    /// <summary>False when the upstream source has no method for this recipe at all.</summary>
+    public bool HasInstructions { get; set; }
+
+    /// <summary>
+    /// True when this read tried to fetch the missing method and could not - an expired
+    /// upstream quota, a network fault. Distinct from HasInstructions being false, which
+    /// means the source genuinely publishes no method: one is worth retrying, the other
+    /// never will be, and telling a reader "no method exists" during an outage is a lie.
+    /// </summary>
+    public bool DetailUnavailable { get; set; }
     public Guid? CreatedByUserId { get; set; }
     public NutritionalInfoDto NutritionalInfoPerServing { get; set; } = new();
     public List<RecipeIngredientDto> Ingredients { get; set; } = new();

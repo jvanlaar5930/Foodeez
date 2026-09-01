@@ -1,4 +1,4 @@
-import { ActivityLevel, DietaryGoal, Gender } from '../enums';
+import { ActivityLevel, DietaryGoal, Gender, UnitSystem } from '../enums';
 
 export interface User {
   id: string;
@@ -6,6 +6,8 @@ export interface User {
   firstName: string;
   lastName: string;
   profileCompleted: boolean;
+  isAdmin: boolean;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -24,4 +26,6 @@ export interface UserProfile {
   dailyFatTargetG: number;
   notes?: string;
   profileCompleted: boolean;
+  darkMode: boolean;
+  unitSystem: UnitSystem;
 }

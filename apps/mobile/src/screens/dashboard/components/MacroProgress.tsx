@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { NutritionBar } from '@/components/ui/NutritionBar';
-import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 interface MacroProgressProps {
   protein: { current: number; target: number };
@@ -9,13 +10,16 @@ interface MacroProgressProps {
   fat: { current: number; target: number };
 }
 
-const MACRO_COLORS = {
-  protein: Colors.info,
-  carbs: Colors.secondary,
+const macroColors = (C: Palette) => ({
+  protein: C.info,
+  carbs: C.secondary,
   fat: '#FFC107',
-};
+});
 
 export function MacroProgress({ protein, carbs, fat }: MacroProgressProps) {
+  const C = useTheme();
+  const MACRO_COLORS = macroColors(C);
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Macros</Text>
@@ -44,14 +48,14 @@ export function MacroProgress({ protein, carbs, fat }: MacroProgressProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
     padding: Spacing.md,
   },
   title: {
     fontSize: FontSize.lg,
     fontWeight: FontWeight.semibold,
-    color: Colors.text,
+    color: C.text,
     marginBottom: Spacing.sm,
   },
 });

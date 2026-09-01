@@ -16,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/store/authStore';
-import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Palette } from '@/theme';
+import { describeApiError } from '@/utils/apiError';
 import type { AuthStackParamList } from '@/navigation/types';
 
 type LoginNav = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
@@ -31,6 +33,8 @@ function validateEmail(email: string): boolean {
 }
 
 export function LoginScreen() {
+  const C = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<LoginNav>();
   const { login, isLoading } = useAuthStore();
 
@@ -59,8 +63,13 @@ export function LoginScreen() {
     if (!validate()) return;
     try {
       await login({ email: email.trim(), password });
-    } catch {
-      Alert.alert('Login Failed', 'Invalid email or password. Please try again.');
+    } catch (err: unknown) {
+      // Report what actually went wrong: a request that never reached the server is a
+      // connectivity problem, not a rejected password.
+      Alert.alert(
+        'Login Failed',
+        describeApiError(err, 'Invalid email or password. Please try again.'),
+      );
     }
   };
 
@@ -77,7 +86,7 @@ export function LoginScreen() {
         >
           {/* Back button */}
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={24} color={C.text} />
           </TouchableOpacity>
 
           <View style={styles.titleSection}>
@@ -125,7 +134,7 @@ export function LoginScreen() {
               <Ionicons
                 name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                 size={20}
-                color={Colors.textSecondary}
+                color={C.textSecondary}
               />
               <Text style={styles.showPasswordText}>
                 {showPassword ? 'Hide' : 'Show'} password
@@ -160,10 +169,10 @@ export function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.background,
   },
   flex: {
     flex: 1,
@@ -185,12 +194,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.xxxl,
     fontWeight: FontWeight.bold,
-    color: Colors.text,
+    color: C.text,
     marginBottom: Spacing.xs,
   },
   subtitle: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     lineHeight: 22,
   },
   form: {
@@ -205,7 +214,7 @@ const styles = StyleSheet.create({
   },
   showPasswordText: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   forgotBtn: {
     alignSelf: 'flex-end',
@@ -213,7 +222,7 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
+    color: C.primary,
     fontWeight: FontWeight.medium,
   },
   registerLink: {
@@ -222,10 +231,10 @@ const styles = StyleSheet.create({
   },
   registerText: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   registerHighlight: {
-    color: Colors.primary,
+    color: C.primary,
     fontWeight: FontWeight.semibold,
   },
 });

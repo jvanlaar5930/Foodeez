@@ -1,63 +1,77 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { MealType } from '@foodeez/shared';
-import type { MealLogItem, NutritionalInfo } from '@foodeez/shared';
-import { MEAL_TYPE_LABELS } from '@foodeez/shared';
+import { MealType, MEAL_TYPE_LABELS } from '@foodeez/shared';
+import type { MealLog, MealLogItem, NutritionalInfo } from '@foodeez/shared';
 import FoodItemRow from './FoodItemRow.vue';
 
 interface Props {
+  mealLog: MealLog;
   mealType: MealType;
   items: MealLogItem[];
   totalNutrition: NutritionalInfo;
 }
 
 defineProps<Props>();
-const emit = defineEmits<{ deleteItem: [id: string] }>();
+const emit = defineEmits<{ editMeal: [mealLog: MealLog]; deleteMeal: [mealLog: MealLog] }>();
 
 const isCollapsed = ref(false);
 
-const mealIcons: Record<number, string> = {
-  1: '🌅',
-  2: '🍎',
-  3: '🥗',
-  4: '🥤',
-  5: '🍽️',
-  6: '🌙',
+const mealIcons: Record<MealType, string> = {
+  [MealType.Breakfast]: 'Breakfast',
+  [MealType.MorningSnack]: 'Snack',
+  [MealType.Lunch]: 'Lunch',
+  [MealType.AfternoonSnack]: 'Snack',
+  [MealType.Dinner]: 'Dinner',
+  [MealType.EveningSnack]: 'Evening',
 };
 </script>
 
 <template>
-  <div class="bg-white rounded-xl border border-gray-100 overflow-hidden">
-    <!-- Header -->
-    <button
-      class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
-      @click="isCollapsed = !isCollapsed"
-    >
+  <div class="overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+    <div class="flex items-center justify-between px-4 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
       <div class="flex items-center gap-2">
-        <span class="text-lg">{{ mealIcons[mealType] ?? '🍴' }}</span>
-        <span class="text-sm font-semibold text-gray-800">
+        <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ mealIcons[mealType] ?? 'Meal' }}</span>
+        <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">
           {{ MEAL_TYPE_LABELS[mealType] ?? `Meal ${mealType}` }}
         </span>
-        <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+        <span class="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
           {{ items.length }} item{{ items.length !== 1 ? 's' : '' }}
         </span>
       </div>
       <div class="flex items-center gap-3">
-        <span class="text-sm font-semibold text-green-700">
+        <span class="text-sm font-semibold text-green-700 dark:text-green-400">
           {{ Math.round(totalNutrition.calories) }} kcal
         </span>
-        <svg
-          :class="['w-4 h-4 text-gray-400 transition-transform', isCollapsed ? '-rotate-90' : '']"
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        <button
+          class="text-xs font-medium text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
+          @click.stop="emit('editMeal', mealLog)"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
+          Edit
+        </button>
+        <button
+          class="text-xs font-medium text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-400"
+          @click.stop="emit('deleteMeal', mealLog)"
+        >
+          Delete
+        </button>
+        <button
+          class="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+          @click="isCollapsed = !isCollapsed"
+        >
+          <svg
+            :class="['h-4 w-4 transition-transform', isCollapsed ? '-rotate-90' : '']"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
-    </button>
+    </div>
 
-    <!-- Items -->
     <div v-if="!isCollapsed">
-      <div v-if="items.length === 0" class="px-4 py-3 text-sm text-gray-400 italic">
+      <div v-if="items.length === 0" class="px-4 py-3 text-sm italic text-gray-400">
         No items logged for this meal.
       </div>
       <div v-else class="divide-y divide-gray-50">
@@ -66,12 +80,10 @@ const mealIcons: Record<number, string> = {
           :key="item.id"
           :item="item"
           class="px-1"
-          @delete="(id) => emit('deleteItem', id)"
         />
       </div>
 
-      <!-- Macro mini row -->
-      <div v-if="items.length > 0" class="px-4 py-2 bg-gray-50 flex gap-4 text-xs text-gray-500">
+      <div v-if="items.length > 0" class="flex gap-4 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
         <span>P: {{ Math.round(totalNutrition.protein) }}g</span>
         <span>C: {{ Math.round(totalNutrition.carbohydrates) }}g</span>
         <span>F: {{ Math.round(totalNutrition.fat) }}g</span>

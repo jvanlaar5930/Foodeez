@@ -10,10 +10,12 @@ interface MealState {
   isLoading: boolean;
   error: string | null;
   setSelectedDate: (date: string) => void;
+  refreshDay: (userId: string, date: string) => Promise<void>;
   fetchDailyLogs: (userId: string, date: string) => Promise<void>;
   fetchNutritionSummary: (userId: string, date: string) => Promise<void>;
   logMeal: (data: LogMealRequest) => Promise<void>;
-  deleteMealLog: (mealLogId: string) => Promise<void>;
+  updateMealLog: (mealLogId: string, data: LogMealRequest) => Promise<void>;
+  deleteMealLog: (mealLogId: string, userId: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -28,6 +30,20 @@ export const useMealStore = create<MealState>()((set, get) => ({
     set({ selectedDate: date });
   },
 
+  refreshDay: async (userId: string, date: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const [logs, summary] = await Promise.all([
+        mealService.getDailyLogs(userId, date),
+        mealService.getNutritionSummary(userId, date),
+      ]);
+      set({ dailyLogs: logs, nutritionSummary: summary, isLoading: false });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to refresh nutrition data.';
+      set({ isLoading: false, error: message });
+    }
+  },
+
   fetchDailyLogs: async (userId: string, date: string) => {
     set({ isLoading: true, error: null });
     try {
@@ -40,22 +56,20 @@ export const useMealStore = create<MealState>()((set, get) => ({
   },
 
   fetchNutritionSummary: async (userId: string, date: string) => {
-    set({ isLoading: true, error: null });
     try {
       const summary = await mealService.getNutritionSummary(userId, date);
-      set({ nutritionSummary: summary, isLoading: false });
+      set({ nutritionSummary: summary });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to fetch nutrition summary.';
-      set({ isLoading: false, error: message });
+      set({ error: message });
     }
   },
 
   logMeal: async (data: LogMealRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const newLog = await mealService.logMeal(data);
-      const currentLogs = get().dailyLogs;
-      set({ dailyLogs: [...currentLogs, newLog], isLoading: false });
+      await mealService.logMeal(data);
+      await get().refreshDay(data.userId, data.logDate);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to log meal.';
       set({ isLoading: false, error: message });
@@ -63,12 +77,23 @@ export const useMealStore = create<MealState>()((set, get) => ({
     }
   },
 
-  deleteMealLog: async (mealLogId: string) => {
+  updateMealLog: async (mealLogId: string, data: LogMealRequest) => {
+    set({ isLoading: true, error: null });
+    try {
+      await mealService.updateMealLog(mealLogId, data);
+      await get().refreshDay(data.userId, data.logDate);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update meal log.';
+      set({ isLoading: false, error: message });
+      throw err;
+    }
+  },
+
+  deleteMealLog: async (mealLogId: string, userId: string) => {
     set({ isLoading: true, error: null });
     try {
       await mealService.deleteMealLog(mealLogId);
-      const currentLogs = get().dailyLogs.filter((log) => log.id !== mealLogId);
-      set({ dailyLogs: currentLogs, isLoading: false });
+      await get().refreshDay(userId, get().selectedDate);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete meal log.';
       set({ isLoading: false, error: message });
