@@ -43,6 +43,12 @@ public static class MealAnalysisPrompt
             "micronutrients, fiber, and whether it suits the meal type. Score it 0-100 " +
             "(100 = perfectly balanced) and keep suggestions specific and actionable " +
             "(for example 'Add a handful of spinach').");
+        if (request.ExcludedFoods.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(AINarration.ExclusionLine(request.ExcludedFoods));
+        }
+
         sb.AppendLine();
         sb.AppendLine(AINarration.Instruction);
         sb.AppendLine();

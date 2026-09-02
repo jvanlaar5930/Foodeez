@@ -497,12 +497,13 @@ public class ClaudeAIService : IAIService, IStreamingAIService
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
-        var prompt = BuildMealAnalysisPrompt(request);
-
         try
         {
-            var responseText = await SendMessageAsync(prompt, ct);
-            return ParseMealAnalysisResponse(responseText);
+            var responseText = await SendMessageAsync(MealAnalysisPrompt.Build(request), ct);
+            var analysis = MealAnalysisPrompt.Parse(responseText);
+            if (analysis != null) return analysis;
+
+            _logger.LogWarning("Claude: returned no usable meal analysis.");
         }
         catch (OperationCanceledException)
         {
@@ -512,15 +513,10 @@ public class ClaudeAIService : IAIService, IStreamingAIService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to analyze meal with Claude AI.");
-            return new MealAnalysisDto
-            {
-                Score = 0,
-                Completeness = "Unable to analyze this meal right now. Please try again.",
-                Missing = [],
-                Suggestions = []
-            };
+            _logger.LogError(ex, "Claude: failed to analyze meal.");
         }
+
+        return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
     }
 
     public async Task<DayAnalysisDto> AnalyzeDayAsync(DayAnalysisRequest request, CancellationToken ct = default)
@@ -548,69 +544,9 @@ public class ClaudeAIService : IAIService, IStreamingAIService
         return new DayAnalysisDto();
     }
 
-    private static string BuildMealAnalysisPrompt(MealAnalysisRequest request)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("You are a professional nutritionist. Analyze this meal for nutritional completeness and balance.");
-        sb.AppendLine();
-        sb.AppendLine($"Meal type: {request.MealType}");
-        sb.AppendLine("Items:");
 
-        var totalCal = 0f; var totalProt = 0f; var totalCarbs = 0f; var totalFat = 0f; var totalFiber = 0f;
-        foreach (var item in request.Items)
-        {
-            sb.AppendLine($"  - {item.Amount}{item.Unit} {item.Name}: {Math.Round(item.Calories)} kcal, {Math.Round(item.Protein)}g protein, {Math.Round(item.Carbs)}g carbs, {Math.Round(item.Fat)}g fat, {Math.Round(item.Fiber)}g fiber");
-            totalCal += item.Calories; totalProt += item.Protein; totalCarbs += item.Carbs; totalFat += item.Fat; totalFiber += item.Fiber;
-        }
 
-        sb.AppendLine();
-        sb.AppendLine($"Totals: {Math.Round(totalCal)} kcal | {Math.Round(totalProt)}g protein | {Math.Round(totalCarbs)}g carbs | {Math.Round(totalFat)}g fat | {Math.Round(totalFiber)}g fiber");
-        sb.AppendLine();
-        sb.AppendLine("Assess: Is this a nutritionally complete and balanced meal? Consider macro balance, micronutrients, fiber, and whether it suits the meal type.");
-        sb.AppendLine("Score from 0-100 (100 = perfectly balanced). Keep suggestions specific and actionable (e.g. 'Add a handful of spinach').");
-        sb.AppendLine();
-        sb.AppendLine("Respond ONLY with valid JSON (no markdown, no extra text):");
-        sb.AppendLine(@"{
-  ""score"": 72,
-  ""completeness"": ""1-2 sentence overall assessment"",
-  ""missing"": [""Fiber"", ""Vegetables""],
-  ""suggestions"": [""Add a side salad for fiber and micronutrients"", ""Include olive oil for healthy fats""]
-}");
 
-        return sb.ToString();
-    }
-
-    private static MealAnalysisDto ParseMealAnalysisResponse(string responseText)
-    {
-        try
-        {
-            var jsonStart = responseText.IndexOf('{');
-            var jsonEnd = responseText.LastIndexOf('}');
-            if (jsonStart < 0 || jsonEnd < 0)
-                return new MealAnalysisDto { Score = 0, Completeness = "Could not parse analysis." };
-
-            var jsonText = responseText[jsonStart..(jsonEnd + 1)];
-            using var doc = JsonDocument.Parse(jsonText);
-            var root = doc.RootElement;
-
-            var dto = new MealAnalysisDto();
-
-            if (root.TryGetProperty("score", out var score))
-                dto.Score = score.GetInt32();
-            if (root.TryGetProperty("completeness", out var comp))
-                dto.Completeness = comp.GetString() ?? string.Empty;
-            if (root.TryGetProperty("missing", out var missing))
-                dto.Missing = missing.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToList();
-            if (root.TryGetProperty("suggestions", out var suggestions))
-                dto.Suggestions = suggestions.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToList();
-
-            return dto;
-        }
-        catch
-        {
-            return new MealAnalysisDto { Score = 0, Completeness = "Could not parse analysis." };
-        }
-    }
 
     private static ParsedFoodDto DefaultParsedFood() => new ParsedFoodDto
     {

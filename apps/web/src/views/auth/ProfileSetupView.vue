@@ -138,8 +138,24 @@
           </div>
         </div>
 
-        <!-- Step 4: Summary -->
+        <!-- Step 4: Foods to avoid -->
         <div v-show="currentStep === 4">
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Anything you can't eat?</h2>
+          <p class="text-gray-500 dark:text-gray-400 mb-6">
+            Allergies, intolerances, or foods you simply do not want. Nothing we suggest - meal plans,
+            meal ideas, daily advice - will include them. You can change this any time.
+          </p>
+
+          <FoodExclusionsInput v-model="profile.excludedFoods" />
+
+          <p class="mt-4 text-xs text-gray-400">
+            Leave this empty if there is nothing to avoid. This is not a substitute for medical advice:
+            always check labels yourself if an allergy is severe.
+          </p>
+        </div>
+
+        <!-- Step 5: Summary -->
+        <div v-show="currentStep === 5">
           <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Your Daily Targets</h2>
           <p class="text-gray-500 dark:text-gray-400 mb-6">Based on your profile, here are your recommended daily nutrition targets.</p>
 
@@ -242,6 +258,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import FoodExclusionsInput from '@/components/profile/FoodExclusionsInput.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useProfileStore } from '@/stores/profile';
 import { Gender, ActivityLevel, DietaryGoal } from '@foodeez/shared';
@@ -251,7 +268,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const profileStore = useProfileStore();
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 const currentStep = ref(1);
 const isLoading = ref(false);
 const setupError = ref('');
@@ -269,6 +286,7 @@ const profile = ref({
   dietaryGoal: DietaryGoal.GeneralHealth as DietaryGoal,
   activityLevel: ActivityLevel.ModeratelyActive as ActivityLevel,
   notes: '',
+  excludedFoods: [] as string[],
 });
 
 // --- Conversion helpers ---

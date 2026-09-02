@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import FoodExclusionsInput from '@/components/profile/FoodExclusionsInput.vue';
 import AppModal from '@/components/ui/AppModal.vue';
 import AppInput from '@/components/ui/AppInput.vue';
 import AppButton from '@/components/ui/AppButton.vue';
@@ -59,6 +60,7 @@ const gender = ref<Gender>(Gender.PreferNotToSay);
 const activityLevel = ref<ActivityLevel>(ActivityLevel.ModeratelyActive);
 const dietaryGoal = ref<DietaryGoal>(DietaryGoal.GeneralHealth);
 const notes = ref('');
+const excludedFoods = ref<string[]>([]);
 const error = ref<string | null>(null);
 const errors = ref<Record<string, string>>({});
 
@@ -89,6 +91,7 @@ function loadFromProfile() {
   activityLevel.value = p.activityLevel;
   dietaryGoal.value = p.dietaryGoal;
   notes.value = p.notes ?? '';
+  excludedFoods.value = [...(p.excludedFoods ?? [])];
   errors.value = {};
   error.value = null;
 }
@@ -170,6 +173,7 @@ async function save() {
       activityLevel: activityLevel.value,
       dietaryGoal: dietaryGoal.value,
       notes: notes.value.trim() || undefined,
+      excludedFoods: excludedFoods.value,
       // Carry the current appearance choice through; this form does not own it.
       darkMode: profileStore.profile?.darkMode,
       unitSystem: units.value,
@@ -296,6 +300,12 @@ const selectClass =
       </div>
 
       <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-200">Foods to avoid</label>
+        <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+          Allergies, intolerances or dislikes. Nothing the AI suggests will include them.
+        </p>
+        <FoodExclusionsInput v-model="excludedFoods" class="mb-4" />
+
         <label class="text-sm font-medium text-gray-700 dark:text-gray-200">Notes</label>
         <textarea
           v-model="notes"

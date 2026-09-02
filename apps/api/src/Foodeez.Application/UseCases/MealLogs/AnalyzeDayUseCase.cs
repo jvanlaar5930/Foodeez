@@ -46,8 +46,9 @@ public class AnalyzeDayUseCase
 
         var logs = await _unitOfWork.MealLogs.GetByUserAndDateAsync(userId, date);
         var summary = await _getNutritionSummary.ExecuteAsync(userId, date);
+        var profile = (await _unitOfWork.Users.GetByIdAsync(userId))?.Profile;
 
-        return stored.Matches(MealAnalysisFingerprint.ForDay(date, logs, summary))
+        return stored.Matches(MealAnalysisFingerprint.ForDay(date, logs, summary, Exclusions(profile)))
             ? ToDto(stored)
             : null;
     }
@@ -65,7 +66,8 @@ public class AnalyzeDayUseCase
         }
 
         var summary = await _getNutritionSummary.ExecuteAsync(userId, date);
-        var fingerprint = MealAnalysisFingerprint.ForDay(date, logs, summary);
+        var profile = (await _unitOfWork.Users.GetByIdAsync(userId))?.Profile;
+        var fingerprint = MealAnalysisFingerprint.ForDay(date, logs, summary, Exclusions(profile));
         var stored = await _unitOfWork.DayAnalyses.GetByUserAndDateAsync(userId, date);
 
         if (!refresh && stored != null && stored.Matches(fingerprint))
@@ -73,9 +75,7 @@ public class AnalyzeDayUseCase
             return ToDto(stored);
         }
 
-        var user = await _unitOfWork.Users.GetByIdAsync(userId);
-        var result = await _aiService.AnalyzeDayAsync(
-            BuildRequest(date, user?.Profile?.DietaryGoal.ToString(), summary, logs), ct);
+        var result = await _aiService.AnalyzeDayAsync(BuildRequest(date, profile, summary, logs), ct);
 
         // Providers swallow their own transport errors and hand back an empty analysis. Storing
         // that would leave the user with a permanently blank score for the day, so refuse it.
@@ -143,7 +143,8 @@ public class AnalyzeDayUseCase
         }
 
         var summary = await _getNutritionSummary.ExecuteAsync(userId, date);
-        var fingerprint = MealAnalysisFingerprint.ForDay(date, logs, summary);
+        var profile = (await _unitOfWork.Users.GetByIdAsync(userId))?.Profile;
+        var fingerprint = MealAnalysisFingerprint.ForDay(date, logs, summary, Exclusions(profile));
         var stored = await _unitOfWork.DayAnalyses.GetByUserAndDateAsync(userId, date);
 
         if (!refresh && stored != null && stored.Matches(fingerprint))
@@ -152,8 +153,7 @@ public class AnalyzeDayUseCase
             yield break;
         }
 
-        var user = await _unitOfWork.Users.GetByIdAsync(userId);
-        var prompt = DayAnalysisPrompt.Build(BuildRequest(date, user?.Profile?.DietaryGoal.ToString(), summary, logs));
+        var prompt = DayAnalysisPrompt.Build(BuildRequest(date, profile, summary, logs));
 
         var transcript = new StringBuilder();
         await foreach (var delta in AINarration.NarrateAsync(_streaming, prompt, transcript, ct))
@@ -201,14 +201,18 @@ public class AnalyzeDayUseCase
 
     private static DayAnalysisRequest BuildRequest(
         DateOnly date,
-        string? dietaryGoal,
+        UserProfile? profile,
         NutritionSummaryDto summary,
         IEnumerable<MealLog> logs) => new()
     {
         Date = date,
         IsToday = date == DateOnly.FromDateTime(DateTime.UtcNow),
-        DietaryGoal = dietaryGoal,
+        DietaryGoal = profile?.DietaryGoal.ToString(),
+        ExcludedFoods = profile?.ExcludedFoods.ToList() ?? new List<string>(),
         Summary = summary,
         Meals = logs.Select(ToMealRequest).ToList()
     };
+
+    private static List<string> Exclusions(UserProfile? profile) =>
+        profile?.ExcludedFoods.ToList() ?? new List<string>();
 }

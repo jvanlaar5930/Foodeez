@@ -60,6 +60,10 @@ public class UserProfileConfiguration : IEntityTypeConfiguration<UserProfile>
         builder.Property(p => p.Notes)
             .HasMaxLength(1000);
 
+        builder.Property(p => p.ExcludedFoods)
+            .HasColumnType("text")
+            .HasConversion(JsonStringList.Converter, JsonStringList.Comparer);
+
         builder.Property(p => p.HeightCm).HasColumnType("float");
         builder.Property(p => p.WeightKg).HasColumnType("float");
         builder.Property(p => p.TargetWeightKg).HasColumnType("float");

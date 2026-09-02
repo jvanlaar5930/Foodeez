@@ -290,22 +290,13 @@ public class LocalAIService : IAIService, IStreamingAIService
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Analyze this {request.MealType} meal for nutritional completeness (score 0-100).");
-        foreach (var i in request.Items)
-            sb.AppendLine($"- {i.Amount}{i.Unit} {i.Name}: {Math.Round(i.Calories)} kcal");
-        sb.AppendLine("Respond ONLY with JSON: {\"score\":72,\"completeness\":\"\",\"missing\":[],\"suggestions\":[]}");
-
         try
         {
-            var text = await SendAsync(sb.ToString(), ct);
-            return ParseJson(text, r => new MealAnalysisDto
-            {
-                Score = GetInt(r, "score", 0),
-                Completeness = GetString(r, "completeness"),
-                Missing = GetStringList(r, "missing"),
-                Suggestions = GetStringList(r, "suggestions")
-            }) ?? new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
+            var responseText = await SendAsync(MealAnalysisPrompt.Build(request), ct);
+            var analysis = MealAnalysisPrompt.Parse(responseText);
+            if (analysis != null) return analysis;
+
+            _logger.LogWarning("Local LLM: returned no usable meal analysis.");
         }
         catch (OperationCanceledException)
         {
@@ -316,8 +307,9 @@ public class LocalAIService : IAIService, IStreamingAIService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Local LLM: failed to analyze meal.");
-            return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
         }
+
+        return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
     }
 
     public async Task<DayAnalysisDto> AnalyzeDayAsync(DayAnalysisRequest request, CancellationToken ct = default)

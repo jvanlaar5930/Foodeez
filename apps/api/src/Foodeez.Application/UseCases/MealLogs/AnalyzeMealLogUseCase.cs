@@ -34,14 +34,18 @@ public class AnalyzeMealLogUseCase
             throw new KeyNotFoundException($"MealLog with id '{mealLogId}' was not found.");
         }
 
-        var fingerprint = MealAnalysisFingerprint.For(mealLog);
+        var excludedFoods = await ExclusionsAsync(mealLog.UserId);
+        var fingerprint = MealAnalysisFingerprint.For(mealLog, excludedFoods);
 
         if (!refresh && mealLog.Analysis is { } stored && stored.Matches(fingerprint))
         {
             return MealAnalysisMapper.ToDto(stored);
         }
 
-        var result = await _aiService.AnalyzeMealAsync(MealAnalysisMapper.ToRequest(mealLog), ct);
+        var request = MealAnalysisMapper.ToRequest(mealLog);
+        request.ExcludedFoods = excludedFoods;
+
+        var result = await _aiService.AnalyzeMealAsync(request, ct);
 
         mealLog.Analysis = new MealAnalysis(
             result.Score,
@@ -73,7 +77,8 @@ public class AnalyzeMealLogUseCase
             throw new KeyNotFoundException($"MealLog with id '{mealLogId}' was not found.");
         }
 
-        var fingerprint = MealAnalysisFingerprint.For(mealLog);
+        var excludedFoods = await ExclusionsAsync(mealLog.UserId);
+        var fingerprint = MealAnalysisFingerprint.For(mealLog, excludedFoods);
 
         if (!refresh && mealLog.Analysis is { } stored && stored.Matches(fingerprint))
         {
@@ -81,8 +86,11 @@ public class AnalyzeMealLogUseCase
             yield break;
         }
 
+        var request = MealAnalysisMapper.ToRequest(mealLog);
+        request.ExcludedFoods = excludedFoods;
+
         var transcript = new StringBuilder();
-        var prompt = MealAnalysisPrompt.Build(MealAnalysisMapper.ToRequest(mealLog));
+        var prompt = MealAnalysisPrompt.Build(request);
 
         await foreach (var delta in AINarration.NarrateAsync(_streaming, prompt, transcript, ct))
         {
@@ -118,5 +126,12 @@ public class AnalyzeMealLogUseCase
         await _unitOfWork.SaveChangesAsync(ct);
 
         return MealAnalysisMapper.ToDto(mealLog.Analysis);
+    }
+
+    /// <summary>The owner's standing exclusions, which no suggestion may ignore.</summary>
+    private async Task<List<string>> ExclusionsAsync(Guid userId)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        return user?.Profile?.ExcludedFoods.ToList() ?? new List<string>();
     }
 }

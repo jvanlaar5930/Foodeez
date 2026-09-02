@@ -26,7 +26,8 @@ public class GenerateAIMealPlanUseCase
     {
         var profileDto = await LoadProfileAsync(request.UserId);
 
-        var generated = await _aiService.GenerateMealPlanAsync(request, profileDto, ct);
+        var generated = await _aiService.GenerateMealPlanAsync(
+            WithProfileExclusions(request, profileDto), profileDto, ct);
 
         // Providers swallow their own transport errors and hand back an empty result, so an
         // outage arrives here looking exactly like a plan with no days in it. Saving that
@@ -51,7 +52,7 @@ public class GenerateAIMealPlanUseCase
 
         var transcript = new StringBuilder();
         await foreach (var delta in AINarration.NarrateAsync(
-            _streaming, MealPlanPrompt.Build(request, profileDto), transcript, ct))
+            _streaming, MealPlanPrompt.Build(WithProfileExclusions(request, profileDto), profileDto), transcript, ct))
         {
             yield return AIStreamEvent.Delta(delta);
         }
@@ -93,7 +94,35 @@ public class GenerateAIMealPlanUseCase
             DailyCarbTargetG = user.Profile.DailyCarbTargetG,
             DailyFatTargetG = user.Profile.DailyFatTargetG,
             Notes = user.Profile.Notes,
+            ExcludedFoods = user.Profile.ExcludedFoods.ToList(),
             ProfileCompleted = user.Profile.ProfileCompleted
+        };
+    }
+
+    /// <summary>
+    /// Folds the profile's standing exclusions into this request's. Every provider prompt
+    /// already prints ExcludeIngredients, so doing it here reaches all of them - and a food
+    /// someone is allergic to must not depend on remembering to type it each time.
+    /// </summary>
+    private static GenerateMealPlanRequest WithProfileExclusions(
+        GenerateMealPlanRequest request,
+        UserProfileDto profile)
+    {
+        if (profile.ExcludedFoods.Count == 0)
+        {
+            return request;
+        }
+
+        return new GenerateMealPlanRequest
+        {
+            UserId = request.UserId,
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            PreferenceTags = request.PreferenceTags,
+            ExcludeIngredients = request.ExcludeIngredients
+                .Concat(profile.ExcludedFoods)
+                .DistinctBy(food => food.Trim().ToLowerInvariant())
+                .ToList()
         };
     }
 

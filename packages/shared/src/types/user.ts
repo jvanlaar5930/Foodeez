@@ -25,6 +25,8 @@ export interface UserProfile {
   dailyCarbTargetG: number;
   dailyFatTargetG: number;
   notes?: string;
+  /** Foods to keep out of every AI suggestion - allergies, intolerances, dislikes. */
+  excludedFoods: string[];
   profileCompleted: boolean;
   darkMode: boolean;
   unitSystem: UnitSystem;

@@ -30,6 +30,10 @@ public class UpdateUserProfileUseCase
         profile.ActivityLevel = request.ActivityLevel;
         profile.DietaryGoal = request.DietaryGoal;
         profile.Notes = request.Notes;
+        if (request.ExcludedFoods is { } excludedFoods)
+        {
+            profile.ExcludedFoods = NormalizeExclusions(excludedFoods);
+        }
         profile.DarkMode = request.DarkMode;
         profile.UnitSystem = request.UnitSystem;
 
@@ -53,9 +57,29 @@ public class UpdateUserProfileUseCase
             DailyCarbTargetG = profile.DailyCarbTargetG,
             DailyFatTargetG = profile.DailyFatTargetG,
             Notes = profile.Notes,
+            ExcludedFoods = profile.ExcludedFoods.ToList(),
             ProfileCompleted = profile.ProfileCompleted,
             DarkMode = profile.DarkMode,
             UnitSystem = profile.UnitSystem
         };
     }
+
+    // A prompt has to carry every one of these, so the list is bounded at both ends: enough
+    // entries for a real set of allergies and dislikes, none of them long enough to be a
+    // paragraph of injected instructions.
+    private const int MaxExclusions = 50;
+    private const int MaxExclusionLength = 60;
+
+    /// <summary>
+    /// Trims, drops blanks and removes case-insensitive duplicates. These are typed by hand
+    /// and end up in a prompt, so "Peanuts", "peanuts " and "" must not all get there.
+    /// </summary>
+    private static List<string> NormalizeExclusions(IEnumerable<string> excluded) =>
+        excluded
+            .Select(food => food.Trim())
+            .Where(food => food.Length > 0)
+            .Select(food => food.Length > MaxExclusionLength ? food[..MaxExclusionLength] : food)
+            .DistinctBy(food => food.ToLowerInvariant())
+            .Take(MaxExclusions)
+            .ToList();
 }

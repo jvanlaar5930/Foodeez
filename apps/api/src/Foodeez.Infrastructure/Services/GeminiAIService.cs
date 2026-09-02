@@ -172,11 +172,13 @@ public class GeminiAIService : IAIService, IStreamingAIService
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
-        var prompt = BuildMealAnalysisPrompt(request);
         try
         {
-            var text = await SendAsync(prompt, ct);
-            return ParseMealAnalysis(text);
+            var responseText = await SendAsync(MealAnalysisPrompt.Build(request), ct);
+            var analysis = MealAnalysisPrompt.Parse(responseText);
+            if (analysis != null) return analysis;
+
+            _logger.LogWarning("Gemini: returned no usable meal analysis.");
         }
         catch (OperationCanceledException)
         {
@@ -187,8 +189,9 @@ public class GeminiAIService : IAIService, IStreamingAIService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Gemini: failed to analyze meal.");
-            return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
         }
+
+        return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
     }
 
     public async Task<DayAnalysisDto> AnalyzeDayAsync(DayAnalysisRequest request, CancellationToken ct = default)
@@ -239,15 +242,7 @@ public class GeminiAIService : IAIService, IStreamingAIService
         return sb.ToString();
     }
 
-    private static string BuildMealAnalysisPrompt(MealAnalysisRequest r)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Analyze this {r.MealType} meal for nutritional completeness.");
-        foreach (var i in r.Items)
-            sb.AppendLine($"- {i.Amount}{i.Unit} {i.Name}: {Math.Round(i.Calories)} kcal, {Math.Round(i.Protein)}g P, {Math.Round(i.Carbs)}g C, {Math.Round(i.Fat)}g F");
-        sb.AppendLine("Score 0-100. Respond ONLY with JSON: {\"score\":72,\"completeness\":\"\",\"missing\":[],\"suggestions\":[]}");
-        return sb.ToString();
-    }
+
 
     private static DietaryRecommendationsDto ParseRecommendations(string text, UserProfileDto p)
     {
@@ -302,24 +297,7 @@ public class GeminiAIService : IAIService, IStreamingAIService
         catch { return new GeneratedMealPlanDto(); }
     }
 
-    private static MealAnalysisDto ParseMealAnalysis(string text)
-    {
-        try
-        {
-            var s = text.IndexOf('{'); var e = text.LastIndexOf('}');
-            if (s < 0 || e < 0) return new MealAnalysisDto { Score = 0, Completeness = "Parse error." };
-            using var doc = JsonDocument.Parse(text[s..(e + 1)]);
-            var r = doc.RootElement;
-            return new MealAnalysisDto
-            {
-                Score = r.TryGetProperty("score", out var sc) ? sc.GetInt32() : 0,
-                Completeness = r.TryGetProperty("completeness", out var c) ? c.GetString() ?? "" : "",
-                Missing = r.TryGetProperty("missing", out var ms) ? ms.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => x.Length > 0).ToList() : [],
-                Suggestions = r.TryGetProperty("suggestions", out var sg) ? sg.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => x.Length > 0).ToList() : []
-            };
-        }
-        catch { return new MealAnalysisDto { Score = 0, Completeness = "Parse error." }; }
-    }
+
 
     private static ParsedFoodDto ParseFoodImage(string text)
     {
