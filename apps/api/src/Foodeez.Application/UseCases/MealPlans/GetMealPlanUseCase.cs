@@ -23,22 +23,7 @@ public class GetMealPlanUseCase
     {
         var entriesByDate = plan.Entries
             .GroupBy(e => e.EntryDate.ToString("yyyy-MM-dd"))
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(e => new MealPlanEntryDto
-                {
-                    Id = e.Id,
-                    MealPlanId = e.MealPlanId,
-                    EntryDate = e.EntryDate,
-                    MealType = e.MealType,
-                    RecipeId = e.RecipeId,
-                    RecipeName = e.Recipe?.Name,
-                    FoodItemId = e.FoodItemId,
-                    FoodItemName = e.FoodItem?.Name,
-                    Notes = e.Notes,
-                    Servings = e.Servings
-                }).ToList()
-            );
+            .ToDictionary(g => g.Key, g => g.Select(MapEntry).ToList());
 
         return new MealPlanDto
         {
@@ -51,4 +36,22 @@ public class GetMealPlanUseCase
             EntriesByDate = entriesByDate
         };
     }
+
+    /// <summary>
+    /// One entry, as the clients see it. Shared with the edit endpoints so a slot saved
+    /// through them comes back in exactly the shape the calendar already renders.
+    /// </summary>
+    internal static MealPlanEntryDto MapEntry(MealPlanEntry e) => new()
+    {
+        Id = e.Id,
+        MealPlanId = e.MealPlanId,
+        EntryDate = e.EntryDate,
+        MealType = e.MealType,
+        RecipeId = e.RecipeId,
+        RecipeName = e.Recipe?.Name,
+        FoodItemId = e.FoodItemId,
+        FoodItemName = e.FoodItem?.Name,
+        Notes = e.Notes,
+        Servings = e.Servings
+    };
 }

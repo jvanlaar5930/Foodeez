@@ -108,6 +108,17 @@
         <p class="font-semibold text-gray-700 dark:text-gray-200">No meals planned this week</p>
         <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Click a slot to add a meal or use AI to generate a full plan</p>
       </div>
+
+      <MealSlotModal
+        v-model="slotOpen"
+        :date="slotDate"
+        :meal-type="slotMealType"
+        :entry="slotEntry"
+        :saving="slotSaving"
+        :error="slotError"
+        @save="handleSaveSlot"
+        @remove="handleRemoveSlot"
+      />
     </div>
   </AppLayout>
 </template>
@@ -117,11 +128,12 @@ import { ref, computed, onMounted } from 'vue';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import DayMealSlot from '@/components/mealplan/DayMealSlot.vue';
+import MealSlotModal from '@/components/mealplan/MealSlotModal.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
 import { useAuthStore } from '@/stores/auth';
-import { MealType, type MealPlanEntry } from '@foodeez/shared';
+import { MealType, type MealPlanEntry, type MealPlanEntryRequest } from '@foodeez/shared';
 
 const authStore = useAuthStore();
 const planStore = useMealPlanStore();
@@ -145,8 +157,11 @@ const MEAL_TYPES = [
 function getEntry(date: Date, mealType: MealType): MealPlanEntry | undefined {
   // Grouped by date on the server, so this is a lookup. The `?? []` is load-bearing: a day
   // with no meals has no key at all, and the old `.entries` did not exist on the payload.
+  //
+  // Read from the plan that covers the day rather than the most recent one, or paging back
+  // a week would show an empty grid even where meals exist.
   const dateStr = format(date, 'yyyy-MM-dd');
-  const forDay = planStore.activePlan?.entriesByDate?.[dateStr] ?? [];
+  const forDay = planStore.planCovering(dateStr)?.entriesByDate?.[dateStr] ?? [];
   return forDay.find(e => e.mealType === mealType);
 }
 
@@ -158,9 +173,65 @@ function prevWeek() { weekStart.value = addDays(weekStart.value, -7); }
 function nextWeek() { weekStart.value = addDays(weekStart.value, 7); }
 function goToCurrentWeek() { weekStart.value = startOfWeek(new Date(), { weekStartsOn: 1 }); }
 
-function openSlot(date: Date, _mealType: MealType) {
-  // TODO: open slot assignment modal
-  console.log('Open slot for', format(date, 'yyyy-MM-dd'), _mealType);
+const slotOpen = ref(false);
+const slotDate = ref<Date>(new Date());
+const slotMealType = ref<MealType>(MealType.Breakfast);
+const slotSaving = ref(false);
+/**
+ * Kept apart from the store's `error`, which the page banner owns: that banner offers
+ * "Try again", meaning regenerate the whole plan, which is the wrong response to a slot
+ * that would not save.
+ */
+const slotError = ref<string | null>(null);
+
+const slotEntry = computed(() => getEntry(slotDate.value, slotMealType.value));
+
+function openSlot(date: Date, mealType: MealType) {
+  planStore.clearError();
+  slotError.value = null;
+  slotDate.value = date;
+  slotMealType.value = mealType;
+  slotOpen.value = true;
+}
+
+async function handleSaveSlot(payload: MealPlanEntryRequest) {
+  if (!authStore.user?.id) return;
+  slotSaving.value = true;
+  slotError.value = null;
+  try {
+    // A week you have never generated a plan for has no plan to hang the meal on, so make
+    // one for that week rather than refusing the click.
+    const plan = await planStore.ensurePlanFor(
+      authStore.user.id,
+      format(weekDays.value[0], 'yyyy-MM-dd'),
+      format(weekDays.value[6], 'yyyy-MM-dd'),
+      `Week of ${format(weekDays.value[0], 'MMM d, yyyy')}`,
+    );
+    await planStore.saveEntry(plan.id, slotEntry.value?.id ?? null, payload);
+    slotOpen.value = false;
+  } catch {
+    // Shown in the dialog, which stays open so the typed-in meal is not lost.
+    slotError.value = planStore.error;
+    planStore.clearError();
+  } finally {
+    slotSaving.value = false;
+  }
+}
+
+async function handleRemoveSlot() {
+  const entry = slotEntry.value;
+  if (!entry) return;
+  slotSaving.value = true;
+  slotError.value = null;
+  try {
+    await planStore.removeEntry(entry.mealPlanId, entry.id);
+    slotOpen.value = false;
+  } catch {
+    slotError.value = planStore.error;
+    planStore.clearError();
+  } finally {
+    slotSaving.value = false;
+  }
 }
 
 async function handleGeneratePlan() {
