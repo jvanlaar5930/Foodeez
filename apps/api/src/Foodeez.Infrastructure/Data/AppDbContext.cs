@@ -18,6 +18,10 @@ public class AppDbContext : DbContext
     public DbSet<SavedRecipe> SavedRecipes => Set<SavedRecipe>();
     public DbSet<MealPlan> MealPlans => Set<MealPlan>();
     public DbSet<MealPlanEntry> MealPlanEntries => Set<MealPlanEntry>();
+    public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<GroceryList> GroceryLists => Set<GroceryList>();
+    public DbSet<GroceryListItem> GroceryListItems => Set<GroceryListItem>();
     public DbSet<AppLog> AppLogs => Set<AppLog>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 

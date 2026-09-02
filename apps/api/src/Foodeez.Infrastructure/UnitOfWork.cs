@@ -15,6 +15,8 @@ public class UnitOfWork : IUnitOfWork
     public IMealPlanRepository MealPlans { get; }
     public IRecipeRepository Recipes { get; }
     public ISavedRecipeRepository SavedRecipes { get; }
+    public IChatRepository Chat { get; }
+    public IGroceryListRepository GroceryLists { get; }
     public IAppSettingRepository AppSettings { get; }
     public IAppLogRepository AppLogs { get; }
 
@@ -27,6 +29,8 @@ public class UnitOfWork : IUnitOfWork
         IMealPlanRepository mealPlans,
         IRecipeRepository recipes,
         ISavedRecipeRepository savedRecipes,
+        IChatRepository chat,
+        IGroceryListRepository groceryLists,
         IAppSettingRepository appSettings,
         IAppLogRepository appLogs)
     {
@@ -38,6 +42,8 @@ public class UnitOfWork : IUnitOfWork
         MealPlans = mealPlans;
         Recipes = recipes;
         SavedRecipes = savedRecipes;
+        Chat = chat;
+        GroceryLists = groceryLists;
         AppSettings = appSettings;
         AppLogs = appLogs;
     }

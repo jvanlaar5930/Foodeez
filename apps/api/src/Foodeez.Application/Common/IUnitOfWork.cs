@@ -11,6 +11,8 @@ public interface IUnitOfWork
     IMealPlanRepository MealPlans { get; }
     IRecipeRepository Recipes { get; }
     ISavedRecipeRepository SavedRecipes { get; }
+    IChatRepository Chat { get; }
+    IGroceryListRepository GroceryLists { get; }
     IAppSettingRepository AppSettings { get; }
     IAppLogRepository AppLogs { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);

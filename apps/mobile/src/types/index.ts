@@ -244,3 +244,119 @@ export interface GenerateMealPlanRequest {
   endDate: string;
   name?: string;
 }
+
+// -- Advice chat --------------------------------------------------------------
+
+/** Serialised by the API as the C# member name, so these values must match exactly. */
+export enum ChatRole {
+  User = 'User',
+  Assistant = 'Assistant',
+}
+
+/** A meal the assistant offered to put on the calendar. */
+export interface PlannedMealDto {
+  date: string;
+  mealType: MealType;
+  name: string;
+  description?: string;
+  servings: number;
+}
+
+export interface ChatMessageDto {
+  id: string;
+  conversationId: string;
+  role: ChatRole;
+  content: string;
+  /** Empty for most turns; non-empty when the reply proposed meals. */
+  suggestions: PlannedMealDto[];
+  suggestionsAcceptedAt?: string;
+  createdAt: string;
+}
+
+export interface ChatConversationDto {
+  id: string;
+  title: string;
+  lastMessageAt: string;
+  createdAt: string;
+  messageCount: number;
+  /** The opening of the last reply, so the list reads like an inbox. */
+  preview?: string;
+}
+
+export interface ChatConversationDetailDto {
+  id: string;
+  title: string;
+  lastMessageAt: string;
+  createdAt: string;
+  messages: ChatMessageDto[];
+}
+
+export interface SendChatMessageRequest {
+  /** Omitted to start a new thread; the reply carries the id it was given. */
+  conversationId?: string;
+  message: string;
+}
+
+export interface ChatReplyDto {
+  conversationId: string;
+  title: string;
+  message: ChatMessageDto;
+}
+
+// -- Grocery list -------------------------------------------------------------
+
+/** The aisles a list is grouped by. The API normalises to exactly these. */
+export const GROCERY_CATEGORIES = [
+  'Produce',
+  'Meat & Seafood',
+  'Dairy & Eggs',
+  'Bakery',
+  'Pantry',
+  'Frozen',
+  'Drinks',
+  'Other',
+] as const;
+
+export interface GroceryItemDto {
+  id: string;
+  name: string;
+  /** How much to buy, written as it would be on a paper list: "500 g", "2 bunches". */
+  quantity: string;
+  category: string;
+  /** Which planned meals wanted it. */
+  source?: string;
+  isChecked: boolean;
+  /** Added or edited by hand, and so kept through a rebuild. */
+  isCustom: boolean;
+  sortOrder: number;
+}
+
+export interface GroceryListDto {
+  id: string;
+  startDate: string;
+  endDate: string;
+  generatedAt: string;
+  /** True when the meal plan has changed since this list was compiled. */
+  isStale: boolean;
+  plannedMealCount: number;
+  items: GroceryItemDto[];
+}
+
+export interface GroceryListStateDto {
+  list: GroceryListDto | null;
+  plannedMealCount: number;
+}
+
+export interface GenerateGroceryListRequest {
+  startDate: string;
+  endDate: string;
+  /** Rebuild even when the stored list still matches the plan. Costs an AI call. */
+  refresh?: boolean;
+}
+
+export interface GroceryItemRequest {
+  name: string;
+  quantity: string;
+  category: string;
+  isChecked?: boolean;
+}
