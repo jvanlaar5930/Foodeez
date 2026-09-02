@@ -85,14 +85,16 @@ public class ClaudeAIService : IAIService, IStreamingAIService
         }
     }
 
-    public async Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+    public async Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
         var base64Image = Convert.ToBase64String(imageData);
 
         var requestBody = new
         {
             model = _configuration["Claude:Model"] ?? "claude-sonnet-4-6",
-            max_tokens = 1024,
+            // A plate of food can run to a dozen entries, and a truncated answer parses as a
+            // meal with items missing rather than as the failure it is.
+            max_tokens = 4096,
             messages = new[]
             {
                 new
@@ -113,7 +115,7 @@ public class ClaudeAIService : IAIService, IStreamingAIService
                         new
                         {
                             type = "text",
-                            text = BuildFoodImagePrompt()
+                            text = MealParsePrompt.BuildImage()
                         }
                     }
                 }
@@ -129,7 +131,7 @@ public class ClaudeAIService : IAIService, IStreamingAIService
 
             var responseBody = await response.Content.ReadAsStringAsync(ct);
             var responseText = ExtractTextFromResponse(responseBody);
-            return ParseFoodImageResponse(responseText);
+            return MealParsePrompt.Parse(responseText);
         }
         catch (OperationCanceledException)
         {
@@ -139,15 +141,27 @@ public class ClaudeAIService : IAIService, IStreamingAIService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to parse food image from Claude AI.");
-            return new ParsedFoodDto
-            {
-                Name = "Unknown Food",
-                ServingSize = 100,
-                ServingUnit = "g",
-                Confidence = 0f,
-                NutritionalInfo = new NutritionalInfoDto()
-            };
+            _logger.LogError(ex, "Claude: failed to read a meal from a photo.");
+            return ParsedMealDto.Unreadable;
+        }
+    }
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+    {
+        try
+        {
+            return MealParsePrompt.Parse(await SendMessageAsync(MealParsePrompt.BuildText(description), ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Claude: failed to read a described meal.");
+            return ParsedMealDto.Unreadable;
         }
     }
 
@@ -279,27 +293,6 @@ public class ClaudeAIService : IAIService, IStreamingAIService
 }");
 
         return sb.ToString();
-    }
-
-    private static string BuildFoodImagePrompt()
-    {
-        return @"Analyze this food image and identify the food item(s). Respond ONLY with a valid JSON object (no markdown, no extra text) in this format:
-{
-  ""name"": ""Food Name"",
-  ""brand"": null,
-  ""servingSize"": 100,
-  ""servingUnit"": ""g"",
-  ""confidence"": 0.85,
-  ""nutritionalInfo"": {
-    ""calories"": 250,
-    ""protein"": 10,
-    ""carbohydrates"": 30,
-    ""fat"": 8,
-    ""fiber"": 3,
-    ""sugar"": 5,
-    ""sodium"": 200
-  }
-}";
     }
 
     private static DietaryRecommendationsDto ParseRecommendationsResponse(string responseText, UserProfileDto profile)
@@ -449,52 +442,6 @@ public class ClaudeAIService : IAIService, IStreamingAIService
         }
     }
 
-    private static ParsedFoodDto ParseFoodImageResponse(string responseText)
-    {
-        try
-        {
-            var jsonStart = responseText.IndexOf('{');
-            var jsonEnd = responseText.LastIndexOf('}');
-            if (jsonStart < 0 || jsonEnd < 0)
-                return DefaultParsedFood();
-
-            var jsonText = responseText[jsonStart..(jsonEnd + 1)];
-            using var doc = JsonDocument.Parse(jsonText);
-            var root = doc.RootElement;
-
-            var dto = new ParsedFoodDto();
-
-            if (root.TryGetProperty("name", out var name))
-                dto.Name = name.GetString() ?? "Unknown Food";
-            if (root.TryGetProperty("brand", out var brand) && brand.ValueKind != JsonValueKind.Null)
-                dto.Brand = brand.GetString();
-            if (root.TryGetProperty("servingSize", out var ss))
-                dto.ServingSize = ss.GetSingle();
-            if (root.TryGetProperty("servingUnit", out var su))
-                dto.ServingUnit = su.GetString() ?? "g";
-            if (root.TryGetProperty("confidence", out var conf))
-                dto.Confidence = conf.GetSingle();
-
-            if (root.TryGetProperty("nutritionalInfo", out var ni))
-            {
-                dto.NutritionalInfo = new NutritionalInfoDto();
-                if (ni.TryGetProperty("calories", out var cal)) dto.NutritionalInfo.Calories = cal.GetSingle();
-                if (ni.TryGetProperty("protein", out var prot)) dto.NutritionalInfo.Protein = prot.GetSingle();
-                if (ni.TryGetProperty("carbohydrates", out var carbs)) dto.NutritionalInfo.Carbohydrates = carbs.GetSingle();
-                if (ni.TryGetProperty("fat", out var fat)) dto.NutritionalInfo.Fat = fat.GetSingle();
-                if (ni.TryGetProperty("fiber", out var fiber)) dto.NutritionalInfo.Fiber = fiber.GetSingle();
-                if (ni.TryGetProperty("sugar", out var sugar)) dto.NutritionalInfo.Sugar = sugar.GetSingle();
-                if (ni.TryGetProperty("sodium", out var sodium)) dto.NutritionalInfo.Sodium = sodium.GetSingle();
-            }
-
-            return dto;
-        }
-        catch
-        {
-            return DefaultParsedFood();
-        }
-    }
-
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
         try
@@ -547,15 +494,6 @@ public class ClaudeAIService : IAIService, IStreamingAIService
 
 
 
-
-    private static ParsedFoodDto DefaultParsedFood() => new ParsedFoodDto
-    {
-        Name = "Unknown Food",
-        ServingSize = 100,
-        ServingUnit = "g",
-        Confidence = 0f,
-        NutritionalInfo = new NutritionalInfoDto()
-    };
 
     public async Task<EstimatedNutritionDto> EstimateNutritionAsync(EstimateNutritionRequest request, CancellationToken ct = default)
     {

@@ -31,6 +31,31 @@ public static class MealPlanPrompt
 
         sb.AppendLine($"- Plan Period: {request.StartDate:yyyy-MM-dd} to {request.EndDate:yyyy-MM-dd}");
         sb.AppendLine();
+
+        if (request.PreviousPeriod.Count > 0)
+        {
+            sb.AppendLine("What they had planned for the period before this one:");
+            foreach (var line in request.PreviousPeriod)
+            {
+                sb.AppendLine($"- {line}");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("Use it only as far as their request below asks you to - repeating it wholesale is not the default.");
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Guidance))
+        {
+            sb.AppendLine("What they asked for this time, in their own words:");
+            sb.AppendLine(request.Guidance.Trim());
+            sb.AppendLine();
+            // A free-text box must not become a way around an allergy. The instruction can
+            // shape the plan; it cannot put back something the profile rules out.
+            sb.AppendLine("Follow that request wherever it does not conflict with the targets or the excluded foods above - those still hold, whatever it says.");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("Cover every date in the period, and keep each day close to the calorie and macro targets.");
         sb.AppendLine();
         sb.AppendLine(AINarration.Instruction);

@@ -3,6 +3,7 @@ import type {
   ChatConversationDetail,
   ChatReply,
   MealPlan,
+  Recipe,
   SendChatMessageRequest,
 } from '@foodeez/shared';
 
@@ -44,6 +45,15 @@ export const chatService = {
    */
   async addSuggestionsToPlan(messageId: string, indexes: number[] = []): Promise<MealPlan[]> {
     const response = await api.post<MealPlan[]>(`/chat/messages/${messageId}/plan`, { indexes });
+    return response.data;
+  },
+
+  /**
+   * Keep the recipes a reply wrote out. They join the shared recipe library and the caller's
+   * own collection, and come back as full recipes.
+   */
+  async saveRecipes(messageId: string, indexes: number[] = []): Promise<Recipe[]> {
+    const response = await api.post<Recipe[]>(`/chat/messages/${messageId}/recipes`, { indexes });
     return response.data;
   },
 };

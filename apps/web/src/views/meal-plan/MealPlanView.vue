@@ -9,12 +9,12 @@
         </div>
         <div class="flex items-center gap-2">
           <button
-            @click="handleGeneratePlan"
+            @click="openGenerate"
             :disabled="isGenerating"
             class="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-semibold px-4 py-2 rounded-xl transition-colors">
             <span v-if="isGenerating" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             <span v-else>✨</span>
-            {{ isGenerating ? 'Generating...' : 'AI Generate' }}
+            {{ isGenerating ? 'Generating...' : 'Generate Plan' }}
           </button>
           <!-- Generation can take minutes on a self-hosted model, so there has to be a
                way out that actually stops the work rather than just hiding the spinner. -->
@@ -109,6 +109,54 @@
         <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Click a slot to add a meal or use AI to generate a full plan</p>
       </div>
 
+      <!-- Generate dialog: the guidance box is optional, so Enter-to-submit and an empty
+           field both just generate. -->
+      <div
+        v-if="generateOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        @click.self="generateOpen = false"
+      >
+        <div class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900">
+          <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100">Generate Plan</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            A full week for {{ format(weekDays[0], 'MMM d') }} &ndash;
+            {{ format(weekDays[6], 'MMM d') }}, built around your targets and the foods you avoid.
+          </p>
+
+          <label for="plan-guidance" class="mt-4 block text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Anything specific? <span class="font-normal text-gray-400">(optional)</span>
+          </label>
+          <textarea
+            id="plan-guidance"
+            v-model="guidance"
+            rows="3"
+            maxlength="1000"
+            placeholder="e.g. more variety in the dinners, and reuse last week's breakfasts and lunches"
+            class="mt-1 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <p class="mt-1 text-xs text-gray-400">
+            Mention last week and the plan you already have is used as the reference.
+          </p>
+
+          <div class="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:border-gray-300 dark:border-gray-700 dark:text-gray-300"
+              @click="generateOpen = false"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+              @click="confirmGenerate"
+            >
+              Generate
+            </button>
+          </div>
+        </div>
+      </div>
+
       <MealSlotModal
         v-model="slotOpen"
         :date="slotDate"
@@ -173,6 +221,10 @@ function prevWeek() { weekStart.value = addDays(weekStart.value, -7); }
 function nextWeek() { weekStart.value = addDays(weekStart.value, 7); }
 function goToCurrentWeek() { weekStart.value = startOfWeek(new Date(), { weekStartsOn: 1 }); }
 
+const generateOpen = ref(false);
+/** Free text for the next generation. Survives the dialog so "Try again" repeats it. */
+const guidance = ref('');
+
 const slotOpen = ref(false);
 const slotDate = ref<Date>(new Date());
 const slotMealType = ref<MealType>(MealType.Breakfast);
@@ -234,6 +286,15 @@ async function handleRemoveSlot() {
   }
 }
 
+function openGenerate() {
+  generateOpen.value = true;
+}
+
+function confirmGenerate() {
+  generateOpen.value = false;
+  void handleGeneratePlan();
+}
+
 async function handleGeneratePlan() {
   if (!authStore.user?.id) return;
   try {
@@ -241,6 +302,9 @@ async function handleGeneratePlan() {
       userId: authStore.user.id,
       startDate: format(weekDays.value[0], 'yyyy-MM-dd'),
       endDate: format(weekDays.value[6], 'yyyy-MM-dd'),
+      // Kept between attempts on purpose: "Try again" after a provider outage should repeat
+      // the request that was made, not quietly drop what was asked for.
+      guidance: guidance.value.trim() || undefined,
     });
   } catch {
     // The store has already put the reason in `error`, which the banner above renders.

@@ -22,5 +22,17 @@ public class ChatMessage : BaseEntity
     /// </summary>
     public DateTime? SuggestionsAcceptedAt { get; set; }
 
+    /// <summary>
+    /// Recipes this reply wrote out in full, empty for most turns. Held here, and not in the
+    /// recipe library, until the reader chooses to keep them.
+    /// </summary>
+    public List<SuggestedRecipe> Recipes { get; set; } = new();
+
+    /// <summary>
+    /// Set once the reader has added the recipes to the library, so the thread shows they
+    /// were kept instead of offering to keep them twice.
+    /// </summary>
+    public DateTime? RecipesSavedAt { get; set; }
+
     public ChatConversation Conversation { get; set; } = null!;
 }

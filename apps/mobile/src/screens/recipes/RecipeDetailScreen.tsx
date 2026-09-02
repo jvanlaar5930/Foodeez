@@ -15,7 +15,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RecipesStackParamList } from '@/navigation/types';
 import { recipeService } from '@/services/recipeService';
 import { useSavedRecipeStore } from '@/store/savedRecipeStore';
-import { RecipeDto } from '@/types';
+import { isAiRecipeImage, RecipeDto } from '@/types';
+import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -103,9 +104,11 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
               color={C.surface}
             />
           </TouchableOpacity>
-          {recipe.imageUrl
-            ? <Image source={{ uri: recipe.imageUrl }} style={styles.heroImage} resizeMode="cover" />
-            : <View style={styles.heroImagePlaceholder}><Ionicons name="restaurant" size={64} color={C.primaryLight} /></View>
+          {isAiRecipeImage(recipe.imageUrl)
+            ? <AiRecipeThumb size={56} style={styles.heroImage} />
+            : recipe.imageUrl
+              ? <Image source={{ uri: recipe.imageUrl }} style={styles.heroImage} resizeMode="cover" />
+              : <View style={styles.heroImagePlaceholder}><Ionicons name="restaurant" size={64} color={C.primaryLight} /></View>
           }
           {recipe.isAIGenerated && (
             <View style={styles.aiBadge}>

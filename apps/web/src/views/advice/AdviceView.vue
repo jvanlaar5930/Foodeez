@@ -68,6 +68,14 @@ async function addToPlan(messageId: string) {
     ? 'Added to your meal plan. They are on the calendar and in your grocery list.'
     : null;
 }
+
+async function saveRecipes(messageId: string) {
+  const saved = await chatStore.saveRecipes(messageId);
+  planNotice.value =
+    saved > 0
+      ? `Saved ${saved === 1 ? 'the recipe' : `${saved} recipes`} to your recipe collection.`
+      : null;
+}
 </script>
 
 <template>
@@ -157,6 +165,7 @@ async function addToPlan(messageId: string) {
             :message="message"
             :is-saved="!message.id.startsWith('pending-')"
             @add-to-plan="addToPlan"
+            @save-recipes="saveRecipes"
           />
 
           <div

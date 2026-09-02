@@ -16,7 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { useChatStore } from '@/store/chatStore';
-import { ChatRole, type ChatMessageDto, type PlannedMealDto } from '@/types';
+import {
+  ChatRole,
+  type ChatMessageDto,
+  type PlannedMealDto,
+  type SuggestedRecipeDto,
+} from '@/types';
 import { BorderRadius, FontSize, FontWeight, Shadows, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -51,6 +56,7 @@ export function AdviceScreen() {
     cancelSend,
     remove,
     addSuggestionsToPlan,
+    saveRecipes,
   } = useChatStore();
 
   // Straight back into the last thread: advice is a conversation, and starting every visit
@@ -77,6 +83,15 @@ export function AdviceScreen() {
     const added = await addSuggestionsToPlan(messageId);
     setPlanNotice(
       added ? 'Added to your meal plan. They are on the calendar and in your grocery list.' : null,
+    );
+  };
+
+  const onSaveRecipes = async (messageId: string) => {
+    const saved = await saveRecipes(messageId);
+    setPlanNotice(
+      saved > 0
+        ? `Saved ${saved === 1 ? 'the recipe' : `${saved} recipes`} to your recipe collection.`
+        : null,
     );
   };
 
@@ -158,6 +173,7 @@ export function AdviceScreen() {
               message={message}
               styles={styles}
               onAddToPlan={() => void onAddToPlan(message.id)}
+              onSaveRecipes={() => void onSaveRecipes(message.id)}
             />
           ))}
 
@@ -266,10 +282,12 @@ function MessageBubble({
   message,
   styles,
   onAddToPlan,
+  onSaveRecipes,
 }: {
   message: ChatMessageDto;
   styles: ReturnType<typeof makeStyles>;
   onAddToPlan: () => void;
+  onSaveRecipes: () => void;
 }) {
   const isUser = message.role === ChatRole.User;
   // A message that only exists on screen has nothing on the server to act on yet.
@@ -288,6 +306,16 @@ function MessageBubble({
           canAdd={isSaved}
           styles={styles}
           onAdd={onAddToPlan}
+        />
+      ) : null}
+
+      {!isUser && message.recipes.length > 0 ? (
+        <RecipesCard
+          recipes={message.recipes}
+          saved={Boolean(message.recipesSavedAt)}
+          canSave={isSaved}
+          styles={styles}
+          onSave={onSaveRecipes}
         />
       ) : null}
     </View>
@@ -326,6 +354,104 @@ function SuggestionsCard({
         <TouchableOpacity style={styles.suggestionsButton} onPress={onAdd}>
           <Text style={styles.suggestionsButtonText}>
             Add {suggestions.length} {suggestions.length === 1 ? 'meal' : 'meals'} to my plan
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
+/** "300 g flour", or just the name when the model gave no measurement. */
+function ingredientLine(ingredient: SuggestedRecipeDto['ingredients'][number]): string {
+  const amount = [ingredient.quantity > 0 ? String(ingredient.quantity) : '', ingredient.unit]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  const line = amount.length > 0 ? `${amount} ${ingredient.name}` : ingredient.name;
+  return ingredient.notes ? `${line} (${ingredient.notes})` : line;
+}
+
+function RecipesCard({
+  recipes,
+  saved,
+  canSave,
+  styles,
+  onSave,
+}: {
+  recipes: SuggestedRecipeDto[];
+  saved: boolean;
+  canSave: boolean;
+  styles: ReturnType<typeof makeStyles>;
+  onSave: () => void;
+}) {
+  // Collapsed by default: a full method inline would bury the conversation around it.
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  return (
+    <View style={styles.recipes}>
+      <Text style={styles.recipesLabel}>{recipes.length === 1 ? 'RECIPE' : 'RECIPES'}</Text>
+
+      {recipes.map((recipe, index) => {
+        const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes;
+        const isOpen = expanded === index;
+        const steps = recipe.instructions
+          .split('\n')
+          .map((step) => step.trim().replace(/^\d+[.)]\s*/, ''))
+          .filter(Boolean);
+
+        return (
+          <View key={`${recipe.name}-${index}`} style={styles.recipeItem}>
+            <TouchableOpacity
+              style={styles.recipeHead}
+              onPress={() => setExpanded(isOpen ? null : index)}
+              accessibilityLabel={`${isOpen ? 'Hide' : 'View'} ${recipe.name}`}
+            >
+              <View style={styles.flex}>
+                <Text style={styles.recipeName}>{recipe.name}</Text>
+                <Text style={styles.recipeMeta}>
+                  {totalTime > 0 ? `${totalTime} min · ` : ''}
+                  {recipe.servings} {recipe.servings === 1 ? 'serving' : 'servings'}
+                  {recipe.calories > 0 ? ` · ${Math.round(recipe.calories)} kcal each` : ''}
+                </Text>
+              </View>
+              <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#B45309" />
+            </TouchableOpacity>
+
+            {isOpen ? (
+              <View style={styles.recipeBody}>
+                {recipe.description ? (
+                  <Text style={styles.recipeDesc}>{recipe.description}</Text>
+                ) : null}
+
+                <Text style={styles.recipeSection}>Ingredients</Text>
+                {recipe.ingredients.map((ingredient, i) => (
+                  <Text key={`${ingredient.name}-${i}`} style={styles.recipeDetail}>
+                    {ingredientLine(ingredient)}
+                  </Text>
+                ))}
+
+                {steps.length > 0 ? (
+                  <>
+                    <Text style={styles.recipeSection}>Method</Text>
+                    {steps.map((step, i) => (
+                      <Text key={i} style={styles.recipeDetail}>
+                        {i + 1}. {step}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+
+      {saved ? (
+        <Text style={styles.recipesDone}>Saved to your recipes.</Text>
+      ) : canSave ? (
+        <TouchableOpacity style={styles.recipesButton} onPress={onSave}>
+          <Text style={styles.recipesButtonText}>
+            Save {recipes.length === 1 ? 'this recipe' : `these ${recipes.length} recipes`}
           </Text>
         </TouchableOpacity>
       ) : null}
@@ -417,6 +543,62 @@ const makeStyles = (C: Palette) =>
       alignItems: 'center',
     },
     suggestionsButtonText: { color: '#FFFFFF', fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+    // Amber rather than the palette green, so a recipe offer reads as a different action
+    // from a plan offer when a reply carries both.
+    recipes: {
+      marginTop: Spacing.sm,
+      maxWidth: '88%',
+      borderRadius: BorderRadius.lg,
+      borderWidth: 1,
+      borderColor: '#FCD34D',
+      backgroundColor: '#FFFBEB',
+      padding: Spacing.md,
+    },
+    recipesLabel: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.bold,
+      color: '#B45309',
+      letterSpacing: 0.5,
+      marginBottom: Spacing.xs,
+    },
+    recipeItem: {
+      borderRadius: BorderRadius.md,
+      backgroundColor: '#FFFFFF',
+      padding: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    recipeHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    recipeName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: '#1F2937' },
+    recipeMeta: { fontSize: FontSize.xs, color: '#6B7280', marginTop: 2 },
+    recipeBody: {
+      marginTop: Spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: '#FDE68A',
+      paddingTop: Spacing.sm,
+    },
+    recipeDesc: { fontSize: FontSize.xs, color: '#4B5563', marginBottom: Spacing.xs },
+    recipeSection: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: '#374151',
+      marginTop: Spacing.xs,
+      marginBottom: 2,
+    },
+    recipeDetail: { fontSize: FontSize.xs, color: '#4B5563', lineHeight: 18 },
+    recipesDone: {
+      marginTop: Spacing.xs,
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
+      color: '#B45309',
+    },
+    recipesButton: {
+      marginTop: Spacing.xs,
+      backgroundColor: '#D97706',
+      borderRadius: BorderRadius.lg,
+      paddingVertical: Spacing.sm,
+      alignItems: 'center',
+    },
+    recipesButtonText: { color: '#FFFFFF', fontWeight: FontWeight.semibold, fontSize: FontSize.md },
     notice: {
       marginHorizontal: Spacing.md,
       marginBottom: Spacing.sm,

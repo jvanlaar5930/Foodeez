@@ -14,7 +14,8 @@ namespace Foodeez.API.Controllers;
 public class MealLogsController : ControllerBase
 {
     private readonly LogMealUseCase _logMealUseCase;
-    private readonly ParseFoodImageUseCase _parseFoodImageUseCase;
+    private readonly ParseMealImageUseCase _parseMealImageUseCase;
+    private readonly QuickAddMealUseCase _quickAddMealUseCase;
     private readonly GetDailyLogsUseCase _getDailyLogsUseCase;
     private readonly GetNutritionSummaryUseCase _getNutritionSummaryUseCase;
     private readonly UpdateMealLogUseCase _updateMealLogUseCase;
@@ -24,7 +25,8 @@ public class MealLogsController : ControllerBase
 
     public MealLogsController(
         LogMealUseCase logMealUseCase,
-        ParseFoodImageUseCase parseFoodImageUseCase,
+        ParseMealImageUseCase parseMealImageUseCase,
+        QuickAddMealUseCase quickAddMealUseCase,
         GetDailyLogsUseCase getDailyLogsUseCase,
         GetNutritionSummaryUseCase getNutritionSummaryUseCase,
         UpdateMealLogUseCase updateMealLogUseCase,
@@ -33,7 +35,8 @@ public class MealLogsController : ControllerBase
         AnalyzeDayUseCase analyzeDayUseCase)
     {
         _logMealUseCase = logMealUseCase;
-        _parseFoodImageUseCase = parseFoodImageUseCase;
+        _parseMealImageUseCase = parseMealImageUseCase;
+        _quickAddMealUseCase = quickAddMealUseCase;
         _getDailyLogsUseCase = getDailyLogsUseCase;
         _getNutritionSummaryUseCase = getNutritionSummaryUseCase;
         _updateMealLogUseCase = updateMealLogUseCase;
@@ -101,21 +104,55 @@ public class MealLogsController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Parse a food image using AI to extract nutritional information.</summary>
+    /// <summary>
+    /// Read a meal out of a description - "turkey sandwich on rye with mayo, and an apple" -
+    /// as the separate foods it is made of, matched to the food database where possible.
+    ///
+    /// Nothing is logged: the items come back for the user to look over and save themselves.
+    /// A description that exactly names one of their saved meals is answered from it, with no
+    /// AI call at all.
+    /// </summary>
+    [HttpPost("quick-add")]
+    [ProducesResponseType(typeof(QuickAddResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> QuickAdd([FromBody] QuickAddRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Description))
+            return BadRequest(new { message = "Describe the meal first." });
+
+        var userId = CurrentUser.IdOf(User);
+        if (userId is null)
+            return Unauthorized();
+
+        // The body carries a userId for symmetry with the rest of this controller, but the
+        // foods created along the way are filed against the token's user, never the body's.
+        request.UserId = userId.Value;
+
+        return Ok(await _quickAddMealUseCase.ExecuteAsync(request, ct));
+    }
+
+    /// <summary>
+    /// Read a meal out of a photograph, as the separate foods on the plate. Same result shape
+    /// as quick add, and the same rule: nothing is logged until the user saves it.
+    /// </summary>
     [HttpPost("parse-image")]
-    [ProducesResponseType(typeof(ParsedFoodDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(QuickAddResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ParseFoodImage(IFormFile image, CancellationToken ct)
     {
         if (image == null || image.Length == 0)
             return BadRequest("No image file provided.");
 
+        var userId = CurrentUser.IdOf(User);
+        if (userId is null)
+            return Unauthorized();
+
         using var ms = new MemoryStream();
         await image.CopyToAsync(ms, ct);
         var imageData = ms.ToArray();
         var mimeType = image.ContentType;
 
-        var result = await _parseFoodImageUseCase.ExecuteAsync(imageData, mimeType, ct);
+        var result = await _parseMealImageUseCase.ExecuteAsync(userId.Value, imageData, mimeType, ct);
         return Ok(result);
     }
 

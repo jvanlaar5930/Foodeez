@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { ChatRole, type ChatMessage } from '@foodeez/shared';
 import PlannedMealsCard from './PlannedMealsCard.vue';
+import SuggestedRecipesCard from './SuggestedRecipesCard.vue';
 
 const props = defineProps<{
   message: ChatMessage;
@@ -9,7 +10,10 @@ const props = defineProps<{
   isSaved?: boolean;
 }>();
 
-const emit = defineEmits<{ addToPlan: [messageId: string] }>();
+const emit = defineEmits<{
+  addToPlan: [messageId: string];
+  saveRecipes: [messageId: string];
+}>();
 
 const isUser = computed(() => props.message.role === ChatRole.User);
 
@@ -42,6 +46,15 @@ const time = computed(() =>
         :accepted-at="message.suggestionsAcceptedAt"
         :can-add="isSaved !== false"
         @add="emit('addToPlan', message.id)"
+      />
+
+      <SuggestedRecipesCard
+        v-if="!isUser && message.recipes.length > 0"
+        class="mt-2"
+        :recipes="message.recipes"
+        :saved-at="message.recipesSavedAt"
+        :can-save="isSaved !== false"
+        @save="emit('saveRecipes', message.id)"
       />
 
       <p :class="['mt-1 text-xs text-gray-400', isUser ? 'text-right' : 'text-left']">

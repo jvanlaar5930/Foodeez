@@ -7,6 +7,8 @@
       </div>
 
       <div class="flex-1 space-y-4 overflow-y-auto p-5">
+        <QuickAddPanel ref="quickAddPanel" @applied="applyQuickAdd" />
+
         <div>
           <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Meal Type</label>
           <div class="flex flex-wrap gap-2">
@@ -28,7 +30,9 @@
         </div>
 
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Search Food</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+            Or add one food at a time
+          </label>
           <input
             v-model="searchQuery"
             type="text"
@@ -93,7 +97,18 @@
             >
               <div class="flex items-start justify-between gap-2">
                 <div>
-                  <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ entry.item.name }}</p>
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ entry.item.name }}</p>
+                    <!-- Which numbers were looked up and which were guessed at, per line, so a
+                         quick-added meal can be checked at a glance instead of taken on faith. -->
+                    <span
+                      v-if="sourceBadge(entry.source)"
+                      :class="['rounded-full px-1.5 py-0.5 text-[10px] font-semibold', sourceBadge(entry.source)!.classes]"
+                      :title="sourceBadge(entry.source)!.title"
+                    >
+                      {{ sourceBadge(entry.source)!.text }}
+                    </span>
+                  </div>
                   <p class="text-xs text-gray-400">
                     1 serving = {{ entry.item.servingSize }}{{ entry.item.servingUnit }}
                   </p>
@@ -227,6 +242,53 @@
         </div>
       </div>
 
+      <div v-if="selectedItems.length > 0" class="border-t px-5 py-3">
+        <div v-if="templateName === null" class="flex items-center gap-3">
+          <button
+            type="button"
+            class="text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+            @click="templateName = ''"
+          >
+            Save as a meal
+          </button>
+          <span v-if="savedTemplateName" class="text-xs text-gray-500 dark:text-gray-400">
+            Saved as &ldquo;{{ savedTemplateName }}&rdquo; - it is in Quick add now.
+          </span>
+          <span v-else class="text-xs text-gray-400">
+            Eat this often? Save it and log it again in one tap.
+          </span>
+        </div>
+
+        <div v-else class="space-y-2">
+          <div class="flex items-center gap-2">
+            <input
+              v-model="templateName"
+              type="text"
+              maxlength="100"
+              placeholder="Name it, e.g. My turkey sandwich"
+              class="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-900"
+              @keydown.enter.prevent="saveAsTemplate"
+            />
+            <button
+              type="button"
+              :disabled="!templateName.trim() || isSavingTemplate"
+              class="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
+              @click="saveAsTemplate"
+            >
+              {{ isSavingTemplate ? 'Saving...' : 'Save' }}
+            </button>
+            <button
+              type="button"
+              class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              @click="templateName = null"
+            >
+              Cancel
+            </button>
+          </div>
+          <p v-if="templateError" class="text-xs text-red-600 dark:text-red-400">{{ templateError }}</p>
+        </div>
+      </div>
+
       <div class="flex gap-3 border-t p-5">
         <button
           class="flex-1 rounded-xl border-2 border-gray-200 dark:border-gray-700 py-2.5 font-semibold text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
@@ -252,6 +314,7 @@
 
 <script setup lang="ts">
 import CustomFoodForm from '@/components/meal/CustomFoodForm.vue';
+import QuickAddPanel from '@/components/meal/QuickAddPanel.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { computed, ref, watch } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
@@ -261,11 +324,20 @@ import { scoreStroke, scoreTextClass } from '@/utils/analysisScore';
 import { AIStreamError } from '@/services/aiStream';
 import { useMealStore } from '@/stores/meal';
 import { useAuthStore } from '@/stores/auth';
-import { MealType, type FoodItem, type MealLog } from '@foodeez/shared';
+import { mealTemplateService } from '@/services/mealTemplateService';
+import {
+  MealType,
+  type FoodItem,
+  type MealLog,
+  type QuickAddResult,
+  type QuickAddSource,
+} from '@foodeez/shared';
 
 interface SelectedItem {
   item: FoodItem;
   amount: number;
+  /** Where this line came from, when quick add put it here. Absent for a searched-for food. */
+  source?: QuickAddSource;
 }
 
 const props = defineProps<{
@@ -283,6 +355,12 @@ const searchQuery = ref('');
 const searchResults = ref<FoodItem[]>([]);
 const selectedItems = ref<SelectedItem[]>([]);
 const isSaving = ref(false);
+const quickAddPanel = ref<InstanceType<typeof QuickAddPanel> | null>(null);
+/** The name being typed into "save as a meal", or null while that is not open. */
+const templateName = ref<string | null>(null);
+const isSavingTemplate = ref(false);
+const templateError = ref<string | null>(null);
+const savedTemplateName = ref<string | null>(null);
 const isAnalyzing = ref(false);
 const analysis = ref<MealAnalysisResult | null>(null);
 /** What the model has written so far, shown while it writes. */
@@ -409,6 +487,9 @@ watch(
       item: item.foodItem,
       amount: item.quantity,
     })) ?? [];
+    templateName.value = null;
+    templateError.value = null;
+    savedTemplateName.value = null;
     searchQuery.value = '';
     searchResults.value = [];
     analysis.value = mealLog?.analysis ?? null;
@@ -431,6 +512,90 @@ function selectItem(item: FoodItem) {
   searchQuery.value = '';
   searchResults.value = [];
   invalidateAnalysis();
+}
+
+/**
+ * Quick add's items land in the same list a searched-for food does, so everything already
+ * built on that list - amounts, removal, the AI analysis, saving - keeps working untouched.
+ */
+function applyQuickAdd(result: QuickAddResult) {
+  for (const parsed of result.items) {
+    // The same food twice in one meal is a second tap on the same button, not two helpings.
+    const existing = selectedItems.value.find((entry) => entry.item.id === parsed.foodItem.id);
+    if (existing) {
+      existing.amount = parsed.quantity;
+      existing.source = parsed.source;
+      continue;
+    }
+
+    selectedItems.value.push({
+      item: parsed.foodItem,
+      amount: parsed.quantity,
+      source: parsed.source,
+    });
+  }
+
+  // Only a saved meal knows which meal it is; a described one leaves the choice alone.
+  if (result.mealType !== undefined && result.mealType !== null) {
+    selectedMealType.value = result.mealType;
+  }
+
+  showCustomForm.value = false;
+  searchQuery.value = '';
+  searchResults.value = [];
+  invalidateAnalysis();
+}
+
+/** The label for a line whose numbers did not come from the user picking a food themselves. */
+function sourceBadge(source: QuickAddSource | undefined): { text: string; title: string; classes: string } | null {
+  if (source === 'Estimated') {
+    return {
+      text: 'AI estimate',
+      title: 'Nothing in the food database matched this, so these numbers are an estimate. Worth a glance.',
+      classes: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    };
+  }
+
+  if (source === 'Matched') {
+    return {
+      text: 'from database',
+      title: 'Matched to a food already on file - these are its real numbers.',
+      classes: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+    };
+  }
+
+  return null;
+}
+
+async function saveAsTemplate() {
+  const name = templateName.value?.trim();
+  if (!name || !authStore.user?.id || selectedItems.value.length === 0) {
+    return;
+  }
+
+  isSavingTemplate.value = true;
+  templateError.value = null;
+
+  try {
+    const saved = await mealTemplateService.save({
+      userId: authStore.user.id,
+      name,
+      mealType: selectedMealType.value,
+      items: selectedItems.value.map((entry) => ({
+        foodItemId: entry.item.id,
+        quantity: entry.amount,
+        unit: entry.item.servingUnit,
+      })),
+    });
+
+    savedTemplateName.value = saved.name;
+    templateName.value = null;
+    await quickAddPanel.value?.refresh();
+  } catch {
+    templateError.value = 'That could not be saved. Try a different name.';
+  } finally {
+    isSavingTemplate.value = false;
+  }
 }
 
 const scoreColor = computed(() => scoreStroke(analysis.value?.score ?? 0));

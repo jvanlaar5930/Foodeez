@@ -119,15 +119,34 @@ public class GroqAIService : IAIService, IStreamingAIService
         }
     }
 
-    public Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+    public Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
-        // Groq free tier does not support vision; return a placeholder
-        _logger.LogWarning("Groq does not support image parsing. Returning default food item.");
-        return Task.FromResult(new ParsedFoodDto
+        // No items and a reason, not a placeholder food: a made-up "Unknown Food" would be
+        // logged and counted as though someone had really eaten it.
+        _logger.LogWarning("Groq: asked to read a meal from a photo, which it cannot do.");
+        return Task.FromResult(new ParsedMealDto
         {
-            Name = "Unknown Food", ServingSize = 100, ServingUnit = "g", Confidence = 0f,
-            NutritionalInfo = new NutritionalInfoDto()
+            Note = "Photos need a provider that can see - Groq's free tier has no vision model. Describe the meal instead."
         });
+    }
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+    {
+        try
+        {
+            return MealParsePrompt.Parse(await SendAsync(MealParsePrompt.BuildText(description), ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Groq: failed to read a described meal.");
+            return ParsedMealDto.Unreadable;
+        }
     }
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)

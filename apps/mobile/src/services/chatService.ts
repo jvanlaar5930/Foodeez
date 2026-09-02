@@ -5,6 +5,7 @@ import type {
   ChatConversationDto,
   ChatReplyDto,
   MealPlanDto,
+  RecipeDto,
   SendChatMessageRequest,
 } from '@/types';
 
@@ -40,5 +41,14 @@ export async function addSuggestionsToPlan(
   indexes: number[] = [],
 ): Promise<MealPlanDto[]> {
   const response = await api.post<MealPlanDto[]>(`/chat/messages/${messageId}/plan`, { indexes });
+  return Array.isArray(response.data) ? response.data : [];
+}
+
+/**
+ * Keep the recipes a reply wrote out. They join the shared recipe library and the caller's
+ * own collection, and come back as full recipes.
+ */
+export async function saveRecipes(messageId: string, indexes: number[] = []): Promise<RecipeDto[]> {
+  const response = await api.post<RecipeDto[]>(`/chat/messages/${messageId}/recipes`, { indexes });
   return Array.isArray(response.data) ? response.data : [];
 }

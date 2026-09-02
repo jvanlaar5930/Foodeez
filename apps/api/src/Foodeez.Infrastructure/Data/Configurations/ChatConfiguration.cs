@@ -48,6 +48,10 @@ public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
             .HasColumnType("text")
             .HasConversion(JsonValueList<PlannedMeal>.Converter, JsonValueList<PlannedMeal>.Comparer);
 
+        builder.Property(m => m.Recipes)
+            .HasColumnType("text")
+            .HasConversion(JsonValueList<SuggestedRecipe>.Converter, JsonValueList<SuggestedRecipe>.Comparer);
+
         // Messages are only ever read as a whole thread in order.
         builder.HasIndex(m => new { m.ConversationId, m.CreatedAt });
     }

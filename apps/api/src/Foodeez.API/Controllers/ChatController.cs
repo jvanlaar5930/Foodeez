@@ -1,6 +1,7 @@
 using Foodeez.API.Streaming;
 using Foodeez.Application.DTOs.Chat;
 using Foodeez.Application.DTOs.MealPlans;
+using Foodeez.Application.DTOs.Recipes;
 using Foodeez.Application.UseCases.Chat;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,15 +20,18 @@ public class ChatController : ControllerBase
     private readonly GetConversationsUseCase _conversations;
     private readonly SendChatMessageUseCase _sendMessage;
     private readonly AcceptSuggestionsUseCase _acceptSuggestions;
+    private readonly SaveChatRecipesUseCase _saveRecipes;
 
     public ChatController(
         GetConversationsUseCase conversations,
         SendChatMessageUseCase sendMessage,
-        AcceptSuggestionsUseCase acceptSuggestions)
+        AcceptSuggestionsUseCase acceptSuggestions,
+        SaveChatRecipesUseCase saveRecipes)
     {
         _conversations = conversations;
         _sendMessage = sendMessage;
         _acceptSuggestions = acceptSuggestions;
+        _saveRecipes = saveRecipes;
     }
 
     /// <summary>Every thread this user has, newest activity first.</summary>
@@ -103,6 +107,33 @@ public class ChatController : ControllerBase
         {
             AcceptOutcome.Added => Ok(result.Plans),
             AcceptOutcome.NothingToAdd => BadRequest(new { message = "That reply has no meals to add." }),
+            _ => NotFound()
+        };
+    }
+
+    /// <summary>
+    /// Keep the recipes a reply wrote out. They join the shared recipe library and the
+    /// caller's own saved collection, and come back as full recipes so the client can open
+    /// one straight from the conversation.
+    /// </summary>
+    [HttpPost("messages/{messageId:guid}/recipes")]
+    [ProducesResponseType(typeof(List<RecipeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SaveRecipes(
+        [FromRoute] Guid messageId,
+        [FromBody] SaveChatRecipesRequest? request,
+        CancellationToken ct)
+    {
+        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
+
+        var result = await _saveRecipes.ExecuteAsync(
+            userId, messageId, request?.Indexes ?? new List<int>(), ct);
+
+        return result.Outcome switch
+        {
+            SaveRecipesOutcome.Saved => Ok(result.Recipes),
+            SaveRecipesOutcome.NothingToSave => BadRequest(new { message = "That reply has no recipes to save." }),
             _ => NotFound()
         };
     }

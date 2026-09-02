@@ -8,6 +8,7 @@ public interface IUnitOfWork
     IMealLogRepository MealLogs { get; }
     IDayAnalysisRepository DayAnalyses { get; }
     IFoodItemRepository FoodItems { get; }
+    IMealTemplateRepository MealTemplates { get; }
     IMealPlanRepository MealPlans { get; }
     IRecipeRepository Recipes { get; }
     ISavedRecipeRepository SavedRecipes { get; }

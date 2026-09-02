@@ -34,7 +34,39 @@ public class ChatMessageDto
     public string Content { get; set; } = string.Empty;
     public List<PlannedMealDto> Suggestions { get; set; } = new();
     public DateTime? SuggestionsAcceptedAt { get; set; }
+    public List<SuggestedRecipeDto> Recipes { get; set; } = new();
+    public DateTime? RecipesSavedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>A recipe the assistant wrote out and offered to keep.</summary>
+public class SuggestedRecipeDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Instructions { get; set; } = string.Empty;
+    public int PrepTimeMinutes { get; set; }
+    public int CookTimeMinutes { get; set; }
+    public int Servings { get; set; } = 1;
+    public string? Tags { get; set; }
+    public List<SuggestedRecipeIngredientDto> Ingredients { get; set; } = new();
+
+    /// <summary>Per serving, and the model's estimate rather than a measurement.</summary>
+    public float Calories { get; set; }
+    public float Protein { get; set; }
+    public float Carbohydrates { get; set; }
+    public float Fat { get; set; }
+    public float Fiber { get; set; }
+    public float Sugar { get; set; }
+    public float Sodium { get; set; }
+}
+
+public class SuggestedRecipeIngredientDto
+{
+    public string Name { get; set; } = string.Empty;
+    public float Quantity { get; set; }
+    public string Unit { get; set; } = string.Empty;
+    public string? Notes { get; set; }
 }
 
 /// <summary>A meal the assistant offered to put on the calendar.</summary>
@@ -72,5 +104,12 @@ public class ChatReplyDto
 public class AcceptSuggestionsRequest
 {
     /// <summary>Empty means all of them - the usual case, from a single "Add to plan" button.</summary>
+    public List<int> Indexes { get; set; } = new();
+}
+
+/// <summary>Which of a reply's recipes to keep in the library.</summary>
+public class SaveChatRecipesRequest
+{
+    /// <summary>Empty means all of them, matching the single "Save recipe" button.</summary>
     public List<int> Indexes { get; set; } = new();
 }

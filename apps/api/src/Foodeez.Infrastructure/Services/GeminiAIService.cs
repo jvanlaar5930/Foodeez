@@ -121,7 +121,7 @@ public class GeminiAIService : IAIService, IStreamingAIService
         }
     }
 
-    public async Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+    public async Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
         try
         {
@@ -136,7 +136,7 @@ public class GeminiAIService : IAIService, IStreamingAIService
                         parts = new object[]
                         {
                             new { inlineData = new { mimeType = mimeType ?? "image/jpeg", data = Convert.ToBase64String(imageData) } },
-                            new { text = "Analyze this food image. Respond ONLY with JSON: {\"name\":\"\",\"brand\":null,\"servingSize\":100,\"servingUnit\":\"g\",\"confidence\":0.8,\"nutritionalInfo\":{\"calories\":0,\"protein\":0,\"carbohydrates\":0,\"fat\":0,\"fiber\":0,\"sugar\":0,\"sodium\":0}}" }
+                            new { text = MealParsePrompt.BuildImage() }
                         }
                     }
                 }
@@ -155,7 +155,7 @@ public class GeminiAIService : IAIService, IStreamingAIService
                 .GetProperty("text")
                 .GetString() ?? string.Empty;
 
-            return ParseFoodImage(text);
+            return MealParsePrompt.Parse(text);
         }
         catch (OperationCanceledException)
         {
@@ -165,8 +165,27 @@ public class GeminiAIService : IAIService, IStreamingAIService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Gemini: failed to parse food image.");
-            return DefaultFood();
+            _logger.LogError(ex, "Gemini: failed to read a meal from a photo.");
+            return ParsedMealDto.Unreadable;
+        }
+    }
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+    {
+        try
+        {
+            return MealParsePrompt.Parse(await SendAsync(MealParsePrompt.BuildText(description), ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Gemini: failed to read a described meal.");
+            return ParsedMealDto.Unreadable;
         }
     }
 
@@ -298,45 +317,6 @@ public class GeminiAIService : IAIService, IStreamingAIService
     }
 
 
-
-    private static ParsedFoodDto ParseFoodImage(string text)
-    {
-        try
-        {
-            var s = text.IndexOf('{'); var e = text.LastIndexOf('}');
-            if (s < 0 || e < 0) return DefaultFood();
-            using var doc = JsonDocument.Parse(text[s..(e + 1)]);
-            var r = doc.RootElement;
-            var dto = new ParsedFoodDto
-            {
-                Name = r.TryGetProperty("name", out var n) ? n.GetString() ?? "Unknown" : "Unknown",
-                ServingSize = r.TryGetProperty("servingSize", out var ss) ? ss.GetSingle() : 100,
-                ServingUnit = r.TryGetProperty("servingUnit", out var su) ? su.GetString() ?? "g" : "g",
-                Confidence = r.TryGetProperty("confidence", out var cf) ? cf.GetSingle() : 0f
-            };
-            if (r.TryGetProperty("nutritionalInfo", out var ni))
-            {
-                dto.NutritionalInfo = new NutritionalInfoDto
-                {
-                    Calories = ni.TryGetProperty("calories", out var cal) ? cal.GetSingle() : 0,
-                    Protein = ni.TryGetProperty("protein", out var p) ? p.GetSingle() : 0,
-                    Carbohydrates = ni.TryGetProperty("carbohydrates", out var c) ? c.GetSingle() : 0,
-                    Fat = ni.TryGetProperty("fat", out var f) ? f.GetSingle() : 0,
-                    Fiber = ni.TryGetProperty("fiber", out var fb) ? fb.GetSingle() : 0,
-                    Sugar = ni.TryGetProperty("sugar", out var sg) ? sg.GetSingle() : 0,
-                    Sodium = ni.TryGetProperty("sodium", out var sod) ? sod.GetSingle() : 0
-                };
-            }
-            return dto;
-        }
-        catch { return DefaultFood(); }
-    }
-
-    private static ParsedFoodDto DefaultFood() => new()
-    {
-        Name = "Unknown Food", ServingSize = 100, ServingUnit = "g", Confidence = 0f,
-        NutritionalInfo = new NutritionalInfoDto()
-    };
 
     public async Task<EstimatedNutritionDto> EstimateNutritionAsync(EstimateNutritionRequest request, CancellationToken ct = default)
     {

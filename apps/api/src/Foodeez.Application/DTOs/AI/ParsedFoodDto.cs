@@ -2,6 +2,10 @@ using Foodeez.Application.DTOs.MealLogs;
 
 namespace Foodeez.Application.DTOs.AI;
 
+/// <summary>
+/// One food the AI recognised. In a parsed meal, <see cref="ServingSize"/> is the amount
+/// eaten - "2 slice" - and <see cref="NutritionalInfo"/> covers exactly that amount.
+/// </summary>
 public class ParsedFoodDto
 {
     public string Name { get; set; } = string.Empty;

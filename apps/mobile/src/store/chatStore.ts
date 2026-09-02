@@ -25,6 +25,7 @@ interface ChatState {
   cancelSend: () => void;
   remove: (conversationId: string) => Promise<void>;
   addSuggestionsToPlan: (messageId: string) => Promise<boolean>;
+  saveRecipes: (messageId: string) => Promise<number>;
   clearError: () => void;
 }
 
@@ -86,6 +87,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       role: ChatRole.User,
       content: question,
       suggestions: [],
+      recipes: [],
       createdAt: new Date().toISOString(),
     };
 
@@ -178,6 +180,34 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     } catch (err: unknown) {
       set({ error: describeApiError(err, 'Those meals could not be added to your plan.') });
       return false;
+    }
+  },
+
+  /**
+   * Keeps the recipes a reply wrote out. Returns how many landed, so the screen can say what
+   * happened rather than leaving the button to guess.
+   */
+  saveRecipes: async (messageId: string) => {
+    try {
+      const saved = await chatService.saveRecipes(messageId);
+
+      set((state) => ({
+        activeConversation: state.activeConversation
+          ? {
+              ...state.activeConversation,
+              messages: state.activeConversation.messages.map((message) =>
+                message.id === messageId
+                  ? { ...message, recipesSavedAt: new Date().toISOString() }
+                  : message,
+              ),
+            }
+          : null,
+      }));
+
+      return saved.length;
+    } catch (err: unknown) {
+      set({ error: describeApiError(err, 'Those recipes could not be saved.') });
+      return 0;
     }
   },
 

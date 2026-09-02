@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealLogStackParamList } from '@/navigation/types';
 import { mealService } from '@/services/mealService';
-import { ParsedFoodDto } from '@/types';
+import { QuickAddItemDto } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -28,7 +28,7 @@ export function FoodScanScreen({ navigation }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [scanState, setScanState] = useState<ScanState>('camera');
-  const [parsedItems, setParsedItems] = useState<ParsedFoodDto[]>([]);
+  const [parsedItems, setParsedItems] = useState<QuickAddItemDto[]>([]);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const cameraRef = useRef<CameraView>(null);
 
@@ -57,9 +57,21 @@ export function FoodScanScreen({ navigation }: Props) {
       const photo = await cameraRef.current.takePictureAsync({ base64: false, quality: 0.8 });
       if (!photo?.uri) return;
       setScanState('analyzing');
-      const items = await mealService.parseFoodImage(photo.uri);
-      setParsedItems(items);
-      setSelectedItems(new Set(items.map((_, i) => i)));
+      const result = await mealService.parseFoodImage(photo.uri);
+
+      // No items is not an empty meal, it is a photo that could not be read. Saying so and
+      // going back to the camera beats an empty results list with a confirm button on it.
+      if (result.items.length === 0) {
+        Alert.alert(
+          'Nothing recognised',
+          result.note ?? 'No food could be picked out of that photo. Try a clearer shot.',
+        );
+        setScanState('camera');
+        return;
+      }
+
+      setParsedItems(result.items);
+      setSelectedItems(new Set(result.items.map((_, i) => i)));
       setScanState('results');
     } catch {
       Alert.alert('Analysis Failed', 'Could not analyze the food. Please try again or add manually.');
@@ -113,18 +125,24 @@ export function FoodScanScreen({ navigation }: Props) {
                 )}
               </View>
               <View style={styles.resultContent}>
-                <Text style={styles.resultName}>{item.name}</Text>
-                {item.brand && <Text style={styles.resultBrand}>{item.brand}</Text>}
+                <Text style={styles.resultName}>{item.foodItem.name}</Text>
+                {item.foodItem.brand && <Text style={styles.resultBrand}>{item.foodItem.brand}</Text>}
                 <Text style={styles.resultServing}>
-                  {item.servingSize} {item.servingUnit}
+                  {item.quantity} {item.unit}
                 </Text>
               </View>
               <View style={styles.resultNutrition}>
                 <Text style={styles.resultCalories}>
-                  {Math.round(item.nutritionalInfo.calories)} kcal
+                  {Math.round(
+                    item.foodItem.nutritionalInfo.calories *
+                      (item.foodItem.servingSize > 0 ? item.quantity / item.foodItem.servingSize : item.quantity),
+                  )}{' '}
+                  kcal
                 </Text>
+                {/* Which numbers were looked up and which were guessed at, so an estimate can
+                    be checked before it is logged rather than taken on faith. */}
                 <Text style={styles.resultConfidence}>
-                  {Math.round(item.confidence * 100)}% confident
+                  {item.source === 'Estimated' ? 'AI estimate' : 'from database'}
                 </Text>
               </View>
             </TouchableOpacity>

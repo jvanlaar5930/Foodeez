@@ -4,6 +4,7 @@ using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealPlans;
 using Foodeez.Application.DTOs.Users;
+using Foodeez.Application.UseCases.Grocery;
 using Foodeez.Application.Interfaces.Services;
 using Foodeez.Domain.Entities;
 
@@ -14,17 +15,24 @@ public class GenerateAIMealPlanUseCase
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAIService _aiService;
     private readonly IStreamingAIService _streaming;
+    private readonly PlannedMealReader _plannedMeals;
 
-    public GenerateAIMealPlanUseCase(IUnitOfWork unitOfWork, IAIService aiService, IStreamingAIService streaming)
+    public GenerateAIMealPlanUseCase(
+        IUnitOfWork unitOfWork,
+        IAIService aiService,
+        IStreamingAIService streaming,
+        PlannedMealReader plannedMeals)
     {
         _unitOfWork = unitOfWork;
         _aiService = aiService;
         _streaming = streaming;
+        _plannedMeals = plannedMeals;
     }
 
     public async Task<MealPlanDto> ExecuteAsync(GenerateMealPlanRequest request, CancellationToken ct = default)
     {
         var profileDto = await LoadProfileAsync(request.UserId);
+        await AttachPreviousPeriodAsync(request);
 
         var generated = await _aiService.GenerateMealPlanAsync(
             WithProfileExclusions(request, profileDto), profileDto, ct);
@@ -49,6 +57,7 @@ public class GenerateAIMealPlanUseCase
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var profileDto = await LoadProfileAsync(request.UserId);
+        await AttachPreviousPeriodAsync(request);
 
         var transcript = new StringBuilder();
         await foreach (var delta in AINarration.NarrateAsync(
@@ -100,6 +109,41 @@ public class GenerateAIMealPlanUseCase
     }
 
     /// <summary>
+    /// Loads what was planned for the period immediately before this one, so an instruction
+    /// like "reuse last week's breakfasts" has a real week to work from.
+    ///
+    /// Only when guidance was given. Without an instruction to act on it, last week's meals
+    /// are just a large block of text that quietly nudges every plan towards repeating
+    /// itself - the opposite of what someone asking for a fresh week wants.
+    /// </summary>
+    private async Task AttachPreviousPeriodAsync(GenerateMealPlanRequest request)
+    {
+        request.PreviousPeriod = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(request.Guidance))
+        {
+            return;
+        }
+
+        var length = request.EndDate.DayNumber - request.StartDate.DayNumber + 1;
+        if (length <= 0)
+        {
+            return;
+        }
+
+        var previousEnd = request.StartDate.AddDays(-1);
+        var previousStart = previousEnd.AddDays(-(length - 1));
+
+        var planned = await _plannedMeals.ReadAsync(request.UserId, previousStart, previousEnd);
+
+        request.PreviousPeriod = planned
+            .OrderBy(meal => meal.Date)
+            .ThenBy(meal => meal.MealType)
+            .Select(meal => $"{meal.Date:yyyy-MM-dd} {meal.MealType}: {meal.Label}")
+            .ToList();
+    }
+
+    /// <summary>
     /// Folds the profile's standing exclusions into this request's. Every provider prompt
     /// already prints ExcludeIngredients, so doing it here reaches all of them - and a food
     /// someone is allergic to must not depend on remembering to type it each time.
@@ -119,6 +163,11 @@ public class GenerateAIMealPlanUseCase
             StartDate = request.StartDate,
             EndDate = request.EndDate,
             PreferenceTags = request.PreferenceTags,
+            // Copied across deliberately: this rebuild is the only path a request takes when
+            // the profile excludes anything, so anything left out here is silently dropped
+            // for exactly those users - which is how guidance would go missing.
+            Guidance = request.Guidance,
+            PreviousPeriod = request.PreviousPeriod,
             ExcludeIngredients = request.ExcludeIngredients
                 .Concat(profile.ExcludedFoods)
                 .DistinctBy(food => food.Trim().ToLowerInvariant())

@@ -17,14 +17,22 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { FoodSearchResultRow } from '@/components/meal/FoodSearchResultRow';
 import { CustomFoodModal } from '@/components/meal/CustomFoodModal';
+import { QuickAddBar } from '@/components/meal/QuickAddBar';
+import { SaveMealModal } from '@/components/meal/SaveMealModal';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/store/authStore';
 import { useMealStore } from '@/store/mealStore';
 import { searchFoodItems } from '@/services/foodItemService';
+import { mealTemplateService } from '@/services/mealTemplateService';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
-import { MealType, type FoodItemDto } from '@/types';
+import {
+  MealType,
+  type FoodItemDto,
+  type QuickAddResultDto,
+  type QuickAddSource,
+} from '@/types';
 import type { MealLogStackParamList } from '@/navigation/types';
 
 type Props = NativeStackScreenProps<MealLogStackParamList, 'AddMeal'>;
@@ -41,6 +49,15 @@ const MEAL_TYPES = [
 interface SelectedItem {
   foodItem: FoodItemDto;
   quantity: number;
+  /** Where this line came from, when quick add put it here. Absent for a searched-for food. */
+  source?: QuickAddSource;
+}
+
+/** The label for a line whose numbers the user did not pick themselves. */
+function sourceLabel(source: QuickAddSource | undefined): string | null {
+  if (source === 'Estimated') return 'AI estimate';
+  if (source === 'Matched') return 'from database';
+  return null;
 }
 
 export function AddMealScreen({ navigation, route }: Props) {
@@ -64,6 +81,11 @@ export function AddMealScreen({ navigation, route }: Props) {
     })) ?? [],
   );
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Bumped after saving a meal, so the quick-add bar reloads and shows the new name. */
+  const [savedMealsToken, setSavedMealsToken] = useState(0);
+  const [showSaveMeal, setShowSaveMeal] = useState(false);
+  const [isSavingMeal, setIsSavingMeal] = useState(false);
+  const [saveMealError, setSaveMealError] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedMealType(editingMealLog?.mealType ?? route.params?.mealType ?? MealType.Breakfast);
@@ -74,6 +96,34 @@ export function AddMealScreen({ navigation, route }: Props) {
       })) ?? [],
     );
   }, [editingMealLog, route.params?.mealType]);
+
+  // What the photo scanner handed over. Kept separate from the reset above so arriving from a
+  // scan fills the screen in rather than clearing it.
+  const scannedItems = route.params?.parsedItems;
+  useEffect(() => {
+    if (!scannedItems?.length) {
+      return;
+    }
+
+    setSelectedItems((prev) => {
+      const next = [...prev];
+      for (const scanned of scannedItems) {
+        const existing = next.findIndex((item) => item.foodItem.id === scanned.foodItem.id);
+        const entry = {
+          foodItem: scanned.foodItem,
+          quantity: scanned.quantity,
+          source: scanned.source,
+        };
+
+        if (existing >= 0) {
+          next[existing] = entry;
+        } else {
+          next.push(entry);
+        }
+      }
+      return next;
+    });
+  }, [scannedItems]);
 
   const performSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -104,6 +154,67 @@ export function AddMealScreen({ navigation, route }: Props) {
       }
     };
   }, [searchQuery, performSearch]);
+
+  /**
+   * Quick add's items land in the same list a searched-for food does, so everything already
+   * built on that list - amounts, removal, totals, saving - keeps working untouched.
+   */
+  const applyQuickAdd = (result: QuickAddResultDto) => {
+    setSelectedItems((prev) => {
+      const next = [...prev];
+      for (const parsed of result.items) {
+        // The same food twice in one meal is a second tap, not two helpings.
+        const existing = next.findIndex((item) => item.foodItem.id === parsed.foodItem.id);
+        const entry = {
+          foodItem: parsed.foodItem,
+          quantity: parsed.quantity,
+          source: parsed.source,
+        };
+
+        if (existing >= 0) {
+          next[existing] = entry;
+        } else {
+          next.push(entry);
+        }
+      }
+      return next;
+    });
+
+    // Only a saved meal knows which meal it is; a described one leaves the choice alone.
+    if (result.mealType) {
+      setSelectedMealType(result.mealType);
+    }
+  };
+
+  const handleSaveAsMeal = async (name: string) => {
+    if (!user || selectedItems.length === 0) {
+      return;
+    }
+
+    setIsSavingMeal(true);
+    setSaveMealError(null);
+
+    try {
+      await mealTemplateService.save({
+        userId: user.id,
+        name,
+        mealType: selectedMealType,
+        items: selectedItems.map((selectedItem) => ({
+          foodItemId: selectedItem.foodItem.id,
+          quantity: selectedItem.quantity,
+          unit: selectedItem.foodItem.servingUnit,
+        })),
+      });
+
+      setSavedMealsToken((token) => token + 1);
+      setShowSaveMeal(false);
+      Alert.alert('Saved', `"${name}" is in Quick add now.`);
+    } catch {
+      setSaveMealError('That could not be saved. Try a different name.');
+    } finally {
+      setIsSavingMeal(false);
+    }
+  };
 
   const handleSelectFood = (item: FoodItemDto) => {
     const exists = selectedItems.find((selectedItem) => selectedItem.foodItem.id === item.id);
@@ -214,6 +325,12 @@ export function AddMealScreen({ navigation, route }: Props) {
           ))}
         </ScrollView>
 
+        <QuickAddBar
+          onApplied={applyQuickAdd}
+          reloadToken={savedMealsToken}
+          onScanPress={() => navigation.navigate('FoodScan')}
+        />
+
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color={C.textSecondary} />
           <TextInput
@@ -282,9 +399,23 @@ export function AddMealScreen({ navigation, route }: Props) {
                       <Text style={styles.selectedName} numberOfLines={1}>
                         {selectedItem.foodItem.name}
                       </Text>
-                      <Text style={styles.selectedCal}>
-                        {Math.round(selectedItem.foodItem.nutritionalInfo.calories * ratio)} kcal
-                      </Text>
+                      <View style={styles.selectedMeta}>
+                        <Text style={styles.selectedCal}>
+                          {Math.round(selectedItem.foodItem.nutritionalInfo.calories * ratio)} kcal
+                        </Text>
+                        {/* Which numbers were looked up and which were guessed at, so a
+                            quick-added meal can be checked rather than taken on faith. */}
+                        {sourceLabel(selectedItem.source) && (
+                          <Text
+                            style={[
+                              styles.sourceTag,
+                              selectedItem.source === 'Estimated' && styles.sourceTagEstimate,
+                            ]}
+                          >
+                            {sourceLabel(selectedItem.source)}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                     <View style={styles.quantityControl}>
                       <TouchableOpacity
@@ -336,6 +467,20 @@ export function AddMealScreen({ navigation, route }: Props) {
         </View>
 
         <View style={styles.footer}>
+          {selectedItems.length > 0 && (
+            <TouchableOpacity
+              style={styles.saveMealLink}
+              onPress={() => {
+                setSaveMealError(null);
+                setShowSaveMeal(true);
+              }}
+            >
+              <Ionicons name="bookmark-outline" size={16} color={C.primary} />
+              <Text style={styles.saveMealLinkText}>
+                Eat this often? Save it as a meal
+              </Text>
+            </TouchableOpacity>
+          )}
           <Button
             title={editingMealLog ? 'Update Meal' : `Save ${selectedMealType.replace('_', ' ')}`}
             size="lg"
@@ -346,6 +491,14 @@ export function AddMealScreen({ navigation, route }: Props) {
           />
         </View>
       </KeyboardAvoidingView>
+      <SaveMealModal
+        visible={showSaveMeal}
+        itemCount={selectedItems.length}
+        isSaving={isSavingMeal}
+        error={saveMealError}
+        onClose={() => setShowSaveMeal(false)}
+        onSave={handleSaveAsMeal}
+      />
       <CustomFoodModal
         visible={showCustomFood}
         initialName={searchQuery.trim()}
@@ -467,6 +620,32 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   selectedLeft: {
     flex: 1,
+  },
+  selectedMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    flexWrap: 'wrap',
+  },
+  sourceTag: {
+    fontSize: FontSize.xs,
+    color: C.textHint,
+  },
+  sourceTagEstimate: {
+    color: C.warning,
+    fontWeight: FontWeight.semibold,
+  },
+  saveMealLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingBottom: Spacing.sm,
+  },
+  saveMealLinkText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: C.primary,
   },
   selectedName: {
     fontSize: FontSize.md,

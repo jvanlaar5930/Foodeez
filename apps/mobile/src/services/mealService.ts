@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { LogMealRequest, MealLogDto, NutritionSummaryDto, ParsedFoodDto } from '@/types';
+import type { LogMealRequest, MealLogDto, NutritionSummaryDto, QuickAddResultDto } from '@/types';
 
 export const mealService = {
   async logMeal(data: LogMealRequest): Promise<MealLogDto> {
@@ -30,7 +30,21 @@ export const mealService = {
     await api.delete(`/meal-logs/${mealLogId}`);
   },
 
-  async parseFoodImage(imageUri: string): Promise<ParsedFoodDto[]> {
+  /**
+   * Break a described meal into its separate foods. Nothing is logged: the items come back
+   * for the user to look over, and each says whether its numbers came from the food database
+   * or from the model.
+   */
+  async quickAdd(userId: string, description: string): Promise<QuickAddResultDto> {
+    const response = await api.post<QuickAddResultDto>('/meal-logs/quick-add', {
+      userId,
+      description,
+    });
+    return response.data;
+  },
+
+  /** The same, from a photograph of the plate. */
+  async parseFoodImage(imageUri: string): Promise<QuickAddResultDto> {
     const formData = new FormData();
     const filename = imageUri.split('/').pop() ?? 'photo.jpg';
     const match = /\.(\w+)$/.exec(filename);
@@ -45,7 +59,7 @@ export const mealService = {
       } as unknown as Blob,
     );
 
-    const response = await api.post<ParsedFoodDto[]>('/meal-logs/parse-image', formData, {
+    const response = await api.post<QuickAddResultDto>('/meal-logs/parse-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -53,6 +67,7 @@ export const mealService = {
 };
 
 export const {
+  quickAdd,
   logMeal,
   updateMealLog,
   getDailyLogs,

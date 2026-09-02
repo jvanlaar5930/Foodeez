@@ -27,6 +27,18 @@ public class MealLogRepository : BaseRepository<MealLog>, IMealLogRepository
             .ToListAsync();
     }
 
+    public async Task<IReadOnlyList<MealLog>> GetRecentAsync(Guid userId, int limit)
+    {
+        return await _dbSet
+            .Where(m => m.UserId == userId)
+            .Include(m => m.Items)
+                .ThenInclude(i => i.FoodItem)
+            .OrderByDescending(m => m.LogDate)
+            .ThenByDescending(m => m.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
     public async Task<IReadOnlyList<MealLog>> GetByUserAndDateRangeAsync(Guid userId, DateOnly start, DateOnly end)
     {
         return await _dbSet

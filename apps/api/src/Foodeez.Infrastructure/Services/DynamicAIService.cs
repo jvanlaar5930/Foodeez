@@ -49,8 +49,11 @@ public class DynamicAIService : IAIService, IStreamingAIService
     public async Task<GeneratedMealPlanDto> GenerateMealPlanAsync(GenerateMealPlanRequest request, UserProfileDto profile, CancellationToken ct = default)
         => await (await ResolveAsync()).GenerateMealPlanAsync(request, profile, ct);
 
-    public async Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
-        => await (await ResolveAsync()).ParseFoodImageAsync(imageData, mimeType, ct);
+    public async Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+        => await (await ResolveAsync()).ParseMealImageAsync(imageData, mimeType, ct);
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+        => await (await ResolveAsync()).ParseMealDescriptionAsync(description, ct);
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
         => await (await ResolveAsync()).AnalyzeMealAsync(request, ct);

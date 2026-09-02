@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<MealLog> MealLogs => Set<MealLog>();
     public DbSet<MealLogItem> MealLogItems => Set<MealLogItem>();
     public DbSet<DayAnalysis> DayAnalyses => Set<DayAnalysis>();
+    public DbSet<MealTemplate> MealTemplates => Set<MealTemplate>();
+    public DbSet<MealTemplateItem> MealTemplateItems => Set<MealTemplateItem>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<SavedRecipe> SavedRecipes => Set<SavedRecipe>();

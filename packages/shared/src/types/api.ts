@@ -65,6 +65,13 @@ export interface GenerateMealPlanRequest {
   endDate: string;
   preferenceTags?: string[];
   excludeIngredients?: string[];
+  /**
+   * Free text for this one generation - "more variety in the dinners", "reuse last week's
+   * breakfasts". Steers the plan without becoming a saved preference. When it is given the
+   * server also shows the model the previous period, so an instruction that refers back to
+   * last week has a real week to work from.
+   */
+  guidance?: string;
 }
 
 /**

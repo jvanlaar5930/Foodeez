@@ -60,7 +60,9 @@ public class SendChatMessageUseCase
             .TakeLast(NutritionChatPrompt.HistoryTurns)
             .ToList();
 
-        await RecordAsync(conversation, ChatRole.User, question, new List<PlannedMealDto>(), ct);
+        await RecordAsync(
+            conversation, ChatRole.User, question,
+            new List<PlannedMealDto>(), new List<SuggestedRecipeDto>(), ct);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var prompt = NutritionChatPrompt.Build(ProfileOf(user), history, question, today);
@@ -84,8 +86,10 @@ public class SendChatMessageUseCase
             yield break;
         }
 
-        var suggestions = NutritionChatPrompt.ParseSuggestions(transcript.ToString(), today);
-        var message = await RecordAsync(conversation, ChatRole.Assistant, reply, suggestions, ct);
+        var answer = transcript.ToString();
+        var suggestions = NutritionChatPrompt.ParseSuggestions(answer, today);
+        var recipes = NutritionChatPrompt.ParseRecipes(answer);
+        var message = await RecordAsync(conversation, ChatRole.Assistant, reply, suggestions, recipes, ct);
 
         yield return AIStreamEvent.Result(new ChatReplyDto
         {
@@ -124,6 +128,7 @@ public class SendChatMessageUseCase
         ChatRole role,
         string content,
         IReadOnlyList<PlannedMealDto> suggestions,
+        IReadOnlyList<SuggestedRecipeDto> recipes,
         CancellationToken ct)
     {
         var message = new ChatMessage
@@ -131,7 +136,8 @@ public class SendChatMessageUseCase
             ConversationId = conversation.Id,
             Role = role,
             Content = content,
-            Suggestions = suggestions.Select(ChatMapper.ToEntity).ToList()
+            Suggestions = suggestions.Select(ChatMapper.ToEntity).ToList(),
+            Recipes = recipes.Select(ChatMapper.ToEntity).ToList()
         };
 
         conversation.Messages.Add(message);

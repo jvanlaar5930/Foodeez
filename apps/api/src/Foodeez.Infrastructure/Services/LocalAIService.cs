@@ -221,20 +221,17 @@ public class LocalAIService : IAIService, IStreamingAIService
         }
     }
 
-    public async Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+    public async Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
-        var unknownFood = new ParsedFoodDto
-        {
-            Name = "Unknown Food", ServingSize = 100, ServingUnit = "g", Confidence = 0f,
-            NutritionalInfo = new NutritionalInfoDto()
-        };
-
         // Sending an image to a text-only model only buys a slow failure, so it is opt-in.
         if (!await SupportsVisionAsync())
         {
             _logger.LogWarning(
                 "Local LLM: image parsing is off. Load a vision model (e.g. a Qwen2-VL or LLaVA build) and set local.supportsVision to true.");
-            return unknownFood;
+            return new ParsedMealDto
+            {
+                Note = "Photos are switched off for the local model. Turn on local.supportsVision, or describe the meal instead."
+            };
         }
 
         var dataUri = $"data:{mimeType ?? "image/jpeg"};base64,{Convert.ToBase64String(imageData)}";
@@ -246,34 +243,14 @@ public class LocalAIService : IAIService, IStreamingAIService
                 content = new object[]
                 {
                     new { type = "image_url", image_url = new { url = dataUri } },
-                    new { type = "text", text = BuildFoodImagePrompt() }
+                    new { type = "text", text = MealParsePrompt.BuildImage() }
                 }
             }
         };
 
         try
         {
-            var text = await SendAsync(messages, ct);
-            return ParseJson(text, r => new ParsedFoodDto
-            {
-                Name = GetString(r, "name") is { Length: > 0 } name ? name : "Unknown Food",
-                Brand = GetString(r, "brand") is { Length: > 0 } brand ? brand : null,
-                ServingSize = GetFloat(r, "servingSize", 100),
-                ServingUnit = GetString(r, "servingUnit") is { Length: > 0 } unit ? unit : "g",
-                Confidence = GetFloat(r, "confidence", 0f),
-                NutritionalInfo = r.TryGetProperty("nutritionalInfo", out var n)
-                    ? new NutritionalInfoDto
-                    {
-                        Calories = GetFloat(n, "calories", 0),
-                        Protein = GetFloat(n, "protein", 0),
-                        Carbohydrates = GetFloat(n, "carbohydrates", 0),
-                        Fat = GetFloat(n, "fat", 0),
-                        Fiber = GetFloat(n, "fiber", 0),
-                        Sugar = GetFloat(n, "sugar", 0),
-                        Sodium = GetFloat(n, "sodium", 0)
-                    }
-                    : new NutritionalInfoDto()
-            }) ?? unknownFood;
+            return MealParsePrompt.Parse(await SendAsync(messages, ct));
         }
         catch (OperationCanceledException)
         {
@@ -283,8 +260,27 @@ public class LocalAIService : IAIService, IStreamingAIService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Local LLM: failed to parse food image.");
-            return unknownFood;
+            _logger.LogError(ex, "Local LLM: failed to read a meal from a photo.");
+            return ParsedMealDto.Unreadable;
+        }
+    }
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+    {
+        try
+        {
+            return MealParsePrompt.Parse(await SendAsync(MealParsePrompt.BuildText(description), ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Local LLM: failed to read a described meal.");
+            return ParsedMealDto.Unreadable;
         }
     }
 
@@ -367,25 +363,6 @@ public class LocalAIService : IAIService, IStreamingAIService
     }
 
     // ────────────────────────── Parsing helpers ──────────────────────────
-
-    private static string BuildFoodImagePrompt() =>
-        @"Analyze this food image and identify the food item(s). Respond ONLY with a valid JSON object (no markdown, no extra text) in this format:
-{
-  ""name"": ""Food Name"",
-  ""brand"": null,
-  ""servingSize"": 100,
-  ""servingUnit"": ""g"",
-  ""confidence"": 0.85,
-  ""nutritionalInfo"": {
-    ""calories"": 250,
-    ""protein"": 10,
-    ""carbohydrates"": 30,
-    ""fat"": 8,
-    ""fiber"": 3,
-    ""sugar"": 5,
-    ""sodium"": 200
-  }
-}";
 
     private static GeneratedMealPlanDto ParseMealPlan(string text)
     {

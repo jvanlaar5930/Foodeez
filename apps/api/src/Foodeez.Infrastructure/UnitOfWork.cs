@@ -12,6 +12,7 @@ public class UnitOfWork : IUnitOfWork
     public IMealLogRepository MealLogs { get; }
     public IDayAnalysisRepository DayAnalyses { get; }
     public IFoodItemRepository FoodItems { get; }
+    public IMealTemplateRepository MealTemplates { get; }
     public IMealPlanRepository MealPlans { get; }
     public IRecipeRepository Recipes { get; }
     public ISavedRecipeRepository SavedRecipes { get; }
@@ -26,6 +27,7 @@ public class UnitOfWork : IUnitOfWork
         IMealLogRepository mealLogs,
         IDayAnalysisRepository dayAnalyses,
         IFoodItemRepository foodItems,
+        IMealTemplateRepository mealTemplates,
         IMealPlanRepository mealPlans,
         IRecipeRepository recipes,
         ISavedRecipeRepository savedRecipes,
@@ -39,6 +41,7 @@ public class UnitOfWork : IUnitOfWork
         MealLogs = mealLogs;
         DayAnalyses = dayAnalyses;
         FoodItems = foodItems;
+        MealTemplates = mealTemplates;
         MealPlans = mealPlans;
         Recipes = recipes;
         SavedRecipes = savedRecipes;

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount } from 'vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import type { Recipe } from '@foodeez/shared';
+import AiRecipeThumb from './AiRecipeThumb.vue';
+import { isAiRecipeImage, type Recipe } from '@foodeez/shared';
 
 const props = defineProps<{
   recipe: Recipe;
@@ -12,6 +13,9 @@ const props = defineProps<{
   loading?: boolean;
 }>();
 const emit = defineEmits<{ close: []; retry: [] }>();
+
+/** A recipe written in the advice tab carries a marker, not a picture, in its place. */
+const isAiThumb = computed(() => isAiRecipeImage(props.recipe.imageUrl));
 
 const steps = computed(() =>
   props.recipe.instructions
@@ -83,7 +87,10 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-if="recipe.imageUrl" class="h-56 overflow-hidden">
+      <div v-if="isAiThumb" class="h-56 overflow-hidden">
+        <AiRecipeThumb />
+      </div>
+      <div v-else-if="recipe.imageUrl" class="h-56 overflow-hidden">
         <img
           :src="recipe.imageUrl"
           :alt="recipe.name"

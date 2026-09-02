@@ -150,6 +150,27 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /**
+   * Keeps the recipes a reply wrote out. Returns how many landed, so the view can say what
+   * happened rather than leaving the button to guess.
+   */
+  async function saveRecipes(messageId: string): Promise<number> {
+    error.value = null;
+    try {
+      const saved = await chatService.saveRecipes(messageId);
+
+      const message = activeConversation.value?.messages.find((m) => m.id === messageId);
+      if (message) {
+        message.recipesSavedAt = new Date().toISOString();
+      }
+
+      return saved.length;
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Those recipes could not be saved.');
+      return 0;
+    }
+  }
+
   function clearError(): void {
     error.value = null;
   }
@@ -162,6 +183,7 @@ export const useChatStore = defineStore('chat', () => {
       role,
       content,
       suggestions: [],
+      recipes: [],
       createdAt: new Date().toISOString(),
     };
   }
@@ -181,6 +203,7 @@ export const useChatStore = defineStore('chat', () => {
     cancelSend,
     remove,
     addSuggestionsToPlan,
+    saveRecipes,
     clearError,
   };
 });

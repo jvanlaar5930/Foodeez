@@ -1,5 +1,5 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
-import type { MealLogDto, MealType, ParsedFoodDto } from '@/types';
+import type { MealLogDto, MealType, QuickAddItemDto } from '@/types';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -17,6 +17,8 @@ export type MainTabParamList = {
   Dashboard: undefined;
   MealLog: undefined;
   MealPlan: undefined;
+  Grocery: undefined;
+  Advice: undefined;
   Recipes: NavigatorScreenParams<RecipesStackParamList> | undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
 };
@@ -31,7 +33,8 @@ export type MealLogStackParamList = {
   AddMeal: {
     mealType?: MealType;
     prefilledItems?: Array<{ name: string; servingSize: number; servingUnit: string }>;
-    parsedItems?: ParsedFoodDto[];
+    /** Items handed over by the photo scanner, already matched and ready to log. */
+    parsedItems?: QuickAddItemDto[];
     mealLog?: MealLogDto;
   };
   FoodScan: undefined;

@@ -43,6 +43,8 @@ internal static class ChatMapper
         Content = message.Content,
         Suggestions = message.Suggestions.Select(ToDto).ToList(),
         SuggestionsAcceptedAt = message.SuggestionsAcceptedAt,
+        Recipes = message.Recipes.Select(ToDto).ToList(),
+        RecipesSavedAt = message.RecipesSavedAt,
         CreatedAt = message.CreatedAt
     };
 
@@ -62,6 +64,60 @@ internal static class ChatMapper
         Name = meal.Name,
         Description = meal.Description,
         Servings = meal.Servings
+    };
+
+    public static SuggestedRecipeDto ToDto(SuggestedRecipe recipe) => new()
+    {
+        Name = recipe.Name,
+        Description = recipe.Description,
+        Instructions = recipe.Instructions,
+        PrepTimeMinutes = recipe.PrepTimeMinutes,
+        CookTimeMinutes = recipe.CookTimeMinutes,
+        Servings = recipe.Servings,
+        Tags = recipe.Tags,
+        Ingredients = recipe.Ingredients
+            .Select(i => new SuggestedRecipeIngredientDto
+            {
+                Name = i.Name,
+                Quantity = i.Quantity,
+                Unit = i.Unit,
+                Notes = i.Notes
+            })
+            .ToList(),
+        Calories = recipe.Calories,
+        Protein = recipe.Protein,
+        Carbohydrates = recipe.Carbohydrates,
+        Fat = recipe.Fat,
+        Fiber = recipe.Fiber,
+        Sugar = recipe.Sugar,
+        Sodium = recipe.Sodium
+    };
+
+    public static SuggestedRecipe ToEntity(SuggestedRecipeDto recipe) => new()
+    {
+        Name = recipe.Name,
+        Description = recipe.Description,
+        Instructions = recipe.Instructions,
+        PrepTimeMinutes = recipe.PrepTimeMinutes,
+        CookTimeMinutes = recipe.CookTimeMinutes,
+        Servings = recipe.Servings,
+        Tags = recipe.Tags,
+        Ingredients = recipe.Ingredients
+            .Select(i => new SuggestedRecipeIngredient
+            {
+                Name = i.Name,
+                Quantity = i.Quantity,
+                Unit = i.Unit,
+                Notes = i.Notes
+            })
+            .ToList(),
+        Calories = recipe.Calories,
+        Protein = recipe.Protein,
+        Carbohydrates = recipe.Carbohydrates,
+        Fat = recipe.Fat,
+        Fiber = recipe.Fiber,
+        Sugar = recipe.Sugar,
+        Sodium = recipe.Sodium
     };
 
     private static string Shorten(string content)

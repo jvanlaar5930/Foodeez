@@ -45,8 +45,8 @@ public static class NutritionChatPrompt
 
         sb.AppendLine("Reply in plain sentences. Do not use markdown, code fences, headings or bullet characters.");
         sb.AppendLine();
-        sb.AppendLine("If - and only if - they have asked you to plan meals, or agreed to a plan you offered, ");
-        sb.AppendLine("finish your reply with a JSON object on its own containing the meals, and write nothing after it:");
+        sb.AppendLine("Some replies end with a single JSON object, written on its own with nothing after it.");
+        sb.AppendLine("It may carry either or both of these keys, and you write it only when the rule below says so:");
         sb.AppendLine(@"{
   ""plannedMeals"": [
     {
@@ -56,10 +56,35 @@ public static class NutritionChatPrompt
       ""description"": ""Baked salmon, broccoli, sweet potato"",
       ""servings"": 2
     }
+  ],
+  ""recipes"": [
+    {
+      ""name"": ""Lemon herb salmon with roasted vegetables"",
+      ""description"": ""One tray, thirty minutes, and enough protein for a training day."",
+      ""prepTimeMinutes"": 10,
+      ""cookTimeMinutes"": 25,
+      ""servings"": 2,
+      ""tags"": ""dinner, high-protein, one-pan"",
+      ""ingredients"": [
+        { ""name"": ""Salmon fillet"", ""quantity"": 2, ""unit"": ""fillets"", ""notes"": ""skin on"" },
+        { ""name"": ""Broccoli"", ""quantity"": 300, ""unit"": ""g"" }
+      ],
+      ""instructions"": ""1. Heat the oven to 200C.\n2. Toss the vegetables in oil and roast for 15 minutes.\n3. Add the salmon and roast for 12 minutes more."",
+      ""calories"": 520, ""protein"": 42, ""carbohydrates"": 28, ""fat"": 26, ""fiber"": 7, ""sugar"": 6, ""sodium"": 380
+    }
   ]
 }");
+        sb.AppendLine();
+        sb.AppendLine("plannedMeals: write it only if they asked you to plan meals, or agreed to a plan you offered.");
         sb.AppendLine("mealType is one of Breakfast, MorningSnack, Lunch, AfternoonSnack, Dinner, EveningSnack.");
-        sb.AppendLine("Give every meal a real date on or after today. If they did not ask for a plan, write no JSON at all.");
+        sb.AppendLine("Give every meal a real date on or after today.");
+        sb.AppendLine();
+        sb.AppendLine("recipes: write it only for a dish you have actually set out how to cook in this reply -");
+        sb.AppendLine("full ingredient list and numbered method. Never for a dish you merely mentioned or named.");
+        sb.AppendLine("Repeat the method there in full, since the reader keeps that copy and not your prose.");
+        sb.AppendLine("Quantities are numbers and units are separate: 300 and \"g\", not \"300g\". Nutrition is per serving.");
+        sb.AppendLine();
+        sb.AppendLine("If neither rule applies, write no JSON at all.");
 
         return sb.ToString();
     }
@@ -121,6 +146,108 @@ public static class NutritionChatPrompt
         }
 
         return meals;
+    }
+
+    /// <summary>
+    /// The recipes a reply wrote out, or an empty list. A recipe with no ingredients is
+    /// dropped: the model naming a dish in passing is not something anyone can cook from,
+    /// and it would sit in the library as an empty shell.
+    /// </summary>
+    public static List<SuggestedRecipeDto> ParseRecipes(string responseText)
+    {
+        var recipes = new List<SuggestedRecipeDto>();
+
+        var root = JsonExtraction.ReadObject(responseText);
+        if (root == null
+            || !root.Value.TryGetProperty("recipes", out var written)
+            || written.ValueKind != JsonValueKind.Array)
+        {
+            return recipes;
+        }
+
+        foreach (var element in written.EnumerateArray())
+        {
+            var name = JsonExtraction.ReadString(element, "name");
+            if (name.Length == 0)
+            {
+                continue;
+            }
+
+            var ingredients = ReadIngredients(element);
+            if (ingredients.Count == 0)
+            {
+                continue;
+            }
+
+            var description = JsonExtraction.ReadString(element, "description");
+            var tags = JsonExtraction.ReadString(element, "tags");
+            var servings = JsonExtraction.ReadInt(element, "servings", 1);
+
+            recipes.Add(new SuggestedRecipeDto
+            {
+                Name = name,
+                Description = description.Length > 0 ? description : null,
+                Instructions = JsonExtraction.ReadString(element, "instructions"),
+                PrepTimeMinutes = Math.Max(0, JsonExtraction.ReadInt(element, "prepTimeMinutes")),
+                CookTimeMinutes = Math.Max(0, JsonExtraction.ReadInt(element, "cookTimeMinutes")),
+                Servings = servings > 0 ? servings : 1,
+                Tags = tags.Length > 0 ? tags : null,
+                Ingredients = ingredients,
+                Calories = JsonExtraction.ReadFloat(element, "calories"),
+                Protein = JsonExtraction.ReadFloat(element, "protein"),
+                Carbohydrates = JsonExtraction.ReadFloat(element, "carbohydrates"),
+                Fat = JsonExtraction.ReadFloat(element, "fat"),
+                Fiber = JsonExtraction.ReadFloat(element, "fiber"),
+                Sugar = JsonExtraction.ReadFloat(element, "sugar"),
+                Sodium = JsonExtraction.ReadFloat(element, "sodium")
+            });
+        }
+
+        return recipes;
+    }
+
+    private static List<SuggestedRecipeIngredientDto> ReadIngredients(JsonElement recipe)
+    {
+        var ingredients = new List<SuggestedRecipeIngredientDto>();
+
+        if (!recipe.TryGetProperty("ingredients", out var array) || array.ValueKind != JsonValueKind.Array)
+        {
+            return ingredients;
+        }
+
+        foreach (var element in array.EnumerateArray())
+        {
+            // A plain string is a shape the model falls back to often enough to be worth
+            // taking: it is still a usable line, just without a parsed quantity.
+            if (element.ValueKind == JsonValueKind.String)
+            {
+                var line = element.GetString() ?? string.Empty;
+                if (line.Trim().Length > 0)
+                {
+                    ingredients.Add(new SuggestedRecipeIngredientDto { Name = line.Trim() });
+                }
+
+                continue;
+            }
+
+            var name = JsonExtraction.ReadString(element, "name");
+            if (name.Length == 0)
+            {
+                continue;
+            }
+
+            var notes = JsonExtraction.ReadString(element, "notes");
+
+            ingredients.Add(new SuggestedRecipeIngredientDto
+            {
+                Name = name,
+                Quantity = JsonExtraction.ReadFloat(element, "quantity"),
+                Unit = JsonExtraction.ReadString(element, "unit"),
+                Notes = notes.Length > 0 ? notes : null
+            });
+        }
+
+        return ingredients;
     }
 
     private static void AppendProfile(StringBuilder sb, UserProfileDto? profile)
