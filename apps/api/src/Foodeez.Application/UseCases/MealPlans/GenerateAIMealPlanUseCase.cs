@@ -1,4 +1,7 @@
+using System.Runtime.CompilerServices;
+using System.Text;
 using Foodeez.Application.Common;
+using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealPlans;
 using Foodeez.Application.DTOs.Users;
 using Foodeez.Application.Interfaces.Services;
@@ -10,23 +13,72 @@ public class GenerateAIMealPlanUseCase
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAIService _aiService;
+    private readonly IStreamingAIService _streaming;
 
-    public GenerateAIMealPlanUseCase(IUnitOfWork unitOfWork, IAIService aiService)
+    public GenerateAIMealPlanUseCase(IUnitOfWork unitOfWork, IAIService aiService, IStreamingAIService streaming)
     {
         _unitOfWork = unitOfWork;
         _aiService = aiService;
+        _streaming = streaming;
     }
 
     public async Task<MealPlanDto> ExecuteAsync(GenerateMealPlanRequest request, CancellationToken ct = default)
     {
-        var user = await _unitOfWork.Users.GetByIdAsync(request.UserId);
+        var profileDto = await LoadProfileAsync(request.UserId);
+
+        var generated = await _aiService.GenerateMealPlanAsync(request, profileDto, ct);
+
+        // Providers swallow their own transport errors and hand back an empty result, so an
+        // outage arrives here looking exactly like a plan with no days in it. Saving that
+        // would hand the user a persisted, permanently blank week and report success -
+        // refusing is the only honest answer, and it leaves nothing to clean up.
+        if (generated.Days.Count == 0)
+            throw new AIGenerationFailedException(
+                "The AI service could not produce a meal plan right now. Please try again in a moment.");
+
+        return await PersistAsync(request, generated);
+    }
+
+    /// <summary>
+    /// The same generation, streamed as the model writes it: the plan's rationale reaches the
+    /// screen while the week is still being written, and the plan is saved once it is whole.
+    /// </summary>
+    public async IAsyncEnumerable<AIStreamEvent> ExecuteStreamAsync(
+        GenerateMealPlanRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var profileDto = await LoadProfileAsync(request.UserId);
+
+        var transcript = new StringBuilder();
+        await foreach (var delta in AINarration.NarrateAsync(
+            _streaming, MealPlanPrompt.Build(request, profileDto), transcript, ct))
+        {
+            yield return AIStreamEvent.Delta(delta);
+        }
+
+        var generated = MealPlanPrompt.Parse(transcript.ToString());
+        if (generated.Days.Count == 0)
+        {
+            // Same judgement as the blocking path: a plan with no days is an outage, not a
+            // plan, and saving it would hand the user a permanently blank week.
+            yield return AIStreamEvent.Error(
+                "The AI service could not produce a meal plan right now. Please try again in a moment.");
+            yield break;
+        }
+
+        yield return AIStreamEvent.Result(await PersistAsync(request, generated));
+    }
+
+    private async Task<UserProfileDto> LoadProfileAsync(Guid userId)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
         if (user == null)
-            throw new KeyNotFoundException($"User with id '{request.UserId}' was not found.");
+            throw new KeyNotFoundException($"User with id '{userId}' was not found.");
 
         if (user.Profile == null)
             throw new InvalidOperationException("User profile must be completed before generating a meal plan.");
 
-        var profileDto = new UserProfileDto
+        return new UserProfileDto
         {
             UserId = user.Profile.UserId,
             HeightCm = user.Profile.HeightCm,
@@ -43,17 +95,10 @@ public class GenerateAIMealPlanUseCase
             Notes = user.Profile.Notes,
             ProfileCompleted = user.Profile.ProfileCompleted
         };
+    }
 
-        var generated = await _aiService.GenerateMealPlanAsync(request, profileDto, ct);
-
-        // Providers swallow their own transport errors and hand back an empty result, so an
-        // outage arrives here looking exactly like a plan with no days in it. Saving that
-        // would hand the user a persisted, permanently blank week and report success -
-        // refusing is the only honest answer, and it leaves nothing to clean up.
-        if (generated.Days.Count == 0)
-            throw new AIGenerationFailedException(
-                "The AI service could not produce a meal plan right now. Please try again in a moment.");
-
+    private async Task<MealPlanDto> PersistAsync(GenerateMealPlanRequest request, GeneratedMealPlanDto generated)
+    {
         var plan = new MealPlan
         {
             UserId = request.UserId,
@@ -79,15 +124,14 @@ public class GenerateAIMealPlanUseCase
                         ? meal.RecipeName
                         : $"{meal.RecipeName} - {meal.RecipeDescription}";
 
-                var entry = new MealPlanEntry
+                plan.Entries.Add(new MealPlanEntry
                 {
                     MealPlanId = plan.Id,
                     EntryDate = day.Date,
                     MealType = meal.MealType,
                     Notes = label,
                     Servings = meal.Servings > 0 ? meal.Servings : 1f
-                };
-                plan.Entries.Add(entry);
+                });
             }
         }
 

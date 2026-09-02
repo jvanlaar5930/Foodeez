@@ -1,3 +1,4 @@
+using Foodeez.API.Streaming;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
@@ -75,6 +76,19 @@ public class MealLogsController : ControllerBase
     {
         var analysis = await _analyzeMealLogUseCase.ExecuteAsync(mealLogId, refresh, ct);
         return Ok(analysis);
+    }
+
+    /// <summary>
+    /// The same analysis, streamed as server-sent events: "delta" events as the model writes,
+    /// then a "result" event with the stored analysis. An analysis already on file arrives as
+    /// a single result with no deltas.
+    /// </summary>
+    [HttpPost("{mealLogId:guid}/analysis/stream")]
+    [Produces("text/event-stream")]
+    public async Task AnalyzeMealLogStream(Guid mealLogId, [FromQuery] bool refresh, CancellationToken ct)
+    {
+        await ServerSentEventStream.WriteAsync(
+            Response, _analyzeMealLogUseCase.ExecuteStreamAsync(mealLogId, refresh, ct), ct);
     }
 
     /// <summary>Delete an existing meal log.</summary>
@@ -165,6 +179,28 @@ public class MealLogsController : ControllerBase
             // was stored, so there is no half-made analysis for the client to reconcile.
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// The same day analysis, streamed as server-sent events: "delta" events as the model
+    /// writes, then a "result" event with the stored analysis.
+    /// </summary>
+    [HttpPost("day-analysis/stream")]
+    [Produces("text/event-stream")]
+    public async Task AnalyzeDayStream(
+        [FromQuery] Guid userId,
+        [FromQuery] string date,
+        [FromQuery] bool refresh,
+        CancellationToken ct)
+    {
+        if (!DateOnly.TryParse(date, out var parsedDate))
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        await ServerSentEventStream.WriteAsync(
+            Response, _analyzeDayUseCase.ExecuteStreamAsync(userId, parsedDate, refresh, ct), ct);
     }
 
     /// <summary>Get nutritional summary for a user on a specific date, including progress toward targets.</summary>

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Text;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
@@ -15,15 +17,18 @@ public class AnalyzeDayUseCase
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAIService _aiService;
+    private readonly IStreamingAIService _streaming;
     private readonly GetNutritionSummaryUseCase _getNutritionSummary;
 
     public AnalyzeDayUseCase(
         IUnitOfWork unitOfWork,
         IAIService aiService,
+        IStreamingAIService streaming,
         GetNutritionSummaryUseCase getNutritionSummary)
     {
         _unitOfWork = unitOfWork;
         _aiService = aiService;
+        _streaming = streaming;
         _getNutritionSummary = getNutritionSummary;
     }
 
@@ -70,15 +75,7 @@ public class AnalyzeDayUseCase
 
         var user = await _unitOfWork.Users.GetByIdAsync(userId);
         var result = await _aiService.AnalyzeDayAsync(
-            new DayAnalysisRequest
-            {
-                Date = date,
-                IsToday = date == DateOnly.FromDateTime(DateTime.UtcNow),
-                DietaryGoal = user?.Profile?.DietaryGoal.ToString(),
-                Summary = summary,
-                Meals = logs.Select(ToMealRequest).ToList()
-            },
-            ct);
+            BuildRequest(date, user?.Profile?.DietaryGoal.ToString(), summary, logs), ct);
 
         // Providers swallow their own transport errors and hand back an empty analysis. Storing
         // that would leave the user with a permanently blank score for the day, so refuse it.
@@ -88,23 +85,7 @@ public class AnalyzeDayUseCase
                 "The AI service could not analyze your day right now. Please try again in a moment.");
         }
 
-        var generatedAt = DateTime.UtcNow;
-
-        if (stored == null)
-        {
-            stored = new DayAnalysis { UserId = userId, LogDate = date };
-            Apply(stored, result, fingerprint, generatedAt);
-            await _unitOfWork.DayAnalyses.AddAsync(stored);
-        }
-        else
-        {
-            Apply(stored, result, fingerprint, generatedAt);
-            _unitOfWork.DayAnalyses.Update(stored);
-        }
-
-        await _unitOfWork.SaveChangesAsync(ct);
-
-        return ToDto(stored);
+        return await StoreAsync(userId, date, stored, result, fingerprint, ct);
     }
 
     private static void Apply(DayAnalysis entity, DayAnalysisDto result, string fingerprint, DateTime generatedAt)
@@ -143,4 +124,91 @@ public class AnalyzeDayUseCase
             Fiber = total.Fiber
         };
     }
+
+    /// <summary>
+    /// The same analysis, streamed as the model writes it. A stored analysis arrives as a
+    /// single result with nothing to watch - it was already paid for.
+    /// </summary>
+    public async IAsyncEnumerable<AIStreamEvent> ExecuteStreamAsync(
+        Guid userId,
+        DateOnly date,
+        bool refresh = false,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var logs = await _unitOfWork.MealLogs.GetByUserAndDateAsync(userId, date);
+        if (logs.Count == 0)
+        {
+            yield return AIStreamEvent.Error("There are no meals logged on this day to analyze.");
+            yield break;
+        }
+
+        var summary = await _getNutritionSummary.ExecuteAsync(userId, date);
+        var fingerprint = MealAnalysisFingerprint.ForDay(date, logs, summary);
+        var stored = await _unitOfWork.DayAnalyses.GetByUserAndDateAsync(userId, date);
+
+        if (!refresh && stored != null && stored.Matches(fingerprint))
+        {
+            yield return AIStreamEvent.Result(ToDto(stored));
+            yield break;
+        }
+
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        var prompt = DayAnalysisPrompt.Build(BuildRequest(date, user?.Profile?.DietaryGoal.ToString(), summary, logs));
+
+        var transcript = new StringBuilder();
+        await foreach (var delta in AINarration.NarrateAsync(_streaming, prompt, transcript, ct))
+        {
+            yield return AIStreamEvent.Delta(delta);
+        }
+
+        var result = DayAnalysisPrompt.Parse(transcript.ToString());
+        if (result == null)
+        {
+            yield return AIStreamEvent.Error(
+                "The AI service could not analyze your day right now. Please try again in a moment.");
+            yield break;
+        }
+
+        yield return AIStreamEvent.Result(await StoreAsync(userId, date, stored, result, fingerprint, ct));
+    }
+
+    private async Task<DayAnalysisDto> StoreAsync(
+        Guid userId,
+        DateOnly date,
+        DayAnalysis? stored,
+        DayAnalysisDto result,
+        string fingerprint,
+        CancellationToken ct)
+    {
+        var isNew = stored == null;
+        stored ??= new DayAnalysis { UserId = userId, LogDate = date };
+
+        Apply(stored, result, fingerprint, DateTime.UtcNow);
+
+        if (isNew)
+        {
+            await _unitOfWork.DayAnalyses.AddAsync(stored);
+        }
+        else
+        {
+            _unitOfWork.DayAnalyses.Update(stored);
+        }
+
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return ToDto(stored);
+    }
+
+    private static DayAnalysisRequest BuildRequest(
+        DateOnly date,
+        string? dietaryGoal,
+        NutritionSummaryDto summary,
+        IEnumerable<MealLog> logs) => new()
+    {
+        Date = date,
+        IsToday = date == DateOnly.FromDateTime(DateTime.UtcNow),
+        DietaryGoal = dietaryGoal,
+        Summary = summary,
+        Meals = logs.Select(ToMealRequest).ToList()
+    };
 }

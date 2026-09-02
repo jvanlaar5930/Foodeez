@@ -28,6 +28,18 @@
         </div>
       </div>
 
+      <!-- The model's thinking, as it writes it: a week of meals takes a while, and a
+           spinner alone gives no sign that anything is happening. -->
+      <div
+        v-if="isGenerating"
+        class="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-4 dark:border-purple-900 dark:bg-purple-950/40"
+      >
+        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
+          Writing your plan
+        </p>
+        <StreamingText :text="generationText" placeholder="Reading your profile and targets..." />
+      </div>
+
       <!-- Generation can fail for reasons worth reading: the AI provider being overloaded
            is temporary and retrying is the right response. -->
       <div
@@ -106,6 +118,7 @@ import { format, startOfWeek, addDays, isToday } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import DayMealSlot from '@/components/mealplan/DayMealSlot.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
 import { useAuthStore } from '@/stores/auth';
 import { MealType, type MealPlanEntry } from '@foodeez/shared';
@@ -117,6 +130,7 @@ const weekStart = ref(startOfWeek(new Date(), { weekStartsOn: 1 }));
 const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart.value, i)));
 const isLoading = computed(() => planStore.isLoading);
 const isGenerating = computed(() => planStore.isGenerating);
+const generationText = computed(() => planStore.generationText);
 const error = computed(() => planStore.error);
 
 const MEAL_TYPES = [

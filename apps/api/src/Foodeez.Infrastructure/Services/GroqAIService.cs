@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,7 +15,7 @@ using Microsoft.Extensions.Logging;
 namespace Foodeez.Infrastructure.Services;
 
 // OpenAI-compatible API via Groq (free tier) — https://console.groq.com
-public class GroqAIService : IAIService
+public class GroqAIService : IAIService, IStreamingAIService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
@@ -265,4 +266,35 @@ public class GroqAIService : IAIService
                 Assumptions = "We could not estimate this one automatically. Enter the values you know.",
             };
     }
+
+    /// <summary>Groq speaks the OpenAI streaming protocol, so the frames read the same way.</summary>
+    public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var apiKey = _configuration["Groq:ApiKey"] ?? throw new InvalidOperationException("Groq:ApiKey is not configured.");
+        var model = _configuration["Groq:Model"] ?? DefaultModel;
+
+        var body = new
+        {
+            model,
+            max_tokens = 2048,
+            stream = true,
+            messages = new[] { new { role = "user", content = prompt } }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, BaseUrl)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json")
+        };
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        await foreach (var payload in StreamingHttp.ReadServerSentEventsAsync(response, ct))
+        {
+            var text = StreamingHttp.OpenAiDelta(payload);
+            if (text.Length > 0) yield return text;
+        }
+    }
+
 }

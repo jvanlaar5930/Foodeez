@@ -163,6 +163,14 @@
             </button>
           </div>
 
+          <div
+            v-if="isAnalyzing || analysisError"
+            class="mt-3 rounded-xl border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 p-4"
+          >
+            <p v-if="analysisError" class="text-sm text-red-600 dark:text-red-400">{{ analysisError }}</p>
+            <StreamingText v-else :text="streamedText" placeholder="Reading your meal..." />
+          </div>
+
           <div v-if="analysis" class="mt-3 space-y-3 rounded-xl border border-purple-200 bg-purple-50 dark:bg-purple-950/40 p-4">
             <div class="flex items-center gap-3">
               <div class="relative h-14 w-14 shrink-0">
@@ -244,10 +252,12 @@
 
 <script setup lang="ts">
 import CustomFoodForm from '@/components/meal/CustomFoodForm.vue';
+import StreamingText from '@/components/ai/StreamingText.vue';
 import { computed, ref, watch } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
 import { foodItemService } from '@/services/foodItemService';
 import { aiService, type MealAnalysisResult } from '@/services/aiService';
+import { AIStreamError } from '@/services/aiStream';
 import { useMealStore } from '@/stores/meal';
 import { useAuthStore } from '@/stores/auth';
 import { MealType, type FoodItem, type MealLog } from '@foodeez/shared';
@@ -274,6 +284,9 @@ const selectedItems = ref<SelectedItem[]>([]);
 const isSaving = ref(false);
 const isAnalyzing = ref(false);
 const analysis = ref<MealAnalysisResult | null>(null);
+/** What the model has written so far, shown while it writes. */
+const streamedText = ref('');
+const analysisError = ref<string | null>(null);
 /** True once the meal has been changed here, so the saved meal's stored score no longer applies. */
 const mealEdited = ref(false);
 
@@ -327,6 +340,8 @@ function multiplier(entry: SelectedItem): number {
 /** Any change to the meal makes the current score stale - drop it rather than show a wrong one. */
 function invalidateAnalysis() {
   analysis.value = null;
+  streamedText.value = '';
+  analysisError.value = null;
   mealEdited.value = true;
 }
 
@@ -396,6 +411,8 @@ watch(
     searchQuery.value = '';
     searchResults.value = [];
     analysis.value = mealLog?.analysis ?? null;
+    streamedText.value = '';
+    analysisError.value = null;
     mealEdited.value = false;
   },
   { immediate: true },
@@ -461,18 +478,23 @@ const analyzedOn = computed(() =>
 async function analyzeMeal() {
   const storedMealLogId = props.mealLog && !mealEdited.value ? props.mealLog.id : null;
   const refresh = analysis.value !== null;
+  const onDelta = (text: string) => {
+    streamedText.value += text;
+  };
 
   isAnalyzing.value = true;
   analysis.value = null;
+  streamedText.value = '';
+  analysisError.value = null;
 
   try {
     if (storedMealLogId) {
-      analysis.value = await aiService.analyzeMealLog(storedMealLogId, refresh);
+      analysis.value = await aiService.analyzeMealLogStream(storedMealLogId, refresh, onDelta);
       return;
     }
 
     const mealLabel = mealTypeLabels[selectedMealType.value] ?? 'Meal';
-    analysis.value = await aiService.analyzeMeal(
+    analysis.value = await aiService.analyzeMealStream(
       mealLabel,
       selectedItems.value.map((entry) => ({
         name: entry.item.name,
@@ -484,7 +506,11 @@ async function analyzeMeal() {
         fat: entry.item.nutritionalInfo.fat * multiplier(entry),
         fiber: (entry.item.nutritionalInfo.fiber ?? 0) * multiplier(entry),
       })),
+      onDelta,
     );
+  } catch (err: unknown) {
+    analysisError.value =
+      err instanceof AIStreamError ? err.message : 'The analysis could not be completed. Please try again.';
   } finally {
     isAnalyzing.value = false;
   }

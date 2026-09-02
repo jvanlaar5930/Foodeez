@@ -51,6 +51,8 @@ public static class DependencyInjection
         services.AddHttpClient<LocalAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         // DynamicAIService is the active IAIService — reads provider from AppSettings at runtime
         services.AddScoped<IAIService, DynamicAIService>();
+        // Streaming is a capability of the same active service, not a second provider.
+        services.AddScoped<IStreamingAIService>(sp => (IStreamingAIService)sp.GetRequiredService<IAIService>());
 
         // ── Spoonacular Service (typed HttpClient) ────────────────────────
         services.AddHttpClient<ISpoonacularService, SpoonacularService>();

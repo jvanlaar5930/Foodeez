@@ -1,5 +1,6 @@
 import type { DayAnalysis, MealAnalysis } from '@foodeez/shared';
 
+import { streamAI } from './aiStream';
 import api from './api';
 
 export interface MealAnalysisItem {
@@ -16,23 +17,33 @@ export interface MealAnalysisItem {
 export type MealAnalysisResult = MealAnalysis;
 
 export const aiService = {
-  /** Analyse a meal that has not been saved yet; the result is persisted when the meal is. */
-  async analyzeMeal(mealType: string, items: MealAnalysisItem[]): Promise<MealAnalysisResult> {
-    const response = await api.post<MealAnalysisResult>('/ai/analyze-meal', { mealType, items });
-    return response.data;
+  /**
+   * Analyse a meal that has not been saved yet: `onDelta` receives the assessment as the model
+   * writes it, and the finished analysis is returned at the end for saving with the meal.
+   */
+  async analyzeMealStream(
+    mealType: string,
+    items: MealAnalysisItem[],
+    onDelta: (text: string) => void,
+  ): Promise<MealAnalysisResult> {
+    return streamAI<MealAnalysisResult>('/ai/analyze-meal/stream', { body: { mealType, items } }, onDelta);
   },
 
   /**
-   * Analyse a saved meal. The server stores the result and serves it back unchanged until the
-   * meal's items change, so only `refresh` costs another AI call.
+   * Analyse a saved meal, streaming as the model writes. The server stores the result and
+   * serves it back unchanged until the meal's items change, so an analysis already on file
+   * arrives complete with no deltas and only `refresh` costs another AI call.
    */
-  async analyzeMealLog(mealLogId: string, refresh = false): Promise<MealAnalysisResult> {
-    const response = await api.post<MealAnalysisResult>(
-      `/meal-logs/${mealLogId}/analysis`,
-      null,
+  async analyzeMealLogStream(
+    mealLogId: string,
+    refresh: boolean,
+    onDelta: (text: string) => void,
+  ): Promise<MealAnalysisResult> {
+    return streamAI<MealAnalysisResult>(
+      `/meal-logs/${mealLogId}/analysis/stream`,
       { params: { refresh } },
+      onDelta,
     );
-    return response.data;
   },
 
   /**
@@ -47,14 +58,16 @@ export const aiService = {
   },
 
   /**
-   * Analyse a whole day. The server stores the result and serves it back until the day's
-   * meals or targets change, so only `refresh` costs another AI call.
+   * Analyse a whole day, streaming as the model writes. As with a single meal, a stored
+   * analysis arrives complete with no deltas and only `refresh` costs another AI call.
    */
-  async analyzeDay(userId: string, date: string, refresh = false): Promise<DayAnalysis> {
-    const response = await api.post<DayAnalysis>('/meal-logs/day-analysis', null, {
-      params: { userId, date, refresh },
-    });
-    return response.data;
+  async analyzeDayStream(
+    userId: string,
+    date: string,
+    refresh: boolean,
+    onDelta: (text: string) => void,
+  ): Promise<DayAnalysis> {
+    return streamAI<DayAnalysis>('/meal-logs/day-analysis/stream', { params: { userId, date, refresh } }, onDelta);
   },
 };
 

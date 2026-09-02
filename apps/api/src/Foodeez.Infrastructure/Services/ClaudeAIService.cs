@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Infrastructure.Services;
 
-public class ClaudeAIService : IAIService
+public class ClaudeAIService : IAIService, IStreamingAIService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
@@ -648,4 +649,41 @@ public class ClaudeAIService : IAIService
                 Assumptions = "We could not estimate this one automatically. Enter the values you know.",
             };
     }
+
+    /// <summary>
+    /// The same request as <see cref="SendMessageAsync"/> with `stream` set, so the answer
+    /// arrives in the pieces Anthropic writes it in rather than in one block at the end.
+    /// </summary>
+    public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var body = new
+        {
+            model = _configuration["Claude:Model"] ?? "claude-sonnet-4-6",
+            max_tokens = 2048,
+            stream = true,
+            messages = new[] { new { role = "user", content = prompt } }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, AnthropicBaseUrl)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        await foreach (var payload in StreamingHttp.ReadServerSentEventsAsync(response, ct))
+        {
+            var text = StreamingHttp.Read(payload, root =>
+                root.TryGetProperty("type", out var type) &&
+                type.GetString() == "content_block_delta" &&
+                root.TryGetProperty("delta", out var delta) &&
+                delta.TryGetProperty("text", out var chunk)
+                    ? chunk.GetString()
+                    : null);
+
+            if (text.Length > 0) yield return text;
+        }
+    }
+
 }

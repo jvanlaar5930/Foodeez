@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.DTOs.MealPlans;
@@ -11,7 +12,7 @@ namespace Foodeez.Infrastructure.Services;
 
 // Reads ai.provider from AppSettings at runtime and delegates to the correct IAIService impl.
 // Registered as IAIService; concrete services (Claude, Gemini, Groq, Ollama, Local) registered directly.
-public class DynamicAIService : IAIService
+public class DynamicAIService : IAIService, IStreamingAIService
 {
     private readonly IServiceProvider _services;
     private readonly IAppSettingRepository _settings;
@@ -59,4 +60,25 @@ public class DynamicAIService : IAIService
 
     public async Task<EstimatedNutritionDto> EstimateNutritionAsync(EstimateNutritionRequest request, CancellationToken ct = default)
         => await (await ResolveAsync()).EstimateNutritionAsync(request, ct);
+
+    /// <summary>
+    /// Every provider here streams, so this only has to pick one. A provider that did not
+    /// would have to say so rather than quietly return nothing, since the caller reads the
+    /// finished answer out of the streamed text.
+    /// </summary>
+    public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var provider = await ResolveAsync();
+        if (provider is not IStreamingAIService streaming)
+        {
+            throw new NotSupportedException(
+                $"The configured AI provider ({provider.GetType().Name}) cannot stream a response.");
+        }
+
+        await foreach (var chunk in streaming.StreamAsync(prompt, ct))
+        {
+            yield return chunk;
+        }
+    }
+
 }
