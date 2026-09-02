@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,7 +15,7 @@ using Microsoft.Extensions.Logging;
 namespace Foodeez.Infrastructure.Services;
 
 // Local Ollama — runs on the same machine, completely free
-public class OllamaAIService : IAIService
+public class OllamaAIService : IAIService, IStreamingAIService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
@@ -248,4 +249,38 @@ public class OllamaAIService : IAIService
                 Assumptions = "We could not estimate this one automatically. Enter the values you know.",
             };
     }
+
+    /// <summary>Ollama streams bare JSON objects, one per line, rather than server-sent events.</summary>
+    public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var baseUrl = _configuration["Ollama:BaseUrl"] ?? DefaultBaseUrl;
+        var model = _configuration["Ollama:Model"] ?? DefaultModel;
+
+        var body = new
+        {
+            model,
+            stream = true,
+            messages = new[] { new { role = "user", content = prompt } }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/chat")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        await foreach (var line in StreamingHttp.ReadJsonLinesAsync(response, ct))
+        {
+            var text = StreamingHttp.Read(line, root =>
+                root.TryGetProperty("message", out var message) &&
+                message.TryGetProperty("content", out var chunk)
+                    ? chunk.GetString()
+                    : null);
+
+            if (text.Length > 0) yield return text;
+        }
+    }
+
 }

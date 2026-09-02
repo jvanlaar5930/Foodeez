@@ -1,3 +1,4 @@
+using Foodeez.API.Streaming;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.UseCases.AI;
 using Microsoft.AspNetCore.Authorization;
@@ -13,15 +14,18 @@ public class AIController : ControllerBase
     private readonly GetDietaryRecommendationsUseCase _getRecommendationsUseCase;
     private readonly AnalyzeMealUseCase _analyzeMealUseCase;
     private readonly EstimateNutritionUseCase _estimateNutritionUseCase;
+    private readonly StreamMealAnalysisUseCase _streamMealAnalysisUseCase;
 
     public AIController(
         GetDietaryRecommendationsUseCase getRecommendationsUseCase,
         AnalyzeMealUseCase analyzeMealUseCase,
-        EstimateNutritionUseCase estimateNutritionUseCase)
+        EstimateNutritionUseCase estimateNutritionUseCase,
+        StreamMealAnalysisUseCase streamMealAnalysisUseCase)
     {
         _getRecommendationsUseCase = getRecommendationsUseCase;
         _analyzeMealUseCase = analyzeMealUseCase;
         _estimateNutritionUseCase = estimateNutritionUseCase;
+        _streamMealAnalysisUseCase = streamMealAnalysisUseCase;
     }
 
     // MVC binds the CancellationToken parameters below to HttpContext.RequestAborted, so a
@@ -48,6 +52,24 @@ public class AIController : ControllerBase
 
         var result = await _analyzeMealUseCase.ExecuteAsync(request, ct);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// The same analysis as analyze-meal, streamed as server-sent events: "delta" events carry
+    /// the assessment as the model writes it, and a final "result" event carries the parsed
+    /// analysis (or "error" if none could be produced).
+    /// </summary>
+    [HttpPost("analyze-meal/stream")]
+    [Produces("text/event-stream")]
+    public async Task AnalyzeMealStream([FromBody] MealAnalysisRequest request, CancellationToken ct)
+    {
+        if (request.Items.Count == 0)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        await ServerSentEventStream.WriteAsync(Response, _streamMealAnalysisUseCase.ExecuteAsync(request, ct), ct);
     }
 
     /// <summary>

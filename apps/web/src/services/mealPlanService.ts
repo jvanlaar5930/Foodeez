@@ -1,3 +1,4 @@
+import { streamAI } from './aiStream';
 import api from './api';
 import type { CreateMealPlanRequest, GenerateMealPlanRequest, MealPlan } from '@foodeez/shared';
 
@@ -28,6 +29,19 @@ export const mealPlanService = {
     // work rather than just hiding it.
     const response = await api.post<MealPlan>('/meal-plans/generate', data, { signal });
     return response.data;
+  },
+
+  /**
+   * The same generation, streamed: `onDelta` receives the plan's rationale as the model
+   * writes it, and the saved plan comes back at the end. Aborting the signal closes the
+   * connection, which is what stops the work on the server.
+   */
+  async generateAIMealPlanStream(
+    data: GenerateMealPlanRequest,
+    onDelta: (text: string) => void,
+    signal?: AbortSignal,
+  ): Promise<MealPlan> {
+    return streamAI<MealPlan>('/meal-plans/generate/stream', { body: data, signal }, onDelta);
   },
 
   async deleteMealPlan(planId: string): Promise<void> {

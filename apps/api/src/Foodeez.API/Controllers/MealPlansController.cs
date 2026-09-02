@@ -1,3 +1,4 @@
+using Foodeez.API.Streaming;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealPlans;
 using Foodeez.Application.UseCases.MealPlans;
@@ -63,5 +64,17 @@ public class MealPlansController : ControllerBase
             // was saved, so there is no half-made plan for the client to reconcile.
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// The same generation, streamed as server-sent events: "delta" events carry the plan's
+    /// rationale as the model writes it, and a final "result" event carries the saved plan.
+    /// </summary>
+    [HttpPost("generate/stream")]
+    [Produces("text/event-stream")]
+    public async Task GenerateMealPlanStream([FromBody] GenerateMealPlanRequest request, CancellationToken ct)
+    {
+        await ServerSentEventStream.WriteAsync(
+            Response, _generateAIMealPlanUseCase.ExecuteStreamAsync(request, ct), ct);
     }
 }

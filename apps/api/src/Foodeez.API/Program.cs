@@ -37,6 +37,7 @@ builder.Services.AddScoped<CreateMealPlanUseCase>();
 builder.Services.AddScoped<GenerateAIMealPlanUseCase>();
 builder.Services.AddScoped<GetDietaryRecommendationsUseCase>();
 builder.Services.AddScoped<AnalyzeMealUseCase>();
+builder.Services.AddScoped<StreamMealAnalysisUseCase>();
 builder.Services.AddScoped<EstimateNutritionUseCase>();
 builder.Services.AddScoped<SearchRecipesUseCase>();
 builder.Services.AddScoped<AutocompleteRecipesUseCase>();

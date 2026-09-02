@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import type { DayAnalysis } from '@foodeez/shared';
 import { aiService } from '@/services/aiService';
+import { AIStreamError } from '@/services/aiStream';
+import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealStore } from '@/stores/meal';
 
 const props = defineProps<{
@@ -15,6 +17,8 @@ const mealStore = useMealStore();
 const analysis = ref<DayAnalysis | null>(null);
 const isAnalyzing = ref(false);
 const error = ref<string | null>(null);
+/** What the model has written so far, shown while it writes. */
+const streamedText = ref('');
 
 /**
  * Changes whenever the day's meals do - which is exactly when the server retires the stored
@@ -85,11 +89,14 @@ async function runAnalysis(refresh: boolean) {
 
   isAnalyzing.value = true;
   error.value = null;
+  streamedText.value = '';
 
   try {
-    analysis.value = await aiService.analyzeDay(props.userId, props.date, refresh);
+    analysis.value = await aiService.analyzeDayStream(props.userId, props.date, refresh, (text) => {
+      streamedText.value += text;
+    });
   } catch (err: unknown) {
-    error.value = extractErrorMessage(err);
+    error.value = err instanceof AIStreamError ? err.message : extractErrorMessage(err);
   } finally {
     isAnalyzing.value = false;
   }
@@ -129,9 +136,8 @@ watch([() => props.date, () => props.userId, daySignature], loadStored, { immedi
       </button>
     </div>
 
-    <div v-if="isAnalyzing" class="mt-3 flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
-      <span class="h-4 w-4 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
-      Reviewing {{ dayLabel }}'s meals...
+    <div v-if="isAnalyzing" class="mt-3">
+      <StreamingText :text="streamedText" :placeholder="`Reviewing ${dayLabel}'s meals...`" />
     </div>
 
     <template v-else-if="analysis">

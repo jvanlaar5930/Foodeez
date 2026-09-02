@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Infrastructure.Services;
 
-public class GeminiAIService : IAIService
+public class GeminiAIService : IAIService, IStreamingAIService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
@@ -387,4 +388,50 @@ public class GeminiAIService : IAIService
                 Assumptions = "We could not estimate this one automatically. Enter the values you know.",
             };
     }
+
+    /// <summary>Google's streaming endpoint, asked for as server-sent events rather than a JSON array.</summary>
+    public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var url = $"{ApiBase}/{GetModel()}:streamGenerateContent?alt=sse&key={GetApiKey()}";
+        var body = new
+        {
+            contents = new[] { new { parts = new[] { new { text = prompt } } } },
+            generationConfig = new { maxOutputTokens = 8192, temperature = 0.3 }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        // The body is where Google explains itself - an overloaded model, a retired one - and
+        // a bare status code cannot tell those apart.
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(ct);
+            if (error.Length > 500) error = error[..500] + "...";
+            throw new HttpRequestException(
+                $"Gemini returned {(int)response.StatusCode} for model '{GetModel()}': {error}");
+        }
+
+        await foreach (var payload in StreamingHttp.ReadServerSentEventsAsync(response, ct))
+        {
+            var text = StreamingHttp.Read(payload, root =>
+                root.TryGetProperty("candidates", out var candidates) &&
+                candidates.ValueKind == JsonValueKind.Array &&
+                candidates.GetArrayLength() > 0 &&
+                candidates[0].TryGetProperty("content", out var content) &&
+                content.TryGetProperty("parts", out var parts) &&
+                parts.ValueKind == JsonValueKind.Array &&
+                parts.GetArrayLength() > 0 &&
+                parts[0].TryGetProperty("text", out var chunk)
+                    ? chunk.GetString()
+                    : null);
+
+            if (text.Length > 0) yield return text;
+        }
+    }
+
 }

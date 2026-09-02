@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -20,7 +21,7 @@ namespace Foodeez.Infrastructure.Services;
 //
 // Configuration comes from the admin settings table first (local.*), falling back to
 // appsettings (LocalAI:*), so the server can be pointed somewhere else without a redeploy.
-public class LocalAIService : IAIService
+public class LocalAIService : IAIService, IStreamingAIService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
@@ -479,4 +480,44 @@ public class LocalAIService : IAIService
                .Where(x => x.Length > 0)
                .ToList()
             : [];
+
+    /// <summary>
+    /// The streaming form of the chat call: same OpenAI-compatible endpoint and the same
+    /// per-request deadline, read frame by frame instead of all at once.
+    /// </summary>
+    public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var baseUrl = await ResolveAsync("local.baseUrl", "LocalAI:BaseUrl") ?? DefaultBaseUrl;
+        var model = await ResolveAsync("local.model", "LocalAI:Model") ?? DefaultModel;
+        var apiKey = await ResolveAsync("local.apiKey", "LocalAI:ApiKey");
+
+        var body = new
+        {
+            model,
+            max_tokens = MaxTokens,
+            stream = true,
+            messages = new object[] { new { role = "user", content = prompt } }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, BuildChatCompletionsUrl(baseUrl))
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        if (!string.IsNullOrWhiteSpace(apiKey))
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(await TimeoutAsync());
+
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        response.EnsureSuccessStatusCode();
+
+        await foreach (var payload in StreamingHttp.ReadServerSentEventsAsync(response, cts.Token))
+        {
+            var text = StreamingHttp.OpenAiDelta(payload);
+            if (text.Length > 0) yield return text;
+        }
+    }
+
 }

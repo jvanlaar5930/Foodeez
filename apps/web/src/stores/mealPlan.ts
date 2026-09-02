@@ -8,6 +8,8 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
   const activePlan = ref<MealPlan | null>(null);
   const isLoading = ref(false);
   const isGenerating = ref(false);
+  /** What the model has written so far this generation, for the view to show as it arrives. */
+  const generationText = ref('');
   const error = ref<string | null>(null);
 
   const sortedPlans = computed(() =>
@@ -57,9 +59,20 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     const controller = generateController;
 
     isGenerating.value = true;
+    generationText.value = '';
     error.value = null;
     try {
-      const plan = await mealPlanService.generateAIMealPlan(data, controller.signal);
+      const plan = await mealPlanService.generateAIMealPlanStream(
+        data,
+        (text) => {
+          // Only the current request may write to the shared buffer; an aborted older one
+          // would otherwise keep typing over its replacement.
+          if (generateController === controller) {
+            generationText.value += text;
+          }
+        },
+        controller.signal,
+      );
       plans.value.unshift(plan);
       activePlan.value = plan;
       return plan;
@@ -85,6 +98,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     generateController?.abort();
     generateController = null;
     isGenerating.value = false;
+    generationText.value = '';
   }
 
   function setActivePlan(plan: MealPlan): void {
@@ -115,6 +129,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     sortedPlans,
     isLoading,
     isGenerating,
+    generationText,
     error,
     fetchPlans,
     createPlan,

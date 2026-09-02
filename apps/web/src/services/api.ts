@@ -9,6 +9,14 @@ export function setAuthStore(store: { token: string | null; logout: () => void }
   authStore = store;
 }
 
+/**
+ * The bearer token for an API call. Exported because streaming endpoints are read with fetch
+ * rather than axios, and they need the same token from the same place.
+ */
+export function getAuthToken(): string | null {
+  return authStore?.token ?? localStorage.getItem('foodeez_token');
+}
+
 const api: AxiosInstance = axios.create({
   baseURL: '/api',
   headers: {
@@ -18,7 +26,7 @@ const api: AxiosInstance = axios.create({
 
 // Request interceptor — attach bearer token
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = authStore?.token ?? localStorage.getItem('foodeez_token');
+  const token = getAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
