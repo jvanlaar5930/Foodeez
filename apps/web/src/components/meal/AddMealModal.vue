@@ -257,6 +257,7 @@ import { computed, ref, watch } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
 import { foodItemService } from '@/services/foodItemService';
 import { aiService, type MealAnalysisResult } from '@/services/aiService';
+import { scoreStroke, scoreTextClass } from '@/utils/analysisScore';
 import { AIStreamError } from '@/services/aiStream';
 import { useMealStore } from '@/stores/meal';
 import { useAuthStore } from '@/stores/auth';
@@ -432,27 +433,8 @@ function selectItem(item: FoodItem) {
   invalidateAnalysis();
 }
 
-const scoreColor = computed(() => {
-  const score = analysis.value?.score ?? 0;
-  if (score >= 75) {
-    return '#16a34a';
-  }
-  if (score >= 50) {
-    return '#f59e0b';
-  }
-  return '#ef4444';
-});
-
-const scoreTextColor = computed(() => {
-  const score = analysis.value?.score ?? 0;
-  if (score >= 75) {
-    return 'text-green-600 dark:text-green-400';
-  }
-  if (score >= 50) {
-    return 'text-amber-600';
-  }
-  return 'text-red-600 dark:text-red-400';
-});
+const scoreColor = computed(() => scoreStroke(analysis.value?.score ?? 0));
+const scoreTextColor = computed(() => scoreTextClass(analysis.value?.score ?? 0));
 
 const analyzeLabel = computed(() => {
   if (isAnalyzing.value) {
@@ -495,6 +477,7 @@ async function analyzeMeal() {
 
     const mealLabel = mealTypeLabels[selectedMealType.value] ?? 'Meal';
     analysis.value = await aiService.analyzeMealStream(
+      authStore.user?.id ?? '',
       mealLabel,
       selectedItems.value.map((entry) => ({
         name: entry.item.name,

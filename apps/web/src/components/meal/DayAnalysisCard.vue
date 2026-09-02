@@ -5,6 +5,7 @@ import { aiService } from '@/services/aiService';
 import { AIStreamError } from '@/services/aiStream';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealStore } from '@/stores/meal';
+import { scoreStroke, scoreTextClass } from '@/utils/analysisScore';
 
 const props = defineProps<{
   userId: string;
@@ -35,27 +36,8 @@ const daySignature = computed(() =>
 
 const dayLabel = computed(() => (props.isToday ? 'today' : 'this day'));
 
-const scoreColor = computed(() => {
-  const score = analysis.value?.score ?? 0;
-  if (score >= 75) {
-    return '#16a34a';
-  }
-  if (score >= 50) {
-    return '#f59e0b';
-  }
-  return '#ef4444';
-});
-
-const scoreTextColor = computed(() => {
-  const score = analysis.value?.score ?? 0;
-  if (score >= 75) {
-    return 'text-green-600 dark:text-green-400';
-  }
-  if (score >= 50) {
-    return 'text-amber-600';
-  }
-  return 'text-red-600 dark:text-red-400';
-});
+const scoreColor = computed(() => scoreStroke(analysis.value?.score ?? 0));
+const scoreTextColor = computed(() => scoreTextClass(analysis.value?.score ?? 0));
 
 const analyzedAt = computed(() =>
   analysis.value?.generatedAt
