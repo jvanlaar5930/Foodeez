@@ -151,8 +151,18 @@ export interface MealPlanEntryDto {
   id: string;
   entryDate: string;
   mealType: MealType;
+  /** Set when the slot is backed by a real recipe, including one the assistant wrote. */
+  recipeId?: string;
   recipeName?: string;
   foodItemName?: string;
+  notes?: string;
+  servings: number;
+}
+
+export interface MealPlanEntryRequest {
+  entryDate: string;
+  mealType: MealType;
+  recipeId?: string;
   notes?: string;
   servings: number;
 }

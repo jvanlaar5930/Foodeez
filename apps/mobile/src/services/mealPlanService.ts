@@ -1,6 +1,6 @@
 import { api } from './api';
 import { AI_REQUEST_TIMEOUT } from '@/constants/api';
-import type { GenerateMealPlanRequest, MealPlanDto } from '@/types';
+import type { GenerateMealPlanRequest, MealPlanDto, MealPlanEntryDto, MealPlanEntryRequest } from '@/types';
 
 export async function getMealPlans(userId: string): Promise<MealPlanDto[]> {
   // The controller takes userId from the query string; `/meal-plans/{userId}` matches no
@@ -35,4 +35,23 @@ export async function generateAIMealPlan(data: GenerateMealPlanRequest): Promise
 
 export async function deleteMealPlan(planId: string): Promise<void> {
   await api.delete(`/meal-plans/${planId}`);
+}
+
+/** Fills one slot. The API replaces whatever was already in it, so this is also a move. */
+export async function addEntry(planId: string, entry: MealPlanEntryRequest): Promise<MealPlanEntryDto> {
+  const response = await api.post<MealPlanEntryDto>(`/meal-plans/${planId}/entries`, entry);
+  return response.data;
+}
+
+export async function updateEntry(
+  planId: string,
+  entryId: string,
+  entry: MealPlanEntryRequest,
+): Promise<MealPlanEntryDto> {
+  const response = await api.put<MealPlanEntryDto>(`/meal-plans/${planId}/entries/${entryId}`, entry);
+  return response.data;
+}
+
+export async function deleteEntry(planId: string, entryId: string): Promise<void> {
+  await api.delete(`/meal-plans/${planId}/entries/${entryId}`);
 }

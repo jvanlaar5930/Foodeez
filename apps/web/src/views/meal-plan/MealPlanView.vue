@@ -168,6 +168,14 @@
         @save="handleSaveSlot"
         @remove="handleRemoveSlot"
       />
+
+      <AddMealModal
+        v-if="logModalOpen && editingLog"
+        :selected-date="editingLog.logDate"
+        :meal-log="editingLog"
+        @close="closeLogModal"
+        @saved="onLogSaved"
+      />
     </div>
   </AppLayout>
 </template>
@@ -178,6 +186,7 @@ import { format, startOfWeek, addDays, isToday } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import DayMealSlot from '@/components/mealplan/DayMealSlot.vue';
 import MealSlotModal from '@/components/mealplan/MealSlotModal.vue';
+import AddMealModal from '@/components/meal/AddMealModal.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
@@ -221,17 +230,21 @@ const loggedLogs = ref<MealLog[]>([]);
 
 function loggedLabelKey(date: string, mealType: MealType) { return `${date}|${mealType}`; }
 
-const loggedLabels = computed(() => {
-  const map = new Map<string, string>();
+const loggedByKey = computed(() => {
+  const map = new Map<string, MealLog>();
   for (const log of loggedLogs.value) {
-    const label = log.items.map(item => item.foodItem.name).filter(Boolean).join(', ');
-    if (label) map.set(loggedLabelKey(log.logDate, log.mealType), label);
+    if (log.items.length > 0) map.set(loggedLabelKey(log.logDate, log.mealType), log);
   }
   return map;
 });
 
+function getLoggedEntry(date: Date, mealType: MealType): MealLog | undefined {
+  return loggedByKey.value.get(loggedLabelKey(format(date, 'yyyy-MM-dd'), mealType));
+}
+
 function getLoggedLabel(date: Date, mealType: MealType): string | undefined {
-  return loggedLabels.value.get(loggedLabelKey(format(date, 'yyyy-MM-dd'), mealType));
+  const log = getLoggedEntry(date, mealType);
+  return log?.items.map(item => item.foodItem.name).filter(Boolean).join(', ') || undefined;
 }
 
 async function fetchLoggedWeek() {
@@ -274,12 +287,41 @@ const slotError = ref<string | null>(null);
 
 const slotEntry = computed(() => getEntry(slotDate.value, slotMealType.value));
 
+/**
+ * A logged meal with no plan entry has nothing else editable behind it, so its slot opens
+ * the meal-log editor instead of the plan editor. A slot with a plan entry always opens that
+ * one - if both exist, the ✓ marker on the plan entry already says so, and the log itself is
+ * still reachable from the daily log view.
+ */
+const logModalOpen = ref(false);
+const editingLog = ref<MealLog | null>(null);
+
 function openSlot(date: Date, mealType: MealType) {
+  const entry = getEntry(date, mealType);
+  if (!entry) {
+    const log = getLoggedEntry(date, mealType);
+    if (log) {
+      editingLog.value = log;
+      logModalOpen.value = true;
+      return;
+    }
+  }
+
   planStore.clearError();
   slotError.value = null;
   slotDate.value = date;
   slotMealType.value = mealType;
   slotOpen.value = true;
+}
+
+function closeLogModal() {
+  logModalOpen.value = false;
+  editingLog.value = null;
+}
+
+async function onLogSaved() {
+  closeLogModal();
+  await fetchLoggedWeek();
 }
 
 async function handleSaveSlot(payload: MealPlanEntryRequest) {

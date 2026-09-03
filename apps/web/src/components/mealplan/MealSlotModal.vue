@@ -4,8 +4,10 @@ import { format } from 'date-fns';
 import AppButton from '@/components/ui/AppButton.vue';
 import AppModal from '@/components/ui/AppModal.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import AiRecipeThumb from '@/components/recipe/AiRecipeThumb.vue';
+import RecipeDetailModal from '@/components/recipe/RecipeDetailModal.vue';
 import { recipeService } from '@/services/recipeService';
-import { MEAL_TYPE_LABELS, MealType } from '@foodeez/shared';
+import { MEAL_TYPE_LABELS, MealType, isAiRecipeImage } from '@foodeez/shared';
 import type { MealPlanEntry, MealPlanEntryRequest, Recipe } from '@foodeez/shared';
 
 const props = defineProps<{
@@ -32,6 +34,56 @@ const results = ref<Recipe[]>([]);
 const searching = ref(false);
 const validation = ref<string | null>(null);
 
+/**
+ * The recipe this slot is linked to, loaded in full. A meal the assistant planned writes a
+ * whole recipe - method, ingredients, timings - and the point of opening the slot is usually
+ * to read it, so it is fetched here rather than left as a bare name in a text box.
+ */
+const linkedRecipe = ref<Recipe | null>(null);
+const loadingRecipe = ref(false);
+const recipeDetailOpen = ref(false);
+/** Guards against a slower earlier fetch landing over the slot that is open now. */
+let recipeToken = 0;
+
+const isAiThumb = computed(() => isAiRecipeImage(linkedRecipe.value?.imageUrl));
+
+const totalTime = computed(() => {
+  const recipe = linkedRecipe.value;
+  if (!recipe) return 0;
+  return recipe.prepTimeMinutes + recipe.cookTimeMinutes;
+});
+
+const recipeMacros = computed(() => {
+  const n = linkedRecipe.value?.nutritionalInfoPerServing;
+  if (!n) return [];
+  return [
+    { label: 'kcal', value: Math.round(n.calories) },
+    { label: 'protein', value: `${Math.round(n.protein)}g` },
+    { label: 'carbs', value: `${Math.round(n.carbohydrates)}g` },
+    { label: 'fat', value: `${Math.round(n.fat)}g` },
+  ];
+});
+
+async function loadRecipe(id: string | undefined): Promise<void> {
+  const token = ++recipeToken;
+  if (!id) {
+    linkedRecipe.value = null;
+    loadingRecipe.value = false;
+    return;
+  }
+
+  loadingRecipe.value = true;
+  try {
+    const recipe = await recipeService.getRecipeById(id);
+    if (token === recipeToken) linkedRecipe.value = recipe;
+  } catch {
+    // The slot still edits perfectly well without it, so a failed lookup just means no panel.
+    if (token === recipeToken) linkedRecipe.value = null;
+  } finally {
+    if (token === recipeToken) loadingRecipe.value = false;
+  }
+}
+
 const title = computed(
   () => `${MEAL_TYPE_LABELS[props.mealType]} · ${format(props.date, 'EEE d MMM')}`,
 );
@@ -51,6 +103,8 @@ function reset(): void {
   servings.value = e?.servings ?? 1;
   results.value = [];
   validation.value = null;
+  recipeDetailOpen.value = false;
+  void loadRecipe(e?.recipeId);
 }
 
 // Seeded on open rather than on mount: one dialog serves every slot in the grid.
@@ -62,6 +116,8 @@ let searchToken = 0;
 function onNameInput(): void {
   // The text no longer describes the picked recipe, so the link goes with it.
   recipeId.value = undefined;
+  linkedRecipe.value = null;
+  recipeToken++;
   validation.value = null;
 
   clearTimeout(searchTimer);
@@ -92,10 +148,22 @@ function pick(recipe: Recipe): void {
   name.value = recipe.name;
   recipeId.value = recipe.id;
   results.value = [];
+  // Search results carry no ingredients or steps, so this refetches the whole recipe rather
+  // than showing a panel with the method missing.
+  void loadRecipe(recipe.id);
 }
 
 function close(): void {
   emit('update:modelValue', false);
+}
+
+/**
+ * The detail modal releases the page's scroll lock as it unmounts, but this dialog is still
+ * open behind it and put that lock there - so it goes back on.
+ */
+function closeRecipeDetail(): void {
+  recipeDetailOpen.value = false;
+  if (props.modelValue) document.body.style.overflow = 'hidden';
 }
 
 function submit(): void {
@@ -151,6 +219,66 @@ function submit(): void {
         <p v-else-if="name.trim()" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
           Saved as a written-down meal. Pick a search result to link a recipe instead.
         </p>
+      </div>
+
+      <div v-if="loadingRecipe" class="flex justify-center py-3">
+        <LoadingSpinner size="sm" />
+      </div>
+
+      <!-- The recipe behind this slot. A meal the assistant planned has a full method and
+           ingredient list written for it, and this is where someone goes looking for it. -->
+      <div
+        v-else-if="linkedRecipe"
+        class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700"
+      >
+        <div class="flex gap-3 p-3">
+          <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+            <AiRecipeThumb v-if="isAiThumb" compact />
+            <img
+              v-else-if="linkedRecipe.imageUrl"
+              :src="linkedRecipe.imageUrl"
+              alt=""
+              class="h-full w-full object-cover"
+            />
+          </div>
+
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {{ linkedRecipe.name }}
+            </p>
+            <p
+              v-if="linkedRecipe.description"
+              class="mt-0.5 line-clamp-2 text-xs text-gray-500 dark:text-gray-400"
+            >
+              {{ linkedRecipe.description }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400">
+              <span v-if="totalTime > 0">{{ totalTime }} min &middot; </span>
+              <span>serves {{ linkedRecipe.servings }}</span>
+              <span v-if="linkedRecipe.ingredients.length > 0">
+                &middot; {{ linkedRecipe.ingredients.length }} ingredients
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div
+          v-if="recipeMacros.length > 0"
+          class="grid grid-cols-4 gap-1 border-t border-gray-100 px-3 py-2 text-center dark:border-gray-800"
+        >
+          <div v-for="macro in recipeMacros" :key="macro.label">
+            <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ macro.value }}</p>
+            <p class="text-[10px] uppercase tracking-wide text-gray-400">{{ macro.label }}</p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="w-full border-t border-gray-100 py-2 text-sm font-semibold text-green-700 transition-colors hover:bg-green-50 dark:border-gray-800 dark:text-green-400 dark:hover:bg-green-950/30"
+          @click="recipeDetailOpen = true"
+        >
+          View full recipe
+        </button>
       </div>
 
       <div v-if="searching" class="flex justify-center py-3">
@@ -225,4 +353,11 @@ function submit(): void {
       </div>
     </template>
   </AppModal>
+
+  <!-- Sits outside AppModal so it is not clipped by the dialog it was opened from. -->
+  <RecipeDetailModal
+    v-if="recipeDetailOpen && linkedRecipe"
+    :recipe="linkedRecipe"
+    @close="closeRecipeDetail"
+  />
 </template>

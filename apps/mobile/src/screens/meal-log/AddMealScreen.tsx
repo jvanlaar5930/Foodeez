@@ -299,7 +299,10 @@ export function AddMealScreen({ navigation, route }: Props) {
 
     const payload = {
       userId: user.id,
-      logDate: selectedDate,
+      // Editing keeps the log's own date - `selectedDate` is the Meal Log tab's separately
+      // selected day, which is the wrong date whenever this screen was reached from
+      // somewhere else (the calendar, in particular) showing a different day entirely.
+      logDate: editingMealLog?.logDate ?? selectedDate,
       mealType: selectedMealType,
       items: selectedItems.map((selectedItem) => ({
         foodItemId: selectedItem.foodItem.id,

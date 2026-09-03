@@ -15,7 +15,7 @@ export type AuthStackParamList = {
 
 export type MainTabParamList = {
   Dashboard: undefined;
-  MealLog: undefined;
+  MealLog: NavigatorScreenParams<MealLogStackParamList> | undefined;
   MealPlan: undefined;
   Grocery: undefined;
   Advice: undefined;
