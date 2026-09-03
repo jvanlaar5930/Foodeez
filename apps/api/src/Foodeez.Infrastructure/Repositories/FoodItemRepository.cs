@@ -25,6 +25,18 @@ public class FoodItemRepository : BaseRepository<FoodItem>, IFoodItemRepository
             .FirstOrDefaultAsync(f => f.Barcode == barcode);
     }
 
+    public async Task<FoodItem?> FindCustomByNameAsync(Guid userId, string name, string servingUnit)
+    {
+        var loweredName = name.Trim().ToLowerInvariant();
+        var loweredUnit = servingUnit.Trim().ToLowerInvariant();
+
+        return await _dbSet.FirstOrDefaultAsync(f =>
+            f.IsCustom &&
+            f.CreatedByUserId == userId &&
+            f.Name.ToLower() == loweredName &&
+            f.ServingUnit.ToLower() == loweredUnit);
+    }
+
     public async Task<IReadOnlyList<FoodItem>> GetByFdcIdsAsync(IEnumerable<int> fdcIds)
     {
         var ids = fdcIds.ToList();

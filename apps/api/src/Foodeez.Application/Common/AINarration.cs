@@ -62,4 +62,15 @@ public static class AINarration
             }
         }
     }
+
+    /// <summary>
+    /// The exclusion line shared by every prompt that suggests food. Worded as a hard
+    /// constraint rather than a preference: some of these are allergies.
+    /// </summary>
+    internal static string ExclusionLine(IReadOnlyCollection<string> excludedFoods) =>
+        excludedFoods.Count == 0
+            ? string.Empty
+            : $"This person cannot eat: {string.Join(", ", excludedFoods)}. " +
+              "These are allergies, intolerances or firm dislikes - never suggest them, or any " +
+              "dish that normally contains them, and do not suggest substitutes made from them.";
 }

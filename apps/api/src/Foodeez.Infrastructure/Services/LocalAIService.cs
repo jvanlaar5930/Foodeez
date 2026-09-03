@@ -31,7 +31,6 @@ public class LocalAIService : IAIService, IStreamingAIService
     private const string DefaultBaseUrl = "http://localhost:1234/v1";   // LM Studio's default
     private const string DefaultModel = "local-model";
     private const int DefaultTimeoutSeconds = 300;
-    private const int MaxTokens = 4096;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -92,6 +91,21 @@ public class LocalAIService : IAIService, IStreamingAIService
         return TimeSpan.FromSeconds(seconds);
     }
 
+    /// <summary>
+    /// How much a loaded model can actually produce in one response is not something we can
+    /// learn from an OpenAI-compatible server - "/v1/models" does not carry it, and the model
+    /// picked in LM Studio's UI never reaches this app at all. Rather than guess a number and
+    /// risk it being too small for whatever is loaded (silently truncating a large plan, same
+    /// as the bug this replaced) or rejected as too large for a small one, this is left unset
+    /// unless an admin explicitly configures it - the server then falls back to its own
+    /// per-model default.
+    /// </summary>
+    private async Task<int?> MaxTokensAsync()
+    {
+        var raw = await ResolveAsync("local.maxTokens", "LocalAI:MaxTokens");
+        return int.TryParse(raw, out var parsed) && parsed > 0 ? parsed : null;
+    }
+
     // ────────────────────────── Transport ──────────────────────────
 
     private Task<string> SendAsync(string prompt, CancellationToken ct) =>
@@ -105,12 +119,12 @@ public class LocalAIService : IAIService, IStreamingAIService
         var model = await ResolveAsync("local.model", "LocalAI:Model") ?? DefaultModel;
         var apiKey = await ResolveAsync("local.apiKey", "LocalAI:ApiKey");
 
-        var body = new
+        var body = new Dictionary<string, object?>
         {
-            model,
-            max_tokens = MaxTokens,
-            stream = false,
-            messages
+            ["model"] = model,
+            ["max_tokens"] = await MaxTokensAsync(),
+            ["stream"] = false,
+            ["messages"] = messages
         };
 
         var request = new HttpRequestMessage(HttpMethod.Post, BuildChatCompletionsUrl(baseUrl))
@@ -221,20 +235,17 @@ public class LocalAIService : IAIService, IStreamingAIService
         }
     }
 
-    public async Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+    public async Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
-        var unknownFood = new ParsedFoodDto
-        {
-            Name = "Unknown Food", ServingSize = 100, ServingUnit = "g", Confidence = 0f,
-            NutritionalInfo = new NutritionalInfoDto()
-        };
-
         // Sending an image to a text-only model only buys a slow failure, so it is opt-in.
         if (!await SupportsVisionAsync())
         {
             _logger.LogWarning(
                 "Local LLM: image parsing is off. Load a vision model (e.g. a Qwen2-VL or LLaVA build) and set local.supportsVision to true.");
-            return unknownFood;
+            return new ParsedMealDto
+            {
+                Note = "Photos are switched off for the local model. Turn on local.supportsVision, or describe the meal instead."
+            };
         }
 
         var dataUri = $"data:{mimeType ?? "image/jpeg"};base64,{Convert.ToBase64String(imageData)}";
@@ -246,34 +257,14 @@ public class LocalAIService : IAIService, IStreamingAIService
                 content = new object[]
                 {
                     new { type = "image_url", image_url = new { url = dataUri } },
-                    new { type = "text", text = BuildFoodImagePrompt() }
+                    new { type = "text", text = MealParsePrompt.BuildImage() }
                 }
             }
         };
 
         try
         {
-            var text = await SendAsync(messages, ct);
-            return ParseJson(text, r => new ParsedFoodDto
-            {
-                Name = GetString(r, "name") is { Length: > 0 } name ? name : "Unknown Food",
-                Brand = GetString(r, "brand") is { Length: > 0 } brand ? brand : null,
-                ServingSize = GetFloat(r, "servingSize", 100),
-                ServingUnit = GetString(r, "servingUnit") is { Length: > 0 } unit ? unit : "g",
-                Confidence = GetFloat(r, "confidence", 0f),
-                NutritionalInfo = r.TryGetProperty("nutritionalInfo", out var n)
-                    ? new NutritionalInfoDto
-                    {
-                        Calories = GetFloat(n, "calories", 0),
-                        Protein = GetFloat(n, "protein", 0),
-                        Carbohydrates = GetFloat(n, "carbohydrates", 0),
-                        Fat = GetFloat(n, "fat", 0),
-                        Fiber = GetFloat(n, "fiber", 0),
-                        Sugar = GetFloat(n, "sugar", 0),
-                        Sodium = GetFloat(n, "sodium", 0)
-                    }
-                    : new NutritionalInfoDto()
-            }) ?? unknownFood;
+            return MealParsePrompt.Parse(await SendAsync(messages, ct));
         }
         catch (OperationCanceledException)
         {
@@ -283,29 +274,39 @@ public class LocalAIService : IAIService, IStreamingAIService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Local LLM: failed to parse food image.");
-            return unknownFood;
+            _logger.LogError(ex, "Local LLM: failed to read a meal from a photo.");
+            return ParsedMealDto.Unreadable;
+        }
+    }
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+    {
+        try
+        {
+            return MealParsePrompt.Parse(await SendAsync(MealParsePrompt.BuildText(description), ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Local LLM: failed to read a described meal.");
+            return ParsedMealDto.Unreadable;
         }
     }
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Analyze this {request.MealType} meal for nutritional completeness (score 0-100).");
-        foreach (var i in request.Items)
-            sb.AppendLine($"- {i.Amount}{i.Unit} {i.Name}: {Math.Round(i.Calories)} kcal");
-        sb.AppendLine("Respond ONLY with JSON: {\"score\":72,\"completeness\":\"\",\"missing\":[],\"suggestions\":[]}");
-
         try
         {
-            var text = await SendAsync(sb.ToString(), ct);
-            return ParseJson(text, r => new MealAnalysisDto
-            {
-                Score = GetInt(r, "score", 0),
-                Completeness = GetString(r, "completeness"),
-                Missing = GetStringList(r, "missing"),
-                Suggestions = GetStringList(r, "suggestions")
-            }) ?? new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
+            var responseText = await SendAsync(MealAnalysisPrompt.Build(request), ct);
+            var analysis = MealAnalysisPrompt.Parse(responseText);
+            if (analysis != null) return analysis;
+
+            _logger.LogWarning("Local LLM: returned no usable meal analysis.");
         }
         catch (OperationCanceledException)
         {
@@ -316,8 +317,9 @@ public class LocalAIService : IAIService, IStreamingAIService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Local LLM: failed to analyze meal.");
-            return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
         }
+
+        return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
     }
 
     public async Task<DayAnalysisDto> AnalyzeDayAsync(DayAnalysisRequest request, CancellationToken ct = default)
@@ -375,25 +377,6 @@ public class LocalAIService : IAIService, IStreamingAIService
     }
 
     // ────────────────────────── Parsing helpers ──────────────────────────
-
-    private static string BuildFoodImagePrompt() =>
-        @"Analyze this food image and identify the food item(s). Respond ONLY with a valid JSON object (no markdown, no extra text) in this format:
-{
-  ""name"": ""Food Name"",
-  ""brand"": null,
-  ""servingSize"": 100,
-  ""servingUnit"": ""g"",
-  ""confidence"": 0.85,
-  ""nutritionalInfo"": {
-    ""calories"": 250,
-    ""protein"": 10,
-    ""carbohydrates"": 30,
-    ""fat"": 8,
-    ""fiber"": 3,
-    ""sugar"": 5,
-    ""sodium"": 200
-  }
-}";
 
     private static GeneratedMealPlanDto ParseMealPlan(string text)
     {
@@ -491,12 +474,12 @@ public class LocalAIService : IAIService, IStreamingAIService
         var model = await ResolveAsync("local.model", "LocalAI:Model") ?? DefaultModel;
         var apiKey = await ResolveAsync("local.apiKey", "LocalAI:ApiKey");
 
-        var body = new
+        var body = new Dictionary<string, object?>
         {
-            model,
-            max_tokens = MaxTokens,
-            stream = true,
-            messages = new object[] { new { role = "user", content = prompt } }
+            ["model"] = model,
+            ["max_tokens"] = await MaxTokensAsync(),
+            ["stream"] = true,
+            ["messages"] = new object[] { new { role = "user", content = prompt } }
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildChatCompletionsUrl(baseUrl))

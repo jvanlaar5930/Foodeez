@@ -1,5 +1,6 @@
 import { api } from './api';
-import type { LogMealRequest, MealLogDto, NutritionSummaryDto, ParsedFoodDto } from '@/types';
+import { AI_REQUEST_TIMEOUT } from '@/constants/api';
+import type { LogMealRequest, MealLogDto, NutritionSummaryDto, QuickAddResultDto } from '@/types';
 
 export const mealService = {
   async logMeal(data: LogMealRequest): Promise<MealLogDto> {
@@ -19,6 +20,14 @@ export const mealService = {
     return response.data;
   },
 
+  /** What was actually logged across a date range - used to show logged meals on the calendar. */
+  async getLogsRange(userId: string, startDate: string, endDate: string): Promise<MealLogDto[]> {
+    const response = await api.get<MealLogDto[]>('/meal-logs/range', {
+      params: { userId, startDate, endDate },
+    });
+    return response.data;
+  },
+
   async getNutritionSummary(userId: string, date: string): Promise<NutritionSummaryDto> {
     const response = await api.get<NutritionSummaryDto>('/meal-logs/nutrition-summary', {
       params: { userId, date },
@@ -30,7 +39,26 @@ export const mealService = {
     await api.delete(`/meal-logs/${mealLogId}`);
   },
 
-  async parseFoodImage(imageUri: string): Promise<ParsedFoodDto[]> {
+  /**
+   * Break a described meal into its separate foods. Nothing is logged: the items come back
+   * for the user to look over, and each says whether its numbers came from the food database
+   * or from the model.
+   */
+  async quickAdd(userId: string, description: string): Promise<QuickAddResultDto> {
+    // This is one blocking AI call, not the streamed kind - and a self-hosted model can
+    // take well past the app's ordinary 30s timeout to answer. The default cut the request
+    // off while the model was still working, so the reader saw a generic failure for a
+    // request that was actually succeeding server-side.
+    const response = await api.post<QuickAddResultDto>(
+      '/meal-logs/quick-add',
+      { userId, description },
+      { timeout: AI_REQUEST_TIMEOUT },
+    );
+    return response.data;
+  },
+
+  /** The same, from a photograph of the plate. */
+  async parseFoodImage(imageUri: string): Promise<QuickAddResultDto> {
     const formData = new FormData();
     const filename = imageUri.split('/').pop() ?? 'photo.jpg';
     const match = /\.(\w+)$/.exec(filename);
@@ -45,17 +73,20 @@ export const mealService = {
       } as unknown as Blob,
     );
 
-    const response = await api.post<ParsedFoodDto[]>('/meal-logs/parse-image', formData, {
+    const response = await api.post<QuickAddResultDto>('/meal-logs/parse-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: AI_REQUEST_TIMEOUT,
     });
     return response.data;
   },
 };
 
 export const {
+  quickAdd,
   logMeal,
   updateMealLog,
   getDailyLogs,
+  getLogsRange,
   getNutritionSummary,
   deleteMealLog,
   parseFoodImage,

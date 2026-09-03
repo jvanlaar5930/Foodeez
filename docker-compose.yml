@@ -1,0 +1,51 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-foodeez}
+      MYSQL_USER: ${MYSQL_USER:-foodeez}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Default: "Server=mysql;Database=${MYSQL_DATABASE:-foodeez};User=${MYSQL_USER:-foodeez};Password=${MYSQL_PASSWORD};Port=3306"
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: Foodeez
+      Jwt__Audience: FoodeezApp
+      Claude__ApiKey: ${CLAUDE_API_KEY:-}
+      Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      Spoonacular__ApiKey: ${SPOONACULAR_API_KEY:-}
+      FoodData__ApiKey: ${FOODDATA_API_KEY:-}
+      Gemini__ApiKey: ${GEMINI_API_KEY:-}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose:
+      - "5000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  mysql-data:

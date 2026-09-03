@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,7 +24,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
 import { useAuthStore } from '@/store/authStore';
-import { MealPlanEntryDto, MealType } from '@/types';
+import { mealService } from '@/services/mealService';
+import { MealLogDto, MealPlanEntryDto, MealType } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -62,15 +64,41 @@ export function MealPlanScreen({ navigation }: Props) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  /** Free text for the next generation. Held here so a failed attempt can be retried as asked. */
+  const [guidance, setGuidance] = useState('');
 
   const { user } = useAuthStore();
   const { plans, activePlan, isLoading, isGenerating, fetchPlans, generatePlan } = useMealPlanStore();
+  // What was actually logged for the visible week, shown read-only alongside what was
+  // planned - a display-only overlay, so a failed fetch just leaves the grid unannotated.
+  const [loggedLogs, setLoggedLogs] = useState<MealLogDto[]>([]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   useEffect(() => {
     if (user?.id) fetchPlans(user.id);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    mealService
+      .getLogsRange(user.id, format(weekStart, 'yyyy-MM-dd'), format(addDays(weekStart, 6), 'yyyy-MM-dd'))
+      .then((logs) => { if (!cancelled) setLoggedLogs(logs); })
+      .catch(() => { if (!cancelled) setLoggedLogs([]); });
+    return () => { cancelled = true; };
+  }, [user?.id, weekStart]);
+
+  const getLoggedLabel = useCallback(
+    (date: Date, mealType: MealType): string | undefined => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const log = loggedLogs.find((l) => l.logDate === dateStr && l.mealType === mealType);
+      if (!log) return undefined;
+      const label = log.items.map((item) => item.foodItem.name).filter(Boolean).join(', ');
+      return label.length > 0 ? label : undefined;
+    },
+    [loggedLogs]
+  );
 
   const getEntriesForDay = useCallback(
     (date: Date): MealPlanEntryDto[] => {
@@ -94,6 +122,7 @@ export function MealPlanScreen({ navigation }: Props) {
         userId: user.id,
         startDate: format(weekStart, 'yyyy-MM-dd'),
         endDate: format(addDays(weekStart, 6), 'yyyy-MM-dd'),
+        guidance: guidance.trim() || undefined,
       });
     } catch {
       Alert.alert('Error', 'Failed to generate meal plan. Please try again.');
@@ -101,7 +130,8 @@ export function MealPlanScreen({ navigation }: Props) {
   };
 
   const selectedDayEntries = getEntriesForDay(selectedDay);
-  const hasEntriesThisWeek = weekDays.some(d => getEntriesForDay(d).length > 0);
+  const dayHasLoggedMeal = (date: Date) => loggedLogs.some((l) => l.logDate === format(date, 'yyyy-MM-dd'));
+  const hasEntriesThisWeek = weekDays.some(d => getEntriesForDay(d).length > 0 || dayHasLoggedMeal(d));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -113,16 +143,29 @@ export function MealPlanScreen({ navigation }: Props) {
         <Text style={styles.weekLabel}>
           {format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d, yyyy')}
         </Text>
-        <TouchableOpacity onPress={() => setWeekStart(d => addDays(d, 7))}>
-          <Ionicons name="chevron-forward" size={24} color={C.text} />
-        </TouchableOpacity>
+        {/* Grouped so the header keeps three children and the week label stays centred. */}
+        <View style={styles.weekHeaderRight}>
+          <TouchableOpacity onPress={() => setWeekStart(d => addDays(d, 7))}>
+            <Ionicons name="chevron-forward" size={24} color={C.text} />
+          </TouchableOpacity>
+          {/* Always reachable, not only on an empty week: replanning a week you are part
+              way through is the common case, and the banner below disappears the moment a
+              single meal is planned. */}
+          <TouchableOpacity
+            disabled={isGenerating}
+            onPress={() => setShowGenerateModal(true)}
+            accessibilityLabel="Generate a plan for this week"
+          >
+            <Ionicons name="sparkles" size={22} color={isGenerating ? C.textSecondary : C.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Day pills */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysRow} contentContainerStyle={styles.daysRowContent}>
         {weekDays.map(day => {
           const isSelected = isSameDay(day, selectedDay);
-          const hasMeals = getEntriesForDay(day).length > 0;
+          const hasMeals = getEntriesForDay(day).length > 0 || dayHasLoggedMeal(day);
           return (
             <TouchableOpacity
               key={day.toISOString()}
@@ -161,6 +204,7 @@ export function MealPlanScreen({ navigation }: Props) {
         ) : (
           MEAL_TYPES.map(mealType => {
             const entry = getEntryForDayAndMeal(selectedDay, mealType);
+            const loggedLabel = entry ? undefined : getLoggedLabel(selectedDay, mealType);
             return (
               <TouchableOpacity
                 key={mealType}
@@ -171,12 +215,16 @@ export function MealPlanScreen({ navigation }: Props) {
                   <Text style={styles.mealSlotType}>{MEAL_TYPE_LABELS[mealType]}</Text>
                   {entry ? (
                     <Text style={styles.mealSlotName} numberOfLines={2}>{entryLabel(entry)}</Text>
+                  ) : loggedLabel ? (
+                    <Text style={styles.mealSlotLogged} numberOfLines={2}>{loggedLabel} (logged)</Text>
                   ) : (
                     <Text style={styles.mealSlotEmpty}>Not planned</Text>
                   )}
                 </View>
                 {entry ? (
                   <Ionicons name="checkmark-circle" size={22} color={C.primary} />
+                ) : loggedLabel ? (
+                  <Ionicons name="restaurant" size={20} color={C.textSecondary} />
                 ) : (
                   <Ionicons name="add-circle-outline" size={22} color={C.textSecondary} />
                 )}
@@ -195,7 +243,7 @@ export function MealPlanScreen({ navigation }: Props) {
             </Text>
             <TouchableOpacity style={styles.generateButton} onPress={() => setShowGenerateModal(true)}>
               <Ionicons name="sparkles" size={18} color={C.surface} />
-              <Text style={styles.generateButtonText}>Generate AI Meal Plan</Text>
+              <Text style={styles.generateButtonText}>Generate Plan</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -214,12 +262,29 @@ export function MealPlanScreen({ navigation }: Props) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Ionicons name="sparkles" size={40} color={C.secondary} />
-            <Text style={styles.modalTitle}>Generate AI Meal Plan</Text>
+            <Text style={styles.modalTitle}>Generate Plan</Text>
             <Text style={styles.modalText}>
-              AI will create a complete meal plan for the week of{' '}
-              {format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d')}{' '}
-              based on your nutritional goals.
+              A full week for {format(weekStart, 'MMM d')} –{' '}
+              {format(addDays(weekStart, 6), 'MMM d')}, built around your targets and the
+              foods you avoid.
             </Text>
+
+            <Text style={styles.modalLabel}>Anything specific? (optional)</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={guidance}
+              onChangeText={setGuidance}
+              placeholder="e.g. more variety in the dinners, and reuse last week's breakfasts"
+              placeholderTextColor={C.textSecondary}
+              multiline
+              numberOfLines={3}
+              maxLength={1000}
+              textAlignVertical="top"
+            />
+            <Text style={styles.modalHint}>
+              Mention last week and the plan you already have is used as the reference.
+            </Text>
+
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancel} onPress={() => setShowGenerateModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
@@ -237,6 +302,7 @@ export function MealPlanScreen({ navigation }: Props) {
 
 const makeStyles = (C: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
+  weekHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   weekHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -293,6 +359,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   mealSlotType: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
   mealSlotName: { fontSize: FontSize.md, color: C.text, fontWeight: FontWeight.semibold, marginTop: 2 },
   mealSlotEmpty: { fontSize: FontSize.md, color: C.textHint, fontStyle: 'italic', marginTop: 2 },
+  mealSlotLogged: { fontSize: FontSize.md, color: C.textSecondary, fontStyle: 'italic', marginTop: 2 },
   generateBanner: {
     backgroundColor: C.surface,
     borderRadius: BorderRadius.xl,
@@ -324,6 +391,32 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   modalContent: { backgroundColor: C.surface, borderRadius: BorderRadius.xl, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md, width: '100%' },
   modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: C.text },
   modalText: { fontSize: FontSize.md, color: C.textSecondary, textAlign: 'center', lineHeight: 22 },
+  modalLabel: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.md,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: C.text,
+  },
+  modalInput: {
+    width: '100%',
+    marginTop: Spacing.xs,
+    minHeight: 72,
+    borderWidth: 1,
+    borderColor: C.divider,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    fontSize: FontSize.sm,
+    color: C.text,
+    backgroundColor: C.background,
+  },
+  modalHint: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    fontSize: FontSize.xs,
+    color: C.textSecondary,
+  },
   modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm, width: '100%' },
   modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
   modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },

@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { MealType, MEAL_TYPE_LABELS } from '@foodeez/shared';
 import type { MealLog, MealLogItem, NutritionalInfo } from '@foodeez/shared';
 import FoodItemRow from './FoodItemRow.vue';
+import MealAnalysisBadge from './MealAnalysisBadge.vue';
 
 interface Props {
   mealLog: MealLog;
@@ -37,6 +38,13 @@ const mealIcons: Record<MealType, string> = {
         <span class="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
           {{ items.length }} item{{ items.length !== 1 ? 's' : '' }}
         </span>
+        <!-- Only for a meal that already has an analysis stored: this reads what is on file
+             and never spends an AI call, so it is safe to show on every row. -->
+        <MealAnalysisBadge
+          v-if="mealLog.analysis"
+          :analysis="mealLog.analysis"
+          :meal-type="mealType"
+        />
       </div>
       <div class="flex items-center gap-3">
         <span class="text-sm font-semibold text-green-700 dark:text-green-400">

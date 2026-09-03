@@ -38,3 +38,11 @@ function resolveApiUrl(): string {
 }
 
 export const API_URL = resolveApiUrl();
+
+/**
+ * Timeout for a request that makes one blocking (non-streamed) AI call - quick-add, photo
+ * parsing, nutrition estimates. The app's ordinary requests use a much shorter timeout, but
+ * these wait on a model that may be self-hosted and slow, and cutting the request off before
+ * it answers discards a response the server was about to deliver.
+ */
+export const AI_REQUEST_TIMEOUT = 120000;

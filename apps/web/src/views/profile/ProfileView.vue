@@ -47,6 +47,31 @@
             </div>
           </div>
 
+          <!-- Foods to avoid -->
+          <div v-if="profile" class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+            <h3 class="font-bold text-gray-900 dark:text-gray-100 mb-1">Foods to Avoid</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              Kept out of every AI meal plan and suggestion.
+            </p>
+            <div v-if="profile.excludedFoods?.length" class="flex flex-wrap gap-1.5">
+              <span
+                v-for="food in profile.excludedFoods"
+                :key="food"
+                class="rounded-full bg-red-100 px-2.5 py-1 text-sm font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300"
+              >
+                {{ food }}
+              </span>
+            </div>
+            <button
+              v-else
+              type="button"
+              class="text-sm font-semibold text-green-700 hover:underline dark:text-green-400"
+              @click="isEditing = true"
+            >
+              Add foods you cannot or would rather not eat
+            </button>
+          </div>
+
           <!-- Daily targets -->
           <div v-if="profile" class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
             <h3 class="font-bold text-gray-900 dark:text-gray-100 mb-4">Daily Nutrition Targets</h3>
@@ -91,25 +116,15 @@
                   <p class="text-sm font-medium text-gray-900 dark:text-gray-100">Weekly Weight Check-in</p>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Remind me to log my weight</p>
                 </div>
-                <button @click="weightReminder = !weightReminder"
-                  class="relative w-11 h-6 rounded-full transition-colors"
-                  :class="weightReminder ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'">
-                  <span class="absolute top-0.5 w-5 h-5 bg-white dark:bg-gray-900 rounded-full shadow transition-transform"
-                    :class="weightReminder ? 'translate-x-5' : 'translate-x-0.5'" />
-                </button>
+                <AppToggle v-model="weightReminder" label="Weekly weight check-in reminders" />
               </div>
-              <div class="border-t" />
+              <div class="border-t border-gray-100 dark:border-gray-800" />
               <div class="flex items-center justify-between py-2">
                 <div>
                   <p class="text-sm font-medium text-gray-900 dark:text-gray-100">Meal Tracking Reminders</p>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Alert me if I haven't logged meals</p>
                 </div>
-                <button @click="trackingReminder = !trackingReminder"
-                  class="relative w-11 h-6 rounded-full transition-colors"
-                  :class="trackingReminder ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'">
-                  <span class="absolute top-0.5 w-5 h-5 bg-white dark:bg-gray-900 rounded-full shadow transition-transform"
-                    :class="trackingReminder ? 'translate-x-5' : 'translate-x-0.5'" />
-                </button>
+                <AppToggle v-model="trackingReminder" label="Meal tracking reminders" />
               </div>
             </div>
           </div>
@@ -129,6 +144,7 @@
 
 <script setup lang="ts">
 import ProfileEditModal from '@/components/profile/ProfileEditModal.vue';
+import AppToggle from '@/components/ui/AppToggle.vue';
 import { ref, computed, onMounted } from 'vue';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import { useAuthStore } from '@/stores/auth';

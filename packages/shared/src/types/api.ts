@@ -30,6 +30,8 @@ export interface UpdateProfileRequest {
   activityLevel: ActivityLevel;
   dietaryGoal: DietaryGoal;
   notes?: string;
+  /** Foods the AI must never suggest. Replaces the stored list wholesale. */
+  excludedFoods?: string[];
   darkMode?: boolean;
   unitSystem?: UnitSystem;
 }
@@ -63,6 +65,27 @@ export interface GenerateMealPlanRequest {
   endDate: string;
   preferenceTags?: string[];
   excludeIngredients?: string[];
+  /**
+   * Free text for this one generation - "more variety in the dinners", "reuse last week's
+   * breakfasts". Steers the plan without becoming a saved preference. When it is given the
+   * server also shows the model the previous period, so an instruction that refers back to
+   * last week has a real week to work from.
+   */
+  guidance?: string;
+}
+
+/**
+ * One meal in one calendar slot. `notes` is how a meal with no recipe behind it gets its
+ * name - the same field AI-generated meals use - so a slot needs a recipe, a food item or
+ * notes, and the API rejects a request carrying none of the three.
+ */
+export interface MealPlanEntryRequest {
+  entryDate: string;
+  mealType: MealType;
+  recipeId?: string;
+  foodItemId?: string;
+  notes?: string;
+  servings: number;
 }
 
 // AI

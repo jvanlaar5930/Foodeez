@@ -8,6 +8,8 @@ interface Props {
   date: Date;
   mealType: MealType;
   entry?: MealPlanEntry;
+  /** What was actually logged for this slot, if anything - read-only, from the Meal Log. */
+  loggedLabel?: string;
 }
 
 const props = defineProps<Props>();
@@ -32,17 +34,23 @@ const mealColors: Record<MealType, string> = {
 
 <template>
   <button
-    :title="displayName ?? `Add ${MEAL_TYPE_LABELS[mealType]}`"
+    :title="displayName ?? loggedLabel ?? `Add ${MEAL_TYPE_LABELS[mealType]}`"
     :class="[
       'w-full h-full min-h-[3rem] p-1 rounded-md text-left transition-colors text-xs',
       entry
         ? `${mealColors[mealType] ?? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700'} border`
-        : 'text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-500 dark:hover:text-gray-400',
+        : loggedLabel
+          ? 'border border-dashed border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+          : 'text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-500 dark:hover:text-gray-400',
     ]"
     @click="emit('click')"
   >
     <span v-if="displayName" class="line-clamp-2 font-medium leading-snug">
       {{ displayName }}
+      <span v-if="loggedLabel" title="Also logged as eaten">✓</span>
+    </span>
+    <span v-else-if="loggedLabel" class="line-clamp-2 italic leading-snug">
+      {{ loggedLabel }}
     </span>
     <span v-else class="flex items-center justify-center h-full opacity-0 hover:opacity-100 transition-opacity">
       +

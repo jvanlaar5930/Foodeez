@@ -7,10 +7,13 @@ using Foodeez.Domain.Entities;
 namespace Foodeez.Application.Common;
 
 /// <summary>
-/// Identifies the contents of a meal so a stored AI analysis can be recognised as still
-/// current. Anything the analysis is derived from - the meal type and each item's food,
-/// quantity and unit - goes into the hash, so an edit to the meal invalidates its score
-/// while re-opening an untouched meal reuses it.
+/// Identifies what an AI analysis was made for, so a stored one can be recognised as still
+/// current. Everything the analysis was derived from goes into the hash - the meal itself,
+/// the targets it is judged against, and the foods the person avoids - so any of them
+/// changing retires the stored score, while re-opening an untouched meal reuses it.
+///
+/// The exclusions matter most: a suggestion written before someone recorded a peanut allergy
+/// must not go on being served afterwards.
 /// </summary>
 public static class MealAnalysisFingerprint
 {
@@ -18,11 +21,17 @@ public static class MealAnalysisFingerprint
     /// Identifies a whole day: every meal on it plus the targets it is judged against, so
     /// logging a meal or changing a calorie goal retires the day's stored analysis.
     /// </summary>
-    public static string ForDay(DateOnly date, IEnumerable<MealLog> logs, NutritionSummaryDto summary)
+    public static string ForDay(
+        DateOnly date,
+        IEnumerable<MealLog> logs,
+        NutritionSummaryDto summary,
+        IEnumerable<string> excludedFoods)
     {
         var canonical = new StringBuilder(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
-        foreach (var mealFingerprint in logs.Select(For).OrderBy(f => f, StringComparer.Ordinal))
+        foreach (var mealFingerprint in logs
+                     .Select(log => For(log, excludedFoods))
+                     .OrderBy(f => f, StringComparer.Ordinal))
         {
             canonical.Append('|').Append(mealFingerprint);
         }
@@ -36,7 +45,7 @@ public static class MealAnalysisFingerprint
         return Hash(canonical.ToString());
     }
 
-    public static string For(MealLog mealLog)
+    public static string For(MealLog mealLog, IEnumerable<string> excludedFoods)
     {
         var canonical = new StringBuilder(mealLog.MealType.ToString());
 
@@ -54,6 +63,14 @@ public static class MealAnalysisFingerprint
                 .Append(quantity.ToString("R", CultureInfo.InvariantCulture))
                 .Append(':')
                 .Append(unit);
+        }
+
+        canonical.Append("|avoids:");
+        foreach (var food in excludedFoods
+                     .Select(food => food.Trim().ToLowerInvariant())
+                     .OrderBy(food => food, StringComparer.Ordinal))
+        {
+            canonical.Append(food).Append(';');
         }
 
         return Hash(canonical.ToString());

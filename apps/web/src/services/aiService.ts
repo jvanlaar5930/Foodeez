@@ -22,11 +22,14 @@ export const aiService = {
    * writes it, and the finished analysis is returned at the end for saving with the meal.
    */
   async analyzeMealStream(
+    userId: string,
     mealType: string,
     items: MealAnalysisItem[],
     onDelta: (text: string) => void,
   ): Promise<MealAnalysisResult> {
-    return streamAI<MealAnalysisResult>('/ai/analyze-meal/stream', { body: { mealType, items } }, onDelta);
+    // userId, not the exclusions themselves: the server reads those from the profile, so a
+    // stale client cannot analyse around someone's allergy.
+    return streamAI<MealAnalysisResult>('/ai/analyze-meal/stream', { body: { userId, mealType, items } }, onDelta);
   },
 
   /**

@@ -1,6 +1,12 @@
 import { streamAI } from './aiStream';
 import api from './api';
-import type { CreateMealPlanRequest, GenerateMealPlanRequest, MealPlan } from '@foodeez/shared';
+import type {
+  CreateMealPlanRequest,
+  GenerateMealPlanRequest,
+  MealPlan,
+  MealPlanEntry,
+  MealPlanEntryRequest,
+} from '@foodeez/shared';
 
 export const mealPlanService = {
   async getMealPlans(userId: string): Promise<MealPlan[]> {
@@ -46,5 +52,27 @@ export const mealPlanService = {
 
   async deleteMealPlan(planId: string): Promise<void> {
     await api.delete(`/meal-plans/${planId}`);
+  },
+
+  /** Fills one slot. The API replaces whatever was already in it, so this is also a move. */
+  async addEntry(planId: string, entry: MealPlanEntryRequest): Promise<MealPlanEntry> {
+    const response = await api.post<MealPlanEntry>(`/meal-plans/${planId}/entries`, entry);
+    return response.data;
+  },
+
+  async updateEntry(
+    planId: string,
+    entryId: string,
+    entry: MealPlanEntryRequest,
+  ): Promise<MealPlanEntry> {
+    const response = await api.put<MealPlanEntry>(
+      `/meal-plans/${planId}/entries/${entryId}`,
+      entry,
+    );
+    return response.data;
+  },
+
+  async deleteEntry(planId: string, entryId: string): Promise<void> {
+    await api.delete(`/meal-plans/${planId}/entries/${entryId}`);
   },
 };

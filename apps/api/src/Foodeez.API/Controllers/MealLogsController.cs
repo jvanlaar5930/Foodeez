@@ -14,8 +14,10 @@ namespace Foodeez.API.Controllers;
 public class MealLogsController : ControllerBase
 {
     private readonly LogMealUseCase _logMealUseCase;
-    private readonly ParseFoodImageUseCase _parseFoodImageUseCase;
+    private readonly ParseMealImageUseCase _parseMealImageUseCase;
+    private readonly QuickAddMealUseCase _quickAddMealUseCase;
     private readonly GetDailyLogsUseCase _getDailyLogsUseCase;
+    private readonly GetMealLogsRangeUseCase _getMealLogsRangeUseCase;
     private readonly GetNutritionSummaryUseCase _getNutritionSummaryUseCase;
     private readonly UpdateMealLogUseCase _updateMealLogUseCase;
     private readonly DeleteMealLogUseCase _deleteMealLogUseCase;
@@ -24,8 +26,10 @@ public class MealLogsController : ControllerBase
 
     public MealLogsController(
         LogMealUseCase logMealUseCase,
-        ParseFoodImageUseCase parseFoodImageUseCase,
+        ParseMealImageUseCase parseMealImageUseCase,
+        QuickAddMealUseCase quickAddMealUseCase,
         GetDailyLogsUseCase getDailyLogsUseCase,
+        GetMealLogsRangeUseCase getMealLogsRangeUseCase,
         GetNutritionSummaryUseCase getNutritionSummaryUseCase,
         UpdateMealLogUseCase updateMealLogUseCase,
         DeleteMealLogUseCase deleteMealLogUseCase,
@@ -33,8 +37,10 @@ public class MealLogsController : ControllerBase
         AnalyzeDayUseCase analyzeDayUseCase)
     {
         _logMealUseCase = logMealUseCase;
-        _parseFoodImageUseCase = parseFoodImageUseCase;
+        _parseMealImageUseCase = parseMealImageUseCase;
+        _quickAddMealUseCase = quickAddMealUseCase;
         _getDailyLogsUseCase = getDailyLogsUseCase;
+        _getMealLogsRangeUseCase = getMealLogsRangeUseCase;
         _getNutritionSummaryUseCase = getNutritionSummaryUseCase;
         _updateMealLogUseCase = updateMealLogUseCase;
         _deleteMealLogUseCase = deleteMealLogUseCase;
@@ -101,21 +107,55 @@ public class MealLogsController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Parse a food image using AI to extract nutritional information.</summary>
+    /// <summary>
+    /// Read a meal out of a description - "turkey sandwich on rye with mayo, and an apple" -
+    /// as the separate foods it is made of, matched to the food database where possible.
+    ///
+    /// Nothing is logged: the items come back for the user to look over and save themselves.
+    /// A description that exactly names one of their saved meals is answered from it, with no
+    /// AI call at all.
+    /// </summary>
+    [HttpPost("quick-add")]
+    [ProducesResponseType(typeof(QuickAddResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> QuickAdd([FromBody] QuickAddRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Description))
+            return BadRequest(new { message = "Describe the meal first." });
+
+        var userId = CurrentUser.IdOf(User);
+        if (userId is null)
+            return Unauthorized();
+
+        // The body carries a userId for symmetry with the rest of this controller, but the
+        // foods created along the way are filed against the token's user, never the body's.
+        request.UserId = userId.Value;
+
+        return Ok(await _quickAddMealUseCase.ExecuteAsync(request, ct));
+    }
+
+    /// <summary>
+    /// Read a meal out of a photograph, as the separate foods on the plate. Same result shape
+    /// as quick add, and the same rule: nothing is logged until the user saves it.
+    /// </summary>
     [HttpPost("parse-image")]
-    [ProducesResponseType(typeof(ParsedFoodDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(QuickAddResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ParseFoodImage(IFormFile image, CancellationToken ct)
     {
         if (image == null || image.Length == 0)
             return BadRequest("No image file provided.");
 
+        var userId = CurrentUser.IdOf(User);
+        if (userId is null)
+            return Unauthorized();
+
         using var ms = new MemoryStream();
         await image.CopyToAsync(ms, ct);
         var imageData = ms.ToArray();
         var mimeType = image.ContentType;
 
-        var result = await _parseFoodImageUseCase.ExecuteAsync(imageData, mimeType, ct);
+        var result = await _parseMealImageUseCase.ExecuteAsync(userId.Value, imageData, mimeType, ct);
         return Ok(result);
     }
 
@@ -128,6 +168,22 @@ public class MealLogsController : ControllerBase
             return BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
         var logs = await _getDailyLogsUseCase.ExecuteAsync(userId, parsedDate);
+        return Ok(logs);
+    }
+
+    /// <summary>
+    /// Get all meal logs for a user across a date range - used to show what was actually
+    /// eaten alongside a calendar of what was planned.
+    /// </summary>
+    [HttpGet("range")]
+    [ProducesResponseType(typeof(List<MealLogDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMealLogsRange(
+        [FromQuery] Guid userId, [FromQuery] string startDate, [FromQuery] string endDate)
+    {
+        if (!DateOnly.TryParse(startDate, out var parsedStart) || !DateOnly.TryParse(endDate, out var parsedEnd))
+            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
+
+        var logs = await _getMealLogsRangeUseCase.ExecuteAsync(userId, parsedStart, parsedEnd);
         return Ok(logs);
     }
 

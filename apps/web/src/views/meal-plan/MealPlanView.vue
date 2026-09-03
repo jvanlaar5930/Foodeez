@@ -9,12 +9,12 @@
         </div>
         <div class="flex items-center gap-2">
           <button
-            @click="handleGeneratePlan"
+            @click="openGenerate"
             :disabled="isGenerating"
             class="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-semibold px-4 py-2 rounded-xl transition-colors">
             <span v-if="isGenerating" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             <span v-else>✨</span>
-            {{ isGenerating ? 'Generating...' : 'AI Generate' }}
+            {{ isGenerating ? 'Generating...' : 'Generate Plan' }}
           </button>
           <!-- Generation can take minutes on a self-hosted model, so there has to be a
                way out that actually stops the work rather than just hiding the spinner. -->
@@ -96,6 +96,7 @@
             :date="day"
             :meal-type="mealType.value"
             :entry="getEntry(day, mealType.value)"
+            :logged-label="getLoggedLabel(day, mealType.value)"
             class="border-l"
             @click="openSlot(day, mealType.value)"
           />
@@ -108,20 +109,90 @@
         <p class="font-semibold text-gray-700 dark:text-gray-200">No meals planned this week</p>
         <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Click a slot to add a meal or use AI to generate a full plan</p>
       </div>
+
+      <!-- Generate dialog: the guidance box is optional, so Enter-to-submit and an empty
+           field both just generate. -->
+      <div
+        v-if="generateOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        @click.self="generateOpen = false"
+      >
+        <div class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900">
+          <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100">Generate Plan</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            A full week for {{ format(weekDays[0], 'MMM d') }} &ndash;
+            {{ format(weekDays[6], 'MMM d') }}, built around your targets and the foods you avoid.
+          </p>
+
+          <label for="plan-guidance" class="mt-4 block text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Anything specific? <span class="font-normal text-gray-400">(optional)</span>
+          </label>
+          <textarea
+            id="plan-guidance"
+            v-model="guidance"
+            rows="3"
+            maxlength="1000"
+            placeholder="e.g. more variety in the dinners, and reuse last week's breakfasts and lunches"
+            class="mt-1 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <p class="mt-1 text-xs text-gray-400">
+            Mention last week and the plan you already have is used as the reference.
+          </p>
+
+          <div class="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:border-gray-300 dark:border-gray-700 dark:text-gray-300"
+              @click="generateOpen = false"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+              @click="confirmGenerate"
+            >
+              Generate
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <MealSlotModal
+        v-model="slotOpen"
+        :date="slotDate"
+        :meal-type="slotMealType"
+        :entry="slotEntry"
+        :saving="slotSaving"
+        :error="slotError"
+        @save="handleSaveSlot"
+        @remove="handleRemoveSlot"
+      />
+
+      <AddMealModal
+        v-if="logModalOpen && editingLog"
+        :selected-date="editingLog.logDate"
+        :meal-log="editingLog"
+        @close="closeLogModal"
+        @saved="onLogSaved"
+      />
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import DayMealSlot from '@/components/mealplan/DayMealSlot.vue';
+import MealSlotModal from '@/components/mealplan/MealSlotModal.vue';
+import AddMealModal from '@/components/meal/AddMealModal.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
 import { useAuthStore } from '@/stores/auth';
-import { MealType, type MealPlanEntry } from '@foodeez/shared';
+import { mealService } from '@/services/mealService';
+import { MealType, type MealLog, type MealPlanEntry, type MealPlanEntryRequest } from '@foodeez/shared';
 
 const authStore = useAuthStore();
 const planStore = useMealPlanStore();
@@ -145,22 +216,161 @@ const MEAL_TYPES = [
 function getEntry(date: Date, mealType: MealType): MealPlanEntry | undefined {
   // Grouped by date on the server, so this is a lookup. The `?? []` is load-bearing: a day
   // with no meals has no key at all, and the old `.entries` did not exist on the payload.
+  //
+  // Read from the plan that covers the day rather than the most recent one, or paging back
+  // a week would show an empty grid even where meals exist.
   const dateStr = format(date, 'yyyy-MM-dd');
-  const forDay = planStore.activePlan?.entriesByDate?.[dateStr] ?? [];
+  const forDay = planStore.planCovering(dateStr)?.entriesByDate?.[dateStr] ?? [];
   return forDay.find(e => e.mealType === mealType);
 }
 
+// What was actually logged for the visible week, shown read-only alongside what was
+// planned - keyed by "date|mealType" since a day's logs are fetched as a flat list.
+const loggedLogs = ref<MealLog[]>([]);
+
+function loggedLabelKey(date: string, mealType: MealType) { return `${date}|${mealType}`; }
+
+const loggedByKey = computed(() => {
+  const map = new Map<string, MealLog>();
+  for (const log of loggedLogs.value) {
+    if (log.items.length > 0) map.set(loggedLabelKey(log.logDate, log.mealType), log);
+  }
+  return map;
+});
+
+function getLoggedEntry(date: Date, mealType: MealType): MealLog | undefined {
+  return loggedByKey.value.get(loggedLabelKey(format(date, 'yyyy-MM-dd'), mealType));
+}
+
+function getLoggedLabel(date: Date, mealType: MealType): string | undefined {
+  const log = getLoggedEntry(date, mealType);
+  return log?.items.map(item => item.foodItem.name).filter(Boolean).join(', ') || undefined;
+}
+
+async function fetchLoggedWeek() {
+  if (!authStore.user?.id) return;
+  try {
+    loggedLogs.value = await mealService.getLogsRange(
+      authStore.user.id,
+      format(weekDays.value[0], 'yyyy-MM-dd'),
+      format(weekDays.value[6], 'yyyy-MM-dd'),
+    );
+  } catch {
+    // Purely a display overlay on top of the plan grid - failing to load it should not
+    // block the calendar itself from rendering.
+    loggedLogs.value = [];
+  }
+}
+
 const hasEntriesThisWeek = computed(() =>
-  weekDays.value.some(d => MEAL_TYPES.some(mt => getEntry(d, mt.value) !== undefined))
+  weekDays.value.some(d => MEAL_TYPES.some(mt => getEntry(d, mt.value) !== undefined || getLoggedLabel(d, mt.value) !== undefined))
 );
 
 function prevWeek() { weekStart.value = addDays(weekStart.value, -7); }
 function nextWeek() { weekStart.value = addDays(weekStart.value, 7); }
 function goToCurrentWeek() { weekStart.value = startOfWeek(new Date(), { weekStartsOn: 1 }); }
 
-function openSlot(date: Date, _mealType: MealType) {
-  // TODO: open slot assignment modal
-  console.log('Open slot for', format(date, 'yyyy-MM-dd'), _mealType);
+const generateOpen = ref(false);
+/** Free text for the next generation. Survives the dialog so "Try again" repeats it. */
+const guidance = ref('');
+
+const slotOpen = ref(false);
+const slotDate = ref<Date>(new Date());
+const slotMealType = ref<MealType>(MealType.Breakfast);
+const slotSaving = ref(false);
+/**
+ * Kept apart from the store's `error`, which the page banner owns: that banner offers
+ * "Try again", meaning regenerate the whole plan, which is the wrong response to a slot
+ * that would not save.
+ */
+const slotError = ref<string | null>(null);
+
+const slotEntry = computed(() => getEntry(slotDate.value, slotMealType.value));
+
+/**
+ * A logged meal with no plan entry has nothing else editable behind it, so its slot opens
+ * the meal-log editor instead of the plan editor. A slot with a plan entry always opens that
+ * one - if both exist, the ✓ marker on the plan entry already says so, and the log itself is
+ * still reachable from the daily log view.
+ */
+const logModalOpen = ref(false);
+const editingLog = ref<MealLog | null>(null);
+
+function openSlot(date: Date, mealType: MealType) {
+  const entry = getEntry(date, mealType);
+  if (!entry) {
+    const log = getLoggedEntry(date, mealType);
+    if (log) {
+      editingLog.value = log;
+      logModalOpen.value = true;
+      return;
+    }
+  }
+
+  planStore.clearError();
+  slotError.value = null;
+  slotDate.value = date;
+  slotMealType.value = mealType;
+  slotOpen.value = true;
+}
+
+function closeLogModal() {
+  logModalOpen.value = false;
+  editingLog.value = null;
+}
+
+async function onLogSaved() {
+  closeLogModal();
+  await fetchLoggedWeek();
+}
+
+async function handleSaveSlot(payload: MealPlanEntryRequest) {
+  if (!authStore.user?.id) return;
+  slotSaving.value = true;
+  slotError.value = null;
+  try {
+    // A week you have never generated a plan for has no plan to hang the meal on, so make
+    // one for that week rather than refusing the click.
+    const plan = await planStore.ensurePlanFor(
+      authStore.user.id,
+      format(weekDays.value[0], 'yyyy-MM-dd'),
+      format(weekDays.value[6], 'yyyy-MM-dd'),
+      `Week of ${format(weekDays.value[0], 'MMM d, yyyy')}`,
+    );
+    await planStore.saveEntry(plan.id, slotEntry.value?.id ?? null, payload);
+    slotOpen.value = false;
+  } catch {
+    // Shown in the dialog, which stays open so the typed-in meal is not lost.
+    slotError.value = planStore.error;
+    planStore.clearError();
+  } finally {
+    slotSaving.value = false;
+  }
+}
+
+async function handleRemoveSlot() {
+  const entry = slotEntry.value;
+  if (!entry) return;
+  slotSaving.value = true;
+  slotError.value = null;
+  try {
+    await planStore.removeEntry(entry.mealPlanId, entry.id);
+    slotOpen.value = false;
+  } catch {
+    slotError.value = planStore.error;
+    planStore.clearError();
+  } finally {
+    slotSaving.value = false;
+  }
+}
+
+function openGenerate() {
+  generateOpen.value = true;
+}
+
+function confirmGenerate() {
+  generateOpen.value = false;
+  void handleGeneratePlan();
 }
 
 async function handleGeneratePlan() {
@@ -170,6 +380,9 @@ async function handleGeneratePlan() {
       userId: authStore.user.id,
       startDate: format(weekDays.value[0], 'yyyy-MM-dd'),
       endDate: format(weekDays.value[6], 'yyyy-MM-dd'),
+      // Kept between attempts on purpose: "Try again" after a provider outage should repeat
+      // the request that was made, not quietly drop what was asked for.
+      guidance: guidance.value.trim() || undefined,
     });
   } catch {
     // The store has already put the reason in `error`, which the banner above renders.
@@ -178,7 +391,10 @@ async function handleGeneratePlan() {
   }
 }
 
+watch(weekStart, fetchLoggedWeek);
+
 onMounted(() => {
   if (authStore.user?.id) planStore.fetchPlans(authStore.user.id);
+  fetchLoggedWeek();
 });
 </script>

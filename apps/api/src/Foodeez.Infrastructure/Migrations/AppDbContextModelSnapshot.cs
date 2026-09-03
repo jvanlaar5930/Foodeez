@@ -106,6 +106,79 @@ namespace Foodeez.Infrastructure.Migrations
                     b.ToTable("app_settings", (string)null);
                 });
 
+            modelBuilder.Entity("Foodeez.Domain.Entities.ChatConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("LastMessageAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "LastMessageAt");
+
+                    b.ToTable("chat_conversations", (string)null);
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Recipes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RecipesSavedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Suggestions")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SuggestionsAcceptedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.ToTable("chat_messages", (string)null);
+                });
+
             modelBuilder.Entity("Foodeez.Domain.Entities.DayAnalysis", b =>
                 {
                     b.Property<Guid>("Id")
@@ -210,6 +283,93 @@ namespace Foodeez.Infrastructure.Migrations
                     b.HasIndex("Barcode");
 
                     b.ToTable("food_items", (string)null);
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.GroceryList", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "StartDate", "EndDate")
+                        .IsUnique();
+
+                    b.ToTable("grocery_lists", (string)null);
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.GroceryListItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("GroceryListId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("IsChecked")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("IsCustom")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Quantity")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroceryListId", "SortOrder");
+
+                    b.ToTable("grocery_list_items", (string)null);
                 });
 
             modelBuilder.Entity("Foodeez.Domain.Entities.MealLog", b =>
@@ -358,6 +518,78 @@ namespace Foodeez.Infrastructure.Migrations
                     b.HasIndex("RecipeId");
 
                     b.ToTable("meal_plan_entries", (string)null);
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.MealTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("MealType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<int>("TimesUsed")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("meal_templates", (string)null);
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.MealTemplateItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("MealTemplateId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<float>("Quantity")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FoodItemId");
+
+                    b.HasIndex("MealTemplateId");
+
+                    b.ToTable("meal_template_items", (string)null);
                 });
 
             modelBuilder.Entity("Foodeez.Domain.Entities.Recipe", b =>
@@ -581,6 +813,10 @@ namespace Foodeez.Infrastructure.Migrations
                     b.Property<int>("DietaryGoal")
                         .HasColumnType("int");
 
+                    b.Property<string>("ExcludedFoods")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("Gender")
                         .HasColumnType("int");
 
@@ -615,6 +851,28 @@ namespace Foodeez.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("user_profiles", (string)null);
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.ChatConversation", b =>
+                {
+                    b.HasOne("Foodeez.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.ChatMessage", b =>
+                {
+                    b.HasOne("Foodeez.Domain.Entities.ChatConversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
                 });
 
             modelBuilder.Entity("Foodeez.Domain.Entities.DayAnalysis", b =>
@@ -673,6 +931,28 @@ namespace Foodeez.Infrastructure.Migrations
 
                     b.Navigation("NutritionalInfo")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.GroceryList", b =>
+                {
+                    b.HasOne("Foodeez.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.GroceryListItem", b =>
+                {
+                    b.HasOne("Foodeez.Domain.Entities.GroceryList", "GroceryList")
+                        .WithMany("Items")
+                        .HasForeignKey("GroceryListId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GroceryList");
                 });
 
             modelBuilder.Entity("Foodeez.Domain.Entities.MealLog", b =>
@@ -830,6 +1110,80 @@ namespace Foodeez.Infrastructure.Migrations
                     b.Navigation("Recipe");
                 });
 
+            modelBuilder.Entity("Foodeez.Domain.Entities.MealTemplate", b =>
+                {
+                    b.HasOne("Foodeez.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.MealTemplateItem", b =>
+                {
+                    b.HasOne("Foodeez.Domain.Entities.FoodItem", "FoodItem")
+                        .WithMany()
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Foodeez.Domain.Entities.MealTemplate", "MealTemplate")
+                        .WithMany("Items")
+                        .HasForeignKey("MealTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.OwnsOne("Foodeez.Domain.ValueObjects.NutritionalInfo", "NutritionalInfo", b1 =>
+                        {
+                            b1.Property<Guid>("MealTemplateItemId")
+                                .HasColumnType("char(36)");
+
+                            b1.Property<float>("Calories")
+                                .HasColumnType("float")
+                                .HasColumnName("nutrition_calories");
+
+                            b1.Property<float>("Carbohydrates")
+                                .HasColumnType("float")
+                                .HasColumnName("nutrition_carbohydrates");
+
+                            b1.Property<float>("Fat")
+                                .HasColumnType("float")
+                                .HasColumnName("nutrition_fat");
+
+                            b1.Property<float>("Fiber")
+                                .HasColumnType("float")
+                                .HasColumnName("nutrition_fiber");
+
+                            b1.Property<float>("Protein")
+                                .HasColumnType("float")
+                                .HasColumnName("nutrition_protein");
+
+                            b1.Property<float>("Sodium")
+                                .HasColumnType("float")
+                                .HasColumnName("nutrition_sodium");
+
+                            b1.Property<float>("Sugar")
+                                .HasColumnType("float")
+                                .HasColumnName("nutrition_sugar");
+
+                            b1.HasKey("MealTemplateItemId");
+
+                            b1.ToTable("meal_template_items");
+
+                            b1.WithOwner()
+                                .HasForeignKey("MealTemplateItemId");
+                        });
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("MealTemplate");
+
+                    b.Navigation("NutritionalInfo")
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Foodeez.Domain.Entities.Recipe", b =>
                 {
                     b.OwnsOne("Foodeez.Domain.ValueObjects.NutritionalInfo", "NutritionalInfoPerServing", b1 =>
@@ -925,6 +1279,16 @@ namespace Foodeez.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Foodeez.Domain.Entities.ChatConversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.GroceryList", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("Foodeez.Domain.Entities.MealLog", b =>
                 {
                     b.Navigation("Items");
@@ -933,6 +1297,11 @@ namespace Foodeez.Infrastructure.Migrations
             modelBuilder.Entity("Foodeez.Domain.Entities.MealPlan", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("Foodeez.Domain.Entities.MealTemplate", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Foodeez.Domain.Entities.Recipe", b =>

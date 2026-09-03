@@ -18,6 +18,14 @@ public class UserProfile : BaseEntity
     public float DailyCarbTargetG { get; set; }
     public float DailyFatTargetG { get; set; }
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// Foods this person cannot or will not eat - allergies, intolerances, dislikes. Every
+    /// AI suggestion has to honour these, so they are kept on the profile rather than asked
+    /// for per request.
+    /// </summary>
+    public List<string> ExcludedFoods { get; set; } = new();
+
     public bool ProfileCompleted { get; set; }
     public bool DarkMode { get; set; }
     public UnitSystem UnitSystem { get; set; } = UnitSystem.US;

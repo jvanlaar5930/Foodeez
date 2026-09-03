@@ -16,6 +16,12 @@ public class DayAnalysisRequest
     public NutritionSummaryDto Summary { get; set; } = new();
 
     public List<DayAnalysisMealRequest> Meals { get; set; } = new();
+
+    /// <summary>
+    /// Foods this person cannot or will not eat. Nothing suggested may include them, so they
+    /// are filled in from the profile server-side rather than trusted from the caller.
+    /// </summary>
+    public List<string> ExcludedFoods { get; set; } = new();
 }
 
 public class DayAnalysisMealRequest

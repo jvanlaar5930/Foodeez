@@ -21,6 +21,27 @@ public class MealPlanRepository : BaseRepository<MealPlan>, IMealPlanRepository
             .ToListAsync();
     }
 
+    public async Task AddEntryAsync(MealPlanEntry entry)
+    {
+        await _context.Set<MealPlanEntry>().AddAsync(entry);
+    }
+
+    public void RemoveEntry(MealPlanEntry entry)
+    {
+        _context.Set<MealPlanEntry>().Remove(entry);
+    }
+
+    public async Task<MealPlan?> GetWithEntriesAsync(Guid planId)
+    {
+        return await _dbSet
+            .Where(p => p.Id == planId)
+            .Include(p => p.Entries)
+                .ThenInclude(e => e.Recipe)
+            .Include(p => p.Entries)
+                .ThenInclude(e => e.FoodItem)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<MealPlan?> GetActiveByUserIdAsync(Guid userId, DateOnly today)
     {
         return await _dbSet

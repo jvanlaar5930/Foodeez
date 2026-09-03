@@ -18,7 +18,8 @@ import { RecipesStackParamList } from '@/navigation/types';
 import { recipeService } from '@/services/recipeService';
 import { useSavedRecipeStore } from '@/store/savedRecipeStore';
 import { SavedRecipeDeck } from '@/components/recipe/SavedRecipeDeck';
-import { RecipeDto } from '@/types';
+import { isAiRecipeImage, RecipeDto } from '@/types';
+import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -172,9 +173,11 @@ export function RecipesScreen({ navigation, route }: Props) {
         />
       </TouchableOpacity>
       <View style={styles.recipeImage}>
-        {item.imageUrl
-          ? <Image source={{ uri: item.imageUrl }} style={styles.recipeImagePhoto} resizeMode="cover" />
-          : <Ionicons name="restaurant" size={32} color={C.primary} />
+        {isAiRecipeImage(item.imageUrl)
+          ? <AiRecipeThumb size={26} />
+          : item.imageUrl
+            ? <Image source={{ uri: item.imageUrl }} style={styles.recipeImagePhoto} resizeMode="cover" />
+            : <Ionicons name="restaurant" size={32} color={C.primary} />
         }
       </View>
       <View style={styles.recipeInfo}>
@@ -367,7 +370,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   // Absolute fill sidesteps percentage-height resolution entirely: the image can only ever
   // be as big as the column above.
-  recipeImagePhoto: { ...StyleSheet.absoluteFillObject },
+  recipeImagePhoto: { ...StyleSheet.absoluteFill },
   // Extra room on the right so the save button never sits on top of a long title.
   recipeInfo: { flex: 1, padding: Spacing.md, paddingRight: Spacing.xl + Spacing.sm },
   saveButton: {

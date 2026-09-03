@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json;
+using Foodeez.Application.Common;
 using Foodeez.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -75,6 +76,7 @@ public class ExceptionHandlingMiddleware
         ValidationException        => (StatusCodes.Status400BadRequest,          "Validation Error"),
         ArgumentException          => (StatusCodes.Status400BadRequest,          "Invalid Argument"),
         InvalidOperationException  => (StatusCodes.Status400BadRequest,          "Invalid Operation"),
+        ConcurrencyConflictException => (StatusCodes.Status409Conflict,          "Concurrency Conflict"),
         _                          => (StatusCodes.Status500InternalServerError, "Internal Server Error"),
     };
 }

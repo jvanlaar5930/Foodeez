@@ -6,6 +6,8 @@ using Foodeez.Application.UseCases.Recipes;
 using Foodeez.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Foodeez.Application.UseCases.Auth;
+using Foodeez.Application.UseCases.Chat;
+using Foodeez.Application.UseCases.Grocery;
 using Foodeez.Application.UseCases.MealLogs;
 using Foodeez.Application.UseCases.MealPlans;
 using Foodeez.Application.UseCases.Users;
@@ -15,6 +17,17 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Kestrel ───────────────────────────────────────────────────────────────────
+// Kestrel's default minimum response data rate (240 bytes/sec) aborts a connection that goes
+// quiet for too long - fine for an ordinary response, but an AI stream can sit idle for tens
+// of seconds while the model "thinks" between chunks. That abort looks identical to a client
+// walking away (both surface as the response's CancellationToken firing), so without this a
+// slow model produces a connection that just stops with nothing logged anywhere.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MinResponseDataRate = null;
+});
 
 // ── Infrastructure (DbContext, Repositories, Services) ────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -29,12 +42,25 @@ builder.Services.AddScoped<UpdateMealLogUseCase>();
 builder.Services.AddScoped<DeleteMealLogUseCase>();
 builder.Services.AddScoped<AnalyzeMealLogUseCase>();
 builder.Services.AddScoped<AnalyzeDayUseCase>();
-builder.Services.AddScoped<ParseFoodImageUseCase>();
+builder.Services.AddScoped<ParseMealImageUseCase>();
+builder.Services.AddScoped<QuickAddMealUseCase>();
+builder.Services.AddScoped<MealTemplatesUseCase>();
+builder.Services.AddScoped<ParsedMealResolver>();
 builder.Services.AddScoped<GetDailyLogsUseCase>();
+builder.Services.AddScoped<GetMealLogsRangeUseCase>();
 builder.Services.AddScoped<GetNutritionSummaryUseCase>();
 builder.Services.AddScoped<GetMealPlanUseCase>();
 builder.Services.AddScoped<CreateMealPlanUseCase>();
 builder.Services.AddScoped<GenerateAIMealPlanUseCase>();
+builder.Services.AddScoped<SaveMealPlanEntryUseCase>();
+builder.Services.AddScoped<AddPlannedMealsUseCase>();
+builder.Services.AddScoped<GetConversationsUseCase>();
+builder.Services.AddScoped<SendChatMessageUseCase>();
+builder.Services.AddScoped<AcceptSuggestionsUseCase>();
+builder.Services.AddScoped<SaveChatRecipesUseCase>();
+builder.Services.AddScoped<PlannedMealReader>();
+builder.Services.AddScoped<GenerateGroceryListUseCase>();
+builder.Services.AddScoped<EditGroceryListUseCase>();
 builder.Services.AddScoped<GetDietaryRecommendationsUseCase>();
 builder.Services.AddScoped<AnalyzeMealUseCase>();
 builder.Services.AddScoped<StreamMealAnalysisUseCase>();

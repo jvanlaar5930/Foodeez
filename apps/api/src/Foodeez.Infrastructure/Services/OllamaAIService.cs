@@ -113,33 +113,45 @@ public class OllamaAIService : IAIService, IStreamingAIService
         }
     }
 
-    public Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+    public Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
-        _logger.LogWarning("Ollama text-only model does not support image parsing. Returning default.");
-        return Task.FromResult(new ParsedFoodDto
+        // No items and a reason, not a placeholder food: a made-up "Unknown Food" would be
+        // logged and counted as though someone had really eaten it.
+        _logger.LogWarning("Ollama: asked to read a meal from a photo, which it cannot do.");
+        return Task.FromResult(new ParsedMealDto
         {
-            Name = "Unknown Food", ServingSize = 100, ServingUnit = "g", Confidence = 0f,
-            NutritionalInfo = new NutritionalInfoDto()
+            Note = "Photos need a provider that can see - this Ollama model is text-only. Describe the meal instead."
         });
+    }
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+    {
+        try
+        {
+            return MealParsePrompt.Parse(await SendAsync(MealParsePrompt.BuildText(description), ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ollama: failed to read a described meal.");
+            return ParsedMealDto.Unreadable;
+        }
     }
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
-        var sb = new StringBuilder($"Analyze this {request.MealType} meal (score 0-100):\n");
-        foreach (var i in request.Items)
-            sb.AppendLine($"- {i.Amount}{i.Unit} {i.Name}: {Math.Round(i.Calories)} kcal");
-        sb.AppendLine("Respond ONLY with JSON: {\"score\":72,\"completeness\":\"\",\"missing\":[],\"suggestions\":[]}");
-
         try
         {
-            var text = await SendAsync(sb.ToString(), ct);
-            return ExtractJson(text, r => new MealAnalysisDto
-            {
-                Score = GetInt(r, "score", 0),
-                Completeness = GetStr(r, "completeness"),
-                Missing = GetList(r, "missing"),
-                Suggestions = GetList(r, "suggestions")
-            }) ?? new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
+            var responseText = await SendAsync(MealAnalysisPrompt.Build(request), ct);
+            var analysis = MealAnalysisPrompt.Parse(responseText);
+            if (analysis != null) return analysis;
+
+            _logger.LogWarning("Ollama: returned no usable meal analysis.");
         }
         catch (OperationCanceledException)
         {
@@ -150,8 +162,9 @@ public class OllamaAIService : IAIService, IStreamingAIService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ollama: failed to analyze meal.");
-            return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
         }
+
+        return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
     }
 
     public async Task<DayAnalysisDto> AnalyzeDayAsync(DayAnalysisRequest request, CancellationToken ct = default)

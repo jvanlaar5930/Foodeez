@@ -14,16 +14,20 @@ namespace Foodeez.Application.UseCases.AI;
 public class StreamMealAnalysisUseCase
 {
     private readonly IStreamingAIService _streaming;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public StreamMealAnalysisUseCase(IStreamingAIService streaming)
+    public StreamMealAnalysisUseCase(IStreamingAIService streaming, IUnitOfWork unitOfWork)
     {
         _streaming = streaming;
+        _unitOfWork = unitOfWork;
     }
 
     public async IAsyncEnumerable<AIStreamEvent> ExecuteAsync(
         MealAnalysisRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        await MealExclusions.ApplyAsync(request, _unitOfWork);
+
         var transcript = new StringBuilder();
 
         await foreach (var delta in AINarration.NarrateAsync(_streaming, MealAnalysisPrompt.Build(request), transcript, ct))

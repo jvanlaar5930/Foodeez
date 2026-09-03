@@ -40,7 +40,7 @@ internal static class MealLogRequestApplier
             });
         }
 
-        ApplyAnalysis(mealLog, request);
+        await ApplyAnalysisAsync(mealLog, request, unitOfWork);
     }
 
     /// <summary>
@@ -48,9 +48,11 @@ internal static class MealLogRequestApplier
     /// the items just applied and is kept, and an older one survives only while the meal it
     /// was generated from is unchanged.
     /// </summary>
-    private static void ApplyAnalysis(MealLog mealLog, LogMealRequest request)
+    private static async Task ApplyAnalysisAsync(MealLog mealLog, LogMealRequest request, IUnitOfWork unitOfWork)
     {
-        var fingerprint = MealAnalysisFingerprint.For(mealLog);
+        var user = await unitOfWork.Users.GetByIdAsync(request.UserId);
+        var excludedFoods = user?.Profile?.ExcludedFoods.ToList() ?? new List<string>();
+        var fingerprint = MealAnalysisFingerprint.For(mealLog, excludedFoods);
 
         if (request.Analysis is { } analysis)
         {

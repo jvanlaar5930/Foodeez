@@ -13,7 +13,7 @@ import { useTheme, useThemedStyles, type Palette } from '@/theme';
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends Omit<TouchableOpacityProps, 'style'> {
+interface ButtonProps extends TouchableOpacityProps {
   title: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -31,6 +31,7 @@ export function Button({
   leftIcon,
   fullWidth = false,
   onPress,
+  style,
   ...props
 }: ButtonProps) {
   const C = useTheme();
@@ -45,6 +46,7 @@ export function Button({
         styles[size],
         fullWidth && styles.fullWidth,
         isDisabled && styles.disabled,
+        style,
       ]}
       onPress={onPress}
       disabled={isDisabled}

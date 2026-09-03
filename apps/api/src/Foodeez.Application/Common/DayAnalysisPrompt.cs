@@ -66,6 +66,12 @@ public static class DayAnalysisPrompt
                 : "Then say what could have been eaten differently to make that day complete and balanced.");
         sb.AppendLine("Give 2-4 recommendations. Be specific about foods and portions - never generic advice like 'eat healthier'.");
 
+        if (request.ExcludedFoods.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(AINarration.ExclusionLine(request.ExcludedFoods));
+        }
+
         sb.AppendLine();
         sb.AppendLine(AINarration.Instruction);
         sb.AppendLine();

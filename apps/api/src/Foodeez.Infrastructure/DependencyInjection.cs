@@ -31,9 +31,12 @@ public static class DependencyInjection
         services.AddScoped<IMealLogRepository, MealLogRepository>();
         services.AddScoped<IDayAnalysisRepository, DayAnalysisRepository>();
         services.AddScoped<IFoodItemRepository, FoodItemRepository>();
+        services.AddScoped<IMealTemplateRepository, MealTemplateRepository>();
         services.AddScoped<IMealPlanRepository, MealPlanRepository>();
         services.AddScoped<IRecipeRepository, RecipeRepository>();
         services.AddScoped<ISavedRecipeRepository, SavedRecipeRepository>();
+        services.AddScoped<IChatRepository, ChatRepository>();
+        services.AddScoped<IGroceryListRepository, GroceryListRepository>();
         services.AddScoped<IAppSettingRepository, AppSettingRepository>();
         services.AddScoped<IAppLogRepository, AppLogRepository>();
 

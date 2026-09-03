@@ -9,6 +9,8 @@ import { AddMealScreen } from '@/screens/meal-log/AddMealScreen';
 import { FoodScanScreen } from '@/screens/meal-log/FoodScanScreen';
 import { MealPlanScreen } from '@/screens/meal-plan/MealPlanScreen';
 import { CalendarDayScreen } from '@/screens/meal-plan/CalendarDayScreen';
+import { GroceryScreen } from '@/screens/grocery/GroceryScreen';
+import { AdviceScreen } from '@/screens/advice/AdviceScreen';
 import { RecipesScreen } from '@/screens/recipes/RecipesScreen';
 import { RecipeDetailScreen } from '@/screens/recipes/RecipeDetailScreen';
 import { ProfileScreen } from '@/screens/profile/ProfileScreen';
@@ -145,6 +147,12 @@ export function MainTabNavigator() {
             case 'MealPlan':
               iconName = focused ? 'calendar' : 'calendar-outline';
               break;
+            case 'Grocery':
+              iconName = focused ? 'cart' : 'cart-outline';
+              break;
+            case 'Advice':
+              iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
+              break;
             case 'Recipes':
               iconName = focused ? 'book' : 'book-outline';
               break;
@@ -156,6 +164,7 @@ export function MainTabNavigator() {
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
+        tabBarLabelStyle: { fontSize: FontSize.xs },
         tabBarActiveTintColor: C.primary,
         tabBarInactiveTintColor: C.textSecondary,
         tabBarStyle: {
@@ -169,6 +178,8 @@ export function MainTabNavigator() {
       <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
       <Tab.Screen name="MealLog" component={MealLogNavigator} options={{ title: 'Meal Log' }} />
       <Tab.Screen name="MealPlan" component={MealPlanNavigator} options={{ title: 'Meal Plan' }} />
+      <Tab.Screen name="Grocery" component={GroceryScreen} options={{ title: 'Grocery' }} />
+      <Tab.Screen name="Advice" component={AdviceScreen} options={{ title: 'Ask AI' }} />
       <Tab.Screen name="Recipes" component={RecipesNavigator} options={{ title: 'Recipes' }} />
       <Tab.Screen name="Profile" component={ProfileNavigator} options={{ title: 'Profile' }} />
     </Tab.Navigator>

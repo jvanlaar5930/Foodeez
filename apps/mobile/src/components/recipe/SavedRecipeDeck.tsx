@@ -11,7 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
-import type { RecipeDto } from '@/types';
+import { isAiRecipeImage, type RecipeDto } from '@/types';
+import { AiRecipeThumb } from './AiRecipeThumb';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = Math.min(280, SCREEN_WIDTH * 0.72);
@@ -102,7 +103,9 @@ export function SavedRecipeDeck({ recipes, onOpen, onRemove }: Props) {
               onPress={() => onOpen(item)}
             >
               <View style={styles.cardImageWrap}>
-                {item.imageUrl ? (
+                {isAiRecipeImage(item.imageUrl) ? (
+                  <AiRecipeThumb size={40} style={styles.cardImagePlaceholder} />
+                ) : item.imageUrl ? (
                   <Animated.Image
                     source={{ uri: item.imageUrl }}
                     style={[styles.cardImage, { transform: [{ translateX: imageShift }] }]}
@@ -191,7 +194,7 @@ const makeStyles = (C: Palette) =>
       right: -24,
     },
     cardImagePlaceholder: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',
     },

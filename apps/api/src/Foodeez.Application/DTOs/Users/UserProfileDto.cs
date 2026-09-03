@@ -17,6 +17,10 @@ public class UserProfileDto
     public float DailyCarbTargetG { get; set; }
     public float DailyFatTargetG { get; set; }
     public string? Notes { get; set; }
+
+    /// <summary>Foods to keep out of every AI suggestion - allergies, intolerances, dislikes.</summary>
+    public List<string> ExcludedFoods { get; set; } = new();
+
     public bool ProfileCompleted { get; set; }
     public bool DarkMode { get; set; }
     public UnitSystem UnitSystem { get; set; }

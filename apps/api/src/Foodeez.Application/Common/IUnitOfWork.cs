@@ -8,9 +8,12 @@ public interface IUnitOfWork
     IMealLogRepository MealLogs { get; }
     IDayAnalysisRepository DayAnalyses { get; }
     IFoodItemRepository FoodItems { get; }
+    IMealTemplateRepository MealTemplates { get; }
     IMealPlanRepository MealPlans { get; }
     IRecipeRepository Recipes { get; }
     ISavedRecipeRepository SavedRecipes { get; }
+    IChatRepository Chat { get; }
+    IGroceryListRepository GroceryLists { get; }
     IAppSettingRepository AppSettings { get; }
     IAppLogRepository AppLogs { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);

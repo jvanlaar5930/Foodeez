@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { Recipe } from '@foodeez/shared';
+import { isAiRecipeImage, type Recipe } from '@foodeez/shared';
+import AiRecipeThumb from './AiRecipeThumb.vue';
 
 const props = defineProps<{ recipe: Recipe }>();
+
+/** A recipe written in the advice tab carries a marker, not a picture, in its place. */
+const isAiThumb = computed(() => isAiRecipeImage(props.recipe.imageUrl));
 
 const totalTime = computed(
   () => props.recipe.prepTimeMinutes + props.recipe.cookTimeMinutes
@@ -29,8 +33,9 @@ function hideImage(e: Event) {
     <div
       class="flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br from-green-100 to-emerald-200 dark:from-green-900/40 dark:to-emerald-900/30"
     >
+      <AiRecipeThumb v-if="isAiThumb" compact />
       <img
-        v-if="recipe.imageUrl"
+        v-else-if="recipe.imageUrl"
         :src="recipe.imageUrl"
         :alt="recipe.name"
         loading="lazy"

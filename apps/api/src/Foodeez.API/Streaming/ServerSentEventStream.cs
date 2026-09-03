@@ -45,7 +45,15 @@ internal static class ServerSentEventStream
         }
         catch (OperationCanceledException)
         {
-            // The reader closed the tab or navigated away. Nothing to report to anyone.
+            // Genuinely ambiguous: this fires both when the reader closes the tab (nothing to
+            // report) and when the transport itself gives up on a connection that stayed idle
+            // too long - Kestrel's data-rate limit or a reverse proxy's read timeout - which
+            // looks identical from here but is an operational problem worth knowing about. A
+            // real client abort will be common in practice, so this stays a warning, not an
+            // error, but it beats what was here before: complete silence either way.
+            logger.LogWarning(
+                "An AI stream ended via cancellation before finishing - either the client " +
+                "disconnected, or the connection was dropped for being idle too long.");
         }
         catch (Exception ex)
         {

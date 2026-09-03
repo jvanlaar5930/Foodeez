@@ -17,14 +17,26 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { FoodSearchResultRow } from '@/components/meal/FoodSearchResultRow';
 import { CustomFoodModal } from '@/components/meal/CustomFoodModal';
+import { QuickAddBar } from '@/components/meal/QuickAddBar';
+import { SaveMealModal } from '@/components/meal/SaveMealModal';
+import { MealAnalysisCard } from '@/components/meal/MealAnalysisCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/store/authStore';
 import { useMealStore } from '@/store/mealStore';
 import { searchFoodItems } from '@/services/foodItemService';
+import { mealTemplateService } from '@/services/mealTemplateService';
+import { analyzeMealLogStream, analyzeMealStream } from '@/services/aiService';
+import { AIStreamError } from '@/services/aiStream';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
-import { MealType, type FoodItemDto } from '@/types';
+import {
+  MealType,
+  type FoodItemDto,
+  type MealAnalysisDto,
+  type QuickAddResultDto,
+  type QuickAddSource,
+} from '@/types';
 import type { MealLogStackParamList } from '@/navigation/types';
 
 type Props = NativeStackScreenProps<MealLogStackParamList, 'AddMeal'>;
@@ -41,6 +53,15 @@ const MEAL_TYPES = [
 interface SelectedItem {
   foodItem: FoodItemDto;
   quantity: number;
+  /** Where this line came from, when quick add put it here. Absent for a searched-for food. */
+  source?: QuickAddSource;
+}
+
+/** The label for a line whose numbers the user did not pick themselves. */
+function sourceLabel(source: QuickAddSource | undefined): string | null {
+  if (source === 'Estimated') return 'AI estimate';
+  if (source === 'Matched') return 'from database';
+  return null;
 }
 
 export function AddMealScreen({ navigation, route }: Props) {
@@ -64,6 +85,27 @@ export function AddMealScreen({ navigation, route }: Props) {
     })) ?? [],
   );
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Bumped after saving a meal, so the quick-add bar reloads and shows the new name. */
+  const [savedMealsToken, setSavedMealsToken] = useState(0);
+  const [showSaveMeal, setShowSaveMeal] = useState(false);
+  const [isSavingMeal, setIsSavingMeal] = useState(false);
+  const [saveMealError, setSaveMealError] = useState<string | null>(null);
+  /**
+   * Guards handleSave against a double-tap firing two overlapping requests - the store's own
+   * isLoading only flips after the first request has already started, which is one render
+   * too late to block a second tap in the same frame.
+   */
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Whether the items or meal type have changed since a saved meal was opened. Only a
+  // saved, untouched meal can ask the server for its stored score for free; once it has
+  // been edited here that score no longer describes what is on screen.
+  const [mealEdited, setMealEdited] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<MealAnalysisDto | null>(editingMealLog?.analysis ?? null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisStreamText, setAnalysisStreamText] = useState('');
+  const analyzeRequest = useRef<{ cancel: () => void } | null>(null);
 
   useEffect(() => {
     setSelectedMealType(editingMealLog?.mealType ?? route.params?.mealType ?? MealType.Breakfast);
@@ -73,7 +115,38 @@ export function AddMealScreen({ navigation, route }: Props) {
         quantity: item.quantity,
       })) ?? [],
     );
+    setMealEdited(false);
+    setAnalysis(editingMealLog?.analysis ?? null);
+    setAnalysisError(null);
   }, [editingMealLog, route.params?.mealType]);
+
+  // What the photo scanner handed over. Kept separate from the reset above so arriving from a
+  // scan fills the screen in rather than clearing it.
+  const scannedItems = route.params?.parsedItems;
+  useEffect(() => {
+    if (!scannedItems?.length) {
+      return;
+    }
+
+    setSelectedItems((prev) => {
+      const next = [...prev];
+      for (const scanned of scannedItems) {
+        const existing = next.findIndex((item) => item.foodItem.id === scanned.foodItem.id);
+        const entry = {
+          foodItem: scanned.foodItem,
+          quantity: scanned.quantity,
+          source: scanned.source,
+        };
+
+        if (existing >= 0) {
+          next[existing] = entry;
+        } else {
+          next.push(entry);
+        }
+      }
+      return next;
+    });
+  }, [scannedItems]);
 
   const performSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -105,7 +178,70 @@ export function AddMealScreen({ navigation, route }: Props) {
     };
   }, [searchQuery, performSearch]);
 
+  /**
+   * Quick add's items land in the same list a searched-for food does, so everything already
+   * built on that list - amounts, removal, totals, saving - keeps working untouched.
+   */
+  const applyQuickAdd = (result: QuickAddResultDto) => {
+    setMealEdited(true);
+    setSelectedItems((prev) => {
+      const next = [...prev];
+      for (const parsed of result.items) {
+        // The same food twice in one meal is a second tap, not two helpings.
+        const existing = next.findIndex((item) => item.foodItem.id === parsed.foodItem.id);
+        const entry = {
+          foodItem: parsed.foodItem,
+          quantity: parsed.quantity,
+          source: parsed.source,
+        };
+
+        if (existing >= 0) {
+          next[existing] = entry;
+        } else {
+          next.push(entry);
+        }
+      }
+      return next;
+    });
+
+    // Only a saved meal knows which meal it is; a described one leaves the choice alone.
+    if (result.mealType) {
+      setSelectedMealType(result.mealType);
+    }
+  };
+
+  const handleSaveAsMeal = async (name: string) => {
+    if (!user || selectedItems.length === 0) {
+      return;
+    }
+
+    setIsSavingMeal(true);
+    setSaveMealError(null);
+
+    try {
+      await mealTemplateService.save({
+        userId: user.id,
+        name,
+        mealType: selectedMealType,
+        items: selectedItems.map((selectedItem) => ({
+          foodItemId: selectedItem.foodItem.id,
+          quantity: selectedItem.quantity,
+          unit: selectedItem.foodItem.servingUnit,
+        })),
+      });
+
+      setSavedMealsToken((token) => token + 1);
+      setShowSaveMeal(false);
+      Alert.alert('Saved', `"${name}" is in Quick add now.`);
+    } catch {
+      setSaveMealError('That could not be saved. Try a different name.');
+    } finally {
+      setIsSavingMeal(false);
+    }
+  };
+
   const handleSelectFood = (item: FoodItemDto) => {
+    setMealEdited(true);
     const exists = selectedItems.find((selectedItem) => selectedItem.foodItem.id === item.id);
     if (exists) {
       setSelectedItems((prev) => prev.filter((selectedItem) => selectedItem.foodItem.id !== item.id));
@@ -115,6 +251,7 @@ export function AddMealScreen({ navigation, route }: Props) {
   };
 
   const updateQuantity = (foodId: string, delta: number) => {
+    setMealEdited(true);
     setSelectedItems((prev) =>
       prev.map((selectedItem) => {
         if (selectedItem.foodItem.id !== foodId) {
@@ -131,6 +268,7 @@ export function AddMealScreen({ navigation, route }: Props) {
   };
 
   const removeItem = (foodId: string) => {
+    setMealEdited(true);
     setSelectedItems((prev) => prev.filter((selectedItem) => selectedItem.foodItem.id !== foodId));
   };
 
@@ -151,14 +289,20 @@ export function AddMealScreen({ navigation, route }: Props) {
   );
 
   const handleSave = async () => {
-    if (!user || selectedItems.length === 0) {
-      Alert.alert('No items', 'Please select at least one food item.');
+    if (!user || selectedItems.length === 0 || isSubmitting) {
+      if (selectedItems.length === 0) {
+        Alert.alert('No items', 'Please select at least one food item.');
+      }
       return;
     }
+    setIsSubmitting(true);
 
     const payload = {
       userId: user.id,
-      logDate: selectedDate,
+      // Editing keeps the log's own date - `selectedDate` is the Meal Log tab's separately
+      // selected day, which is the wrong date whenever this screen was reached from
+      // somewhere else (the calendar, in particular) showing a different day entirely.
+      logDate: editingMealLog?.logDate ?? selectedDate,
       mealType: selectedMealType,
       items: selectedItems.map((selectedItem) => ({
         foodItemId: selectedItem.foodItem.id,
@@ -176,10 +320,75 @@ export function AddMealScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch {
       Alert.alert('Error', `Failed to ${editingMealLog ? 'update' : 'log'} meal. Please try again.`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const isItemSelected = (id: string) => selectedItems.some((selectedItem) => selectedItem.foodItem.id === id);
+
+  const analyzeLabel = isAnalyzing ? 'Analyzing...' : analysis ? 'Re-run AI Analysis' : 'AI Meal Analysis';
+
+  /**
+   * For a saved meal that hasn't been touched here, the server answers from the score
+   * already stored on the meal - only asking again on an already-scored meal spends a
+   * fresh AI call.
+   */
+  const analyzeMeal = () => {
+    if (!user || isAnalyzing) {
+      return;
+    }
+
+    const storedMealLogId = editingMealLog && !mealEdited ? editingMealLog.id : null;
+    const refresh = analysis !== null;
+
+    setIsAnalyzing(true);
+    setAnalysis(null);
+    setAnalysisError(null);
+    setAnalysisStreamText('');
+
+    const onDelta = (text: string) => setAnalysisStreamText((prev) => prev + text);
+
+    const request = storedMealLogId
+      ? analyzeMealLogStream(storedMealLogId, refresh, onDelta)
+      : analyzeMealStream(
+          user.id,
+          MEAL_TYPES.find((option) => option.value === selectedMealType)?.label ?? 'Meal',
+          selectedItems.map((selectedItem) => {
+            const ratio = selectedItem.foodItem.servingSize > 0
+              ? selectedItem.quantity / selectedItem.foodItem.servingSize
+              : selectedItem.quantity;
+
+            return {
+              name: selectedItem.foodItem.name,
+              amount: selectedItem.quantity,
+              unit: selectedItem.foodItem.servingUnit,
+              calories: selectedItem.foodItem.nutritionalInfo.calories * ratio,
+              protein: selectedItem.foodItem.nutritionalInfo.protein * ratio,
+              carbs: selectedItem.foodItem.nutritionalInfo.carbohydrates * ratio,
+              fat: selectedItem.foodItem.nutritionalInfo.fat * ratio,
+              fiber: (selectedItem.foodItem.nutritionalInfo.fiber ?? 0) * ratio,
+            };
+          }),
+          onDelta,
+        );
+
+    analyzeRequest.current = request;
+
+    request
+      .then(setAnalysis)
+      .catch((err: unknown) => {
+        setAnalysisError(
+          err instanceof AIStreamError ? err.message : 'The analysis could not be completed. Please try again.',
+        );
+      })
+      .finally(() => {
+        analyzeRequest.current = null;
+        setIsAnalyzing(false);
+      });
+  };
+
+  useEffect(() => () => analyzeRequest.current?.cancel(), []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -188,66 +397,86 @@ export function AddMealScreen({ navigation, route }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.mealTypeRow}
-          style={styles.mealTypeScroll}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {MEAL_TYPES.map((mealTypeOption) => (
-            <TouchableOpacity
-              key={mealTypeOption.value}
-              style={[
-                styles.mealTypeChip,
-                selectedMealType === mealTypeOption.value && styles.mealTypeChipActive,
-              ]}
-              onPress={() => setSelectedMealType(mealTypeOption.value)}
-            >
-              <Text
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.mealTypeRow}
+            style={styles.mealTypeScroll}
+          >
+            {MEAL_TYPES.map((mealTypeOption) => (
+              <TouchableOpacity
+                key={mealTypeOption.value}
                 style={[
-                  styles.mealTypeLabel,
-                  selectedMealType === mealTypeOption.value && styles.mealTypeLabelActive,
+                  styles.mealTypeChip,
+                  selectedMealType === mealTypeOption.value && styles.mealTypeChipActive,
                 ]}
+                onPress={() => {
+                  setMealEdited(true);
+                  setSelectedMealType(mealTypeOption.value);
+                }}
               >
-                {mealTypeOption.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                <Text
+                  style={[
+                    styles.mealTypeLabel,
+                    selectedMealType === mealTypeOption.value && styles.mealTypeLabelActive,
+                  ]}
+                >
+                  {mealTypeOption.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color={C.textSecondary} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search food items..."
-            placeholderTextColor={C.textHint}
-            autoCorrect={false}
-            clearButtonMode="while-editing"
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color={C.textSecondary} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search food items..."
+              placeholderTextColor={C.textHint}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
+            {isSearching && <ActivityIndicator size="small" color={C.primary} />}
+          </View>
+
+          {/* Below the search box: searching by name is the more direct path, and this is
+              the fallback for "I don't want to look each item up". */}
+          <QuickAddBar
+            onApplied={applyQuickAdd}
+            reloadToken={savedMealsToken}
+            onScanPress={() => navigation.navigate('FoodScan')}
           />
-          {isSearching && <ActivityIndicator size="small" color={C.primary} />}
-        </View>
 
-        <View style={styles.body}>
-          {(searchQuery.trim().length > 0 || isSearching) && (
-            <View style={styles.resultsContainer}>
-              <Text style={styles.sectionLabel}>
-                {isSearching ? 'Searching...' : `${searchResults.length} results`}
-              </Text>
-              <FlatList
-                data={searchResults}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <FoodSearchResultRow
-                    item={item}
-                    onSelect={handleSelectFood}
-                    isSelected={isItemSelected(item.id)}
-                  />
-                )}
-                style={styles.resultsList}
-                keyboardShouldPersistTaps="handled"
-              />
-              {/* Homemade food will never be in a nutrition database, so offer to enter it. */}
+          <View style={styles.body}>
+            {(searchQuery.trim().length > 0 || isSearching) && (
+              <View style={styles.resultsContainer}>
+                <Text style={styles.sectionLabel}>
+                  {isSearching ? 'Searching...' : `${searchResults.length} results`}
+                </Text>
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <FoodSearchResultRow
+                      item={item}
+                      onSelect={handleSelectFood}
+                      isSelected={isItemSelected(item.id)}
+                    />
+                  )}
+                  style={styles.resultsList}
+                  // The outer ScrollView now owns scrolling; nesting a second scrollable
+                  // vertical list inside it would fight for gestures and trip React
+                  // Native's "VirtualizedLists should never be nested" warning.
+                  scrollEnabled={false}
+                />
+                {/* Homemade food will never be in a nutrition database, so offer to enter it. */}
               {!isSearching && (
                 <TouchableOpacity
                   style={styles.addCustomButton}
@@ -282,9 +511,23 @@ export function AddMealScreen({ navigation, route }: Props) {
                       <Text style={styles.selectedName} numberOfLines={1}>
                         {selectedItem.foodItem.name}
                       </Text>
-                      <Text style={styles.selectedCal}>
-                        {Math.round(selectedItem.foodItem.nutritionalInfo.calories * ratio)} kcal
-                      </Text>
+                      <View style={styles.selectedMeta}>
+                        <Text style={styles.selectedCal}>
+                          {Math.round(selectedItem.foodItem.nutritionalInfo.calories * ratio)} kcal
+                        </Text>
+                        {/* Which numbers were looked up and which were guessed at, so a
+                            quick-added meal can be checked rather than taken on faith. */}
+                        {sourceLabel(selectedItem.source) && (
+                          <Text
+                            style={[
+                              styles.sourceTag,
+                              selectedItem.source === 'Estimated' && styles.sourceTagEstimate,
+                            ]}
+                          >
+                            {sourceLabel(selectedItem.source)}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                     <View style={styles.quantityControl}>
                       <TouchableOpacity
@@ -331,21 +574,53 @@ export function AddMealScreen({ navigation, route }: Props) {
                   ))}
                 </View>
               </Card>
+
+              <MealAnalysisCard
+                analysis={analysis}
+                isAnalyzing={isAnalyzing}
+                error={analysisError}
+                streamedText={analysisStreamText}
+                analyzeLabel={analyzeLabel}
+                onAnalyze={analyzeMeal}
+              />
             </View>
           )}
-        </View>
+          </View>
+        </ScrollView>
 
         <View style={styles.footer}>
+          {selectedItems.length > 0 && (
+            <TouchableOpacity
+              style={styles.saveMealLink}
+              onPress={() => {
+                setSaveMealError(null);
+                setShowSaveMeal(true);
+              }}
+            >
+              <Ionicons name="bookmark-outline" size={16} color={C.primary} />
+              <Text style={styles.saveMealLinkText}>
+                Eat this often? Save it as a meal
+              </Text>
+            </TouchableOpacity>
+          )}
           <Button
             title={editingMealLog ? 'Update Meal' : `Save ${selectedMealType.replace('_', ' ')}`}
             size="lg"
             fullWidth
-            loading={isLoading}
-            disabled={selectedItems.length === 0}
+            loading={isLoading || isSubmitting}
+            disabled={selectedItems.length === 0 || isSubmitting}
             onPress={handleSave}
           />
         </View>
       </KeyboardAvoidingView>
+      <SaveMealModal
+        visible={showSaveMeal}
+        itemCount={selectedItems.length}
+        isSaving={isSavingMeal}
+        error={saveMealError}
+        onClose={() => setShowSaveMeal(false)}
+        onSave={handleSaveAsMeal}
+      />
       <CustomFoodModal
         visible={showCustomFood}
         initialName={searchQuery.trim()}
@@ -366,6 +641,12 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: Spacing.lg,
   },
   mealTypeScroll: {
     flexGrow: 0,
@@ -418,11 +699,10 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     height: '100%',
   },
   body: {
-    flex: 1,
+    // No longer flex: 1 - the screen scrolls as one column now, so this only needs to be
+    // as tall as its own content, not fill whatever space was left over.
   },
-  resultsContainer: {
-    flex: 1,
-  },
+  resultsContainer: {},
   sectionLabel: {
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium,
@@ -449,11 +729,8 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     fontWeight: FontWeight.medium,
     flexShrink: 1,
   },
-  resultsList: {
-    flex: 1,
-  },
+  resultsList: {},
   selectedSection: {
-    flex: 1,
     paddingHorizontal: Spacing.md,
   },
   selectedRow: {
@@ -467,6 +744,32 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   selectedLeft: {
     flex: 1,
+  },
+  selectedMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    flexWrap: 'wrap',
+  },
+  sourceTag: {
+    fontSize: FontSize.xs,
+    color: C.textHint,
+  },
+  sourceTagEstimate: {
+    color: C.warning,
+    fontWeight: FontWeight.semibold,
+  },
+  saveMealLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingBottom: Spacing.sm,
+  },
+  saveMealLinkText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: C.primary,
   },
   selectedName: {
     fontSize: FontSize.md,

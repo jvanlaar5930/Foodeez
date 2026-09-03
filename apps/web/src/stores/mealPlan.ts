@@ -1,7 +1,13 @@
 import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
 import { mealPlanService } from '@/services/mealPlanService';
-import type { CreateMealPlanRequest, GenerateMealPlanRequest, MealPlan } from '@foodeez/shared';
+import type {
+  CreateMealPlanRequest,
+  GenerateMealPlanRequest,
+  MealPlan,
+  MealPlanEntry,
+  MealPlanEntryRequest,
+} from '@foodeez/shared';
 
 export const useMealPlanStore = defineStore('mealPlan', () => {
   const plans = ref<MealPlan[]>([]);
@@ -105,6 +111,89 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     activePlan.value = plan;
   }
 
+  /**
+   * The plan a given day belongs to. The calendar can be scrolled to any week, and only
+   * the plan whose range covers that day can hold a meal on it - `activePlan` is just the
+   * most recent plan and is often the wrong one once you page back a week.
+   */
+  function planCovering(dateStr: string): MealPlan | undefined {
+    return plans.value.find((p) => p.startDate <= dateStr && p.endDate >= dateStr);
+  }
+
+  /**
+   * The plan covering `startDate`, creating one for the range if there is none. Adding a
+   * meal to a week with no plan should just work rather than making the user go and make
+   * a plan first.
+   */
+  async function ensurePlanFor(
+    userId: string,
+    startDate: string,
+    endDate: string,
+    name: string,
+  ): Promise<MealPlan> {
+    const existing = planCovering(startDate);
+    if (existing) return existing;
+    return createPlan({ userId, name, startDate, endDate });
+  }
+
+  /**
+   * Writes a saved entry into the cached plan so the grid updates without a refetch.
+   * The server replaces whatever occupied the slot, so this mirrors that: the entry is
+   * pulled out of wherever it used to be (an edit can move it to another day) and any
+   * other occupant of its new slot is dropped.
+   */
+  function placeEntry(plan: MealPlan, entry: MealPlanEntry): void {
+    for (const [date, entries] of Object.entries(plan.entriesByDate)) {
+      const kept = entries.filter(
+        (e) => e.id !== entry.id && !(date === entry.entryDate && e.mealType === entry.mealType),
+      );
+      if (kept.length !== entries.length) plan.entriesByDate[date] = kept;
+    }
+    plan.entriesByDate[entry.entryDate] = [
+      ...(plan.entriesByDate[entry.entryDate] ?? []),
+      entry,
+    ];
+  }
+
+  async function saveEntry(
+    planId: string,
+    entryId: string | null,
+    payload: MealPlanEntryRequest,
+  ): Promise<MealPlanEntry> {
+    error.value = null;
+    try {
+      const saved = entryId
+        ? await mealPlanService.updateEntry(planId, entryId, payload)
+        : await mealPlanService.addEntry(planId, payload);
+      const plan = plans.value.find((p) => p.id === planId);
+      if (plan) placeEntry(plan, saved);
+      return saved;
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err);
+      throw err;
+    }
+  }
+
+  async function removeEntry(planId: string, entryId: string): Promise<void> {
+    error.value = null;
+    try {
+      await mealPlanService.deleteEntry(planId, entryId);
+      const plan = plans.value.find((p) => p.id === planId);
+      if (!plan) return;
+      for (const [date, entries] of Object.entries(plan.entriesByDate)) {
+        const kept = entries.filter((e) => e.id !== entryId);
+        if (kept.length !== entries.length) plan.entriesByDate[date] = kept;
+      }
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err);
+      throw err;
+    }
+  }
+
+  function clearError(): void {
+    error.value = null;
+  }
+
   function extractErrorMessage(err: unknown): string {
     if (err && typeof err === 'object' && 'response' in err) {
       // `message` covers the plain-object errors this API returns (the 503 when the AI
@@ -135,5 +224,10 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     createPlan,
     generatePlan,
     setActivePlan,
+    planCovering,
+    ensurePlanFor,
+    saveEntry,
+    removeEntry,
+    clearError,
   };
 });

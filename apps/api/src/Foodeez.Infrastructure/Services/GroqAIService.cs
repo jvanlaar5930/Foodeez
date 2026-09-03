@@ -37,6 +37,17 @@ public class GroqAIService : IAIService, IStreamingAIService
         _logger = logger;
     }
 
+    /// <summary>
+    /// The output ceiling for a single response - how much room the configured model actually
+    /// has is a property of that model, not something this application should be guessing at
+    /// in code. Read from config (set to match whatever "Groq:Model" points at); the fallback
+    /// is used only when nobody has configured one.
+    /// </summary>
+    private int MaxOutputTokens() =>
+        int.TryParse(_configuration["Groq:MaxTokens"], out var configured) && configured > 0
+            ? configured
+            : 8192;
+
     private async Task<string> SendAsync(string prompt, CancellationToken ct)
     {
         var apiKey = _configuration["Groq:ApiKey"] ?? throw new InvalidOperationException("Groq:ApiKey is not configured.");
@@ -45,7 +56,7 @@ public class GroqAIService : IAIService, IStreamingAIService
         var body = new
         {
             model,
-            max_tokens = 2048,
+            max_tokens = MaxOutputTokens(),
             messages = new[] { new { role = "user", content = prompt } }
         };
 
@@ -119,35 +130,45 @@ public class GroqAIService : IAIService, IStreamingAIService
         }
     }
 
-    public Task<ParsedFoodDto> ParseFoodImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
+    public Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
-        // Groq free tier does not support vision; return a placeholder
-        _logger.LogWarning("Groq does not support image parsing. Returning default food item.");
-        return Task.FromResult(new ParsedFoodDto
+        // No items and a reason, not a placeholder food: a made-up "Unknown Food" would be
+        // logged and counted as though someone had really eaten it.
+        _logger.LogWarning("Groq: asked to read a meal from a photo, which it cannot do.");
+        return Task.FromResult(new ParsedMealDto
         {
-            Name = "Unknown Food", ServingSize = 100, ServingUnit = "g", Confidence = 0f,
-            NutritionalInfo = new NutritionalInfoDto()
+            Note = "Photos need a provider that can see - Groq's free tier has no vision model. Describe the meal instead."
         });
+    }
+
+    public async Task<ParsedMealDto> ParseMealDescriptionAsync(string description, CancellationToken ct = default)
+    {
+        try
+        {
+            return MealParsePrompt.Parse(await SendAsync(MealParsePrompt.BuildText(description), ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up. That is not a provider failure and must not be logged
+            // as one, nor flattened into an empty result the caller would treat as data.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Groq: failed to read a described meal.");
+            return ParsedMealDto.Unreadable;
+        }
     }
 
     public async Task<MealAnalysisDto> AnalyzeMealAsync(MealAnalysisRequest request, CancellationToken ct = default)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Analyze this {request.MealType} meal for nutritional completeness (score 0-100).");
-        foreach (var i in request.Items)
-            sb.AppendLine($"- {i.Amount}{i.Unit} {i.Name}: {Math.Round(i.Calories)} kcal");
-        sb.AppendLine("Respond ONLY with JSON: {\"score\":72,\"completeness\":\"\",\"missing\":[],\"suggestions\":[]}");
-
         try
         {
-            var text = await SendAsync(sb.ToString(), ct);
-            return ParseJson<MealAnalysisDto>(text, r => new MealAnalysisDto
-            {
-                Score = GetInt(r, "score", 0),
-                Completeness = GetString(r, "completeness"),
-                Missing = GetStringList(r, "missing"),
-                Suggestions = GetStringList(r, "suggestions")
-            }) ?? new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
+            var responseText = await SendAsync(MealAnalysisPrompt.Build(request), ct);
+            var analysis = MealAnalysisPrompt.Parse(responseText);
+            if (analysis != null) return analysis;
+
+            _logger.LogWarning("Groq: returned no usable meal analysis.");
         }
         catch (OperationCanceledException)
         {
@@ -158,8 +179,9 @@ public class GroqAIService : IAIService, IStreamingAIService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Groq: failed to analyze meal.");
-            return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
         }
+
+        return new MealAnalysisDto { Score = 0, Completeness = "Analysis unavailable.", Missing = [], Suggestions = [] };
     }
 
     public async Task<DayAnalysisDto> AnalyzeDayAsync(DayAnalysisRequest request, CancellationToken ct = default)
@@ -276,7 +298,7 @@ public class GroqAIService : IAIService, IStreamingAIService
         var body = new
         {
             model,
-            max_tokens = 2048,
+            max_tokens = MaxOutputTokens(),
             stream = true,
             messages = new[] { new { role = "user", content = prompt } }
         };
