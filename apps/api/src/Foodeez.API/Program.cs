@@ -128,9 +128,24 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+// Development stays wide open on purpose: the Expo client runs from a device on the LAN and
+// Vite from another port, so their origins are not knowable ahead of time.
+//
+// Anywhere else the origins come from Cors:AllowedOrigins. An empty list therefore permits no
+// cross-origin browser calls at all, which is the right default for the deployment we have -
+// nginx proxies /api/ to the API, so the web app is same-origin and never needs CORS, and the
+// mobile client is not a browser and is not subject to it. Only add an origin here when a
+// browser app is genuinely served from somewhere else.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    {
+        if (builder.Environment.IsDevelopment())
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        else
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+    }));
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 builder.Services.AddControllers()
@@ -150,7 +165,13 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+
+    // Migrations are a relational concept. Integration tests swap in the in-memory provider,
+    // where this call throws rather than being a harmless no-op, so it is guarded rather than
+    // unconditional - the test host boots the real Program and would otherwise fail here
+    // before reaching a single endpoint.
+    if (db.Database.IsRelational())
+        db.Database.Migrate();
 }
 
 // ── Middleware pipeline ───────────────────────────────────────────────────────

@@ -261,7 +261,7 @@ import { useRouter } from 'vue-router';
 import FoodExclusionsInput from '@/components/profile/FoodExclusionsInput.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useProfileStore } from '@/stores/profile';
-import { Gender, ActivityLevel, DietaryGoal } from '@foodeez/shared';
+import { Gender, ActivityLevel, DietaryGoal, calculateTargets } from '@foodeez/shared';
 import AppAlert from '@/components/ui/AppAlert.vue';
 
 const router = useRouter();
@@ -363,34 +363,15 @@ const ACTIVITY_LEVELS = [
   { value: ActivityLevel.ExtraActive, label: 'Extra Active', description: 'Very hard exercise + physical job' },
 ];
 
-const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
-  [ActivityLevel.Sedentary]: 1.2,
-  [ActivityLevel.LightlyActive]: 1.375,
-  [ActivityLevel.ModeratelyActive]: 1.55,
-  [ActivityLevel.VeryActive]: 1.725,
-  [ActivityLevel.ExtraActive]: 1.9,
-};
+// The same calculation the server runs on save, so this preview is what actually gets
+// stored. Previously this screen had its own formula and showed numbers the profile page
+// then contradicted.
+const estimatedTargets = computed(() => calculateTargets(profile.value));
 
-const GOAL_ADJUSTMENTS: Record<DietaryGoal, number> = {
-  [DietaryGoal.WeightLoss]: -500,
-  [DietaryGoal.WeightMaintenance]: 0,
-  [DietaryGoal.WeightGain]: 300,
-  [DietaryGoal.MuscleGain]: 250,
-  [DietaryGoal.GeneralHealth]: 0,
-};
-
-const estimatedCalories = computed(() => {
-  const { heightCm, weightKg, age, gender, activityLevel, dietaryGoal } = profile.value;
-  const bmr = gender === Gender.Female
-    ? 10 * weightKg + 6.25 * heightCm - 5 * age - 161
-    : 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
-  const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
-  return Math.round(tdee + GOAL_ADJUSTMENTS[dietaryGoal]);
-});
-
-const estimatedProtein = computed(() => Math.round(profile.value.weightKg * 1.6));
-const estimatedCarbs = computed(() => Math.round((estimatedCalories.value * 0.45) / 4));
-const estimatedFat = computed(() => Math.round((estimatedCalories.value * 0.25) / 9));
+const estimatedCalories = computed(() => estimatedTargets.value.calories);
+const estimatedProtein = computed(() => Math.round(estimatedTargets.value.proteinG));
+const estimatedCarbs = computed(() => Math.round(estimatedTargets.value.carbsG));
+const estimatedFat = computed(() => Math.round(estimatedTargets.value.fatG));
 
 function nextStep() {
   currentStep.value++;

@@ -77,6 +77,9 @@ public class ExceptionHandlingMiddleware
         ArgumentException          => (StatusCodes.Status400BadRequest,          "Invalid Argument"),
         InvalidOperationException  => (StatusCodes.Status400BadRequest,          "Invalid Operation"),
         ConcurrencyConflictException => (StatusCodes.Status409Conflict,          "Concurrency Conflict"),
+        // 503, not 500: the request was fine and retrying is the right response. These use
+        // cases store nothing on failure, so there is no half-made result to reconcile.
+        AIGenerationFailedException => (StatusCodes.Status503ServiceUnavailable, "AI Service Unavailable"),
         _                          => (StatusCodes.Status500InternalServerError, "Internal Server Error"),
     };
 }

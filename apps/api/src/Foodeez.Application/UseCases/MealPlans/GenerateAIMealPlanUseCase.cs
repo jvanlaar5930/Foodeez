@@ -15,20 +15,17 @@ namespace Foodeez.Application.UseCases.MealPlans;
 public class GenerateAIMealPlanUseCase
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IAIService _aiService;
     private readonly IStreamingAIService _streaming;
     private readonly PlannedMealReader _plannedMeals;
     private readonly ILogger<GenerateAIMealPlanUseCase> _logger;
 
     public GenerateAIMealPlanUseCase(
         IUnitOfWork unitOfWork,
-        IAIService aiService,
         IStreamingAIService streaming,
         PlannedMealReader plannedMeals,
         ILogger<GenerateAIMealPlanUseCase> logger)
     {
         _unitOfWork = unitOfWork;
-        _aiService = aiService;
         _streaming = streaming;
         _plannedMeals = plannedMeals;
         _logger = logger;
@@ -39,16 +36,32 @@ public class GenerateAIMealPlanUseCase
         var profileDto = await LoadProfileAsync(request.UserId);
         await AttachPreviousPeriodAsync(request);
 
-        var generated = await _aiService.GenerateMealPlanAsync(
-            WithProfileExclusions(request, profileDto), profileDto, ct);
+        // Built from MealPlanPrompt, exactly as the streaming path below does, rather than
+        // delegated to each provider's own prompt builder. Only Claude's mentioned
+        // ExcludeIngredients, so on every other provider this path planned meals around foods
+        // the user had told us they cannot eat; the per-provider parsers also dropped
+        // ingredients and instructions. One prompt and one parser means one behaviour.
+        var transcript = new StringBuilder();
+        await foreach (var chunk in _streaming.StreamAsync(BuildPrompt(request, profileDto), ct))
+        {
+            transcript.Append(chunk);
+        }
+
+        var generated = MealPlanPrompt.Parse(transcript.ToString());
 
         // Providers swallow their own transport errors and hand back an empty result, so an
         // outage arrives here looking exactly like a plan with no days in it. Saving that
         // would hand the user a persisted, permanently blank week and report success -
         // refusing is the only honest answer, and it leaves nothing to clean up.
         if (generated.Days.Count == 0)
+        {
+            _logger.LogWarning(
+                "AI meal plan produced no usable days. Raw response ({Length} chars): {Response}",
+                transcript.Length, Truncate(transcript.ToString(), 4000));
+
             throw new AIGenerationFailedException(
                 "The AI service could not produce a meal plan right now. Please try again in a moment.");
+        }
 
         return await PersistAsync(request, generated);
     }
@@ -66,7 +79,7 @@ public class GenerateAIMealPlanUseCase
 
         var transcript = new StringBuilder();
         await foreach (var delta in AINarration.NarrateAsync(
-            _streaming, MealPlanPrompt.Build(WithProfileExclusions(request, profileDto), profileDto), transcript, ct))
+            _streaming, BuildPrompt(request, profileDto), transcript, ct))
         {
             yield return AIStreamEvent.Delta(delta);
         }
@@ -90,6 +103,14 @@ public class GenerateAIMealPlanUseCase
 
         yield return AIStreamEvent.Result(await PersistAsync(request, generated));
     }
+
+    /// <summary>
+    /// The one prompt both paths use. Exclusions are folded in here so that no route to the
+    /// model can lose them - a food someone is allergic to must not depend on which endpoint
+    /// the client happened to call.
+    /// </summary>
+    private static string BuildPrompt(GenerateMealPlanRequest request, UserProfileDto profile) =>
+        MealPlanPrompt.Build(WithProfileExclusions(request, profile), profile);
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..max] + "…";

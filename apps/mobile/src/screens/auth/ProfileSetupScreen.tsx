@@ -20,9 +20,7 @@ import {
   Gender,
 } from '@/types';
 import {
-  calculateBMR,
-  calculateMacroTargets,
-  calculateTDEE,
+  calculateTargets,
   formatCalories,
   formatMacro,
 } from '@/utils/nutritionUtils';
@@ -135,12 +133,15 @@ export function ProfileSetupScreen() {
     if (!weight || !height || !age || !data.gender || !data.activityLevel || !data.dietaryGoal) {
       return { calories: 2000, protein: 150, carbs: 250, fat: 67 };
     }
-    const bmr = calculateBMR(weight, height, age, data.gender);
-    let tdee = calculateTDEE(bmr, data.activityLevel);
-    if (data.dietaryGoal === DietaryGoal.WeightLoss) tdee -= 500;
-    if (data.dietaryGoal === DietaryGoal.WeightGain || data.dietaryGoal === DietaryGoal.MuscleGain) tdee += 300;
-    const macros = calculateMacroTargets(tdee, data.dietaryGoal);
-    return { calories: tdee, ...macros };
+    // Same calculation the server will run on save, so this preview is what gets stored.
+    return calculateTargets({
+      weightKg: weight,
+      heightCm: height,
+      age,
+      gender: data.gender,
+      activityLevel: data.activityLevel,
+      dietaryGoal: data.dietaryGoal,
+    });
   };
 
   const validateStep = (): boolean => {

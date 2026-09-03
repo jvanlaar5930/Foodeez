@@ -27,7 +27,7 @@ public class DeleteMealLogUseCaseTests
     [Fact]
     public async Task ExecuteAsync_ExistingMealLog_DeletesIt()
     {
-        var mealLog = new MealLog { Id = Guid.NewGuid() };
+        var mealLog = new MealLog();
         _mealLogRepoMock.Setup(r => r.GetDetailedByIdAsync(mealLog.Id)).ReturnsAsync(mealLog);
 
         await _sut.ExecuteAsync(mealLog.Id);

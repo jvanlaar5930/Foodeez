@@ -1,4 +1,5 @@
 using Foodeez.Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +7,7 @@ namespace Foodeez.API.Controllers;
 
 [ApiController]
 [Route("api/logs")]
+[Authorize(Roles = "Admin")]
 public class LogsController : ControllerBase
 {
     private readonly AppDbContext _db;

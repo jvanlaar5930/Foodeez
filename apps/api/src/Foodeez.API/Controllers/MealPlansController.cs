@@ -31,11 +31,13 @@ public class MealPlansController : ControllerBase
         _saveEntryUseCase = saveEntryUseCase;
     }
 
-    /// <summary>Get all meal plans for a user.</summary>
+    /// <summary>Get all meal plans for the signed-in user.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<MealPlanDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMealPlans([FromQuery] Guid userId)
+    public async Task<IActionResult> GetMealPlans()
     {
+        if (CurrentUserId() is not { } userId) return Unauthorized();
+
         var plans = await _getMealPlanUseCase.ExecuteAsync(userId);
         return Ok(plans);
     }
@@ -46,8 +48,14 @@ public class MealPlansController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateMealPlan([FromBody] CreateMealPlanRequest request)
     {
+        if (CurrentUserId() is not { } userId) return Unauthorized();
+
+        // The body carries a userId for symmetry with the rest of this controller, but the
+        // plan is filed against the token's user, never the body's.
+        request.UserId = userId;
+
         var plan = await _createMealPlanUseCase.ExecuteAsync(request);
-        return CreatedAtAction(nameof(GetMealPlans), new { userId = request.UserId }, plan);
+        return CreatedAtAction(nameof(GetMealPlans), null, plan);
     }
 
     /// <summary>Generate a meal plan using AI based on user profile and preferences.</summary>
@@ -58,17 +66,12 @@ public class MealPlansController : ControllerBase
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> GenerateMealPlan([FromBody] GenerateMealPlanRequest request, CancellationToken ct)
     {
-        try
-        {
-            var plan = await _generateAIMealPlanUseCase.ExecuteAsync(request, ct);
-            return CreatedAtAction(nameof(GetMealPlans), new { userId = request.UserId }, plan);
-        }
-        catch (AIGenerationFailedException ex)
-        {
-            // 503, not 500: the request was fine and retrying is the right response. Nothing
-            // was saved, so there is no half-made plan for the client to reconcile.
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
-        }
+        if (CurrentUserId() is not { } userId) return Unauthorized();
+        request.UserId = userId;
+
+        // AIGenerationFailedException is mapped to 503 by ExceptionHandlingMiddleware.
+        var plan = await _generateAIMealPlanUseCase.ExecuteAsync(request, ct);
+        return CreatedAtAction(nameof(GetMealPlans), null, plan);
     }
 
     /// <summary>
@@ -79,6 +82,13 @@ public class MealPlansController : ControllerBase
     [Produces("text/event-stream")]
     public async Task GenerateMealPlanStream([FromBody] GenerateMealPlanRequest request, CancellationToken ct)
     {
+        if (CurrentUserId() is not { } userId)
+        {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+        request.UserId = userId;
+
         await ServerSentEventStream.WriteAsync(
             Response, _generateAIMealPlanUseCase.ExecuteStreamAsync(request, ct), ct);
     }

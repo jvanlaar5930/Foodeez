@@ -1,25 +1,32 @@
 // Enums
+//
+// Every value below is the API's own enum member name. The server registers
+// JsonStringEnumConverter with no naming policy, so it both emits and expects the exact C#
+// member name - "WeightLoss", never "weight_loss". Deserialisation is case-insensitive but
+// not separator-insensitive, so an underscored value does not merely mismatch, it fails to
+// bind and the whole request is rejected.
+
 export enum Gender {
-  Male = 'male',
-  Female = 'female',
-  Other = 'other',
-  PreferNotToSay = 'prefer_not_to_say',
+  Male = 'Male',
+  Female = 'Female',
+  Other = 'Other',
+  PreferNotToSay = 'PreferNotToSay',
 }
 
 export enum ActivityLevel {
-  Sedentary = 'sedentary',
-  LightlyActive = 'lightly_active',
-  ModeratelyActive = 'moderately_active',
-  VeryActive = 'very_active',
-  ExtraActive = 'extra_active',
+  Sedentary = 'Sedentary',
+  LightlyActive = 'LightlyActive',
+  ModeratelyActive = 'ModeratelyActive',
+  VeryActive = 'VeryActive',
+  ExtraActive = 'ExtraActive',
 }
 
 export enum DietaryGoal {
-  WeightLoss = 'weight_loss',
-  WeightMaintenance = 'weight_maintenance',
-  WeightGain = 'weight_gain',
-  MuscleGain = 'muscle_gain',
-  GeneralHealth = 'general_health',
+  WeightLoss = 'WeightLoss',
+  WeightMaintenance = 'WeightMaintenance',
+  WeightGain = 'WeightGain',
+  MuscleGain = 'MuscleGain',
+  GeneralHealth = 'GeneralHealth',
 }
 
 export enum UnitSystem {
@@ -27,12 +34,7 @@ export enum UnitSystem {
   Metric = 'Metric',
 }
 
-/**
- * Values are the API's own enum member names. The server serialises MealType with
- * JsonStringEnumConverter and no naming policy, so it emits "MorningSnack", not
- * "morning_snack" - and a mismatch here silently empties every meal slot rather than
- * failing loudly.
- */
+/** A mismatch here silently empties every meal slot rather than failing loudly. */
 export enum MealType {
   Breakfast = 'Breakfast',
   MorningSnack = 'MorningSnack',

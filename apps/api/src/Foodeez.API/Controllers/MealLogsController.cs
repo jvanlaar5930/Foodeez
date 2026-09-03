@@ -159,11 +159,14 @@ public class MealLogsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Get all meal logs for a user on a specific date.</summary>
+    /// <summary>Get all meal logs for the signed-in user on a specific date.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<MealLogDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDailyLogs([FromQuery] Guid userId, [FromQuery] string date)
+    public async Task<IActionResult> GetDailyLogs([FromQuery] string date)
     {
+        if (CurrentUser.IdOf(User) is not { } userId)
+            return Unauthorized();
+
         if (!DateOnly.TryParse(date, out var parsedDate))
             return BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
@@ -172,14 +175,17 @@ public class MealLogsController : ControllerBase
     }
 
     /// <summary>
-    /// Get all meal logs for a user across a date range - used to show what was actually
+    /// Get all meal logs for the signed-in user across a date range - used to show what was actually
     /// eaten alongside a calendar of what was planned.
     /// </summary>
     [HttpGet("range")]
     [ProducesResponseType(typeof(List<MealLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMealLogsRange(
-        [FromQuery] Guid userId, [FromQuery] string startDate, [FromQuery] string endDate)
+        [FromQuery] string startDate, [FromQuery] string endDate)
     {
+        if (CurrentUser.IdOf(User) is not { } userId)
+            return Unauthorized();
+
         if (!DateOnly.TryParse(startDate, out var parsedStart) || !DateOnly.TryParse(endDate, out var parsedEnd))
             return BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
@@ -194,8 +200,11 @@ public class MealLogsController : ControllerBase
     [HttpGet("day-analysis")]
     [ProducesResponseType(typeof(DayAnalysisDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> GetDayAnalysis([FromQuery] Guid userId, [FromQuery] string date)
+    public async Task<IActionResult> GetDayAnalysis([FromQuery] string date)
     {
+        if (CurrentUser.IdOf(User) is not { } userId)
+            return Unauthorized();
+
         if (!DateOnly.TryParse(date, out var parsedDate))
             return BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
@@ -213,28 +222,19 @@ public class MealLogsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> AnalyzeDay(
-        [FromQuery] Guid userId,
         [FromQuery] string date,
         [FromQuery] bool refresh,
         CancellationToken ct)
     {
+        if (CurrentUser.IdOf(User) is not { } userId)
+            return Unauthorized();
+
         if (!DateOnly.TryParse(date, out var parsedDate))
             return BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
-        try
-        {
-            return Ok(await _analyzeDayUseCase.ExecuteAsync(userId, parsedDate, refresh, ct));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-        catch (AIGenerationFailedException ex)
-        {
-            // 503, not 500: the request was fine and retrying is the right response. Nothing
-            // was stored, so there is no half-made analysis for the client to reconcile.
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
-        }
+        // InvalidOperationException -> 400 and AIGenerationFailedException -> 503 are both
+        // mapped by ExceptionHandlingMiddleware.
+        return Ok(await _analyzeDayUseCase.ExecuteAsync(userId, parsedDate, refresh, ct));
     }
 
     /// <summary>
@@ -244,11 +244,16 @@ public class MealLogsController : ControllerBase
     [HttpPost("day-analysis/stream")]
     [Produces("text/event-stream")]
     public async Task AnalyzeDayStream(
-        [FromQuery] Guid userId,
         [FromQuery] string date,
         [FromQuery] bool refresh,
         CancellationToken ct)
     {
+        if (CurrentUser.IdOf(User) is not { } userId)
+        {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
         if (!DateOnly.TryParse(date, out var parsedDate))
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -259,11 +264,14 @@ public class MealLogsController : ControllerBase
             Response, _analyzeDayUseCase.ExecuteStreamAsync(userId, parsedDate, refresh, ct), ct);
     }
 
-    /// <summary>Get nutritional summary for a user on a specific date, including progress toward targets.</summary>
+    /// <summary>Get the signed-in user's nutritional summary for a date, including progress toward targets.</summary>
     [HttpGet("nutrition-summary")]
     [ProducesResponseType(typeof(NutritionSummaryDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetNutritionSummary([FromQuery] Guid userId, [FromQuery] string date)
+    public async Task<IActionResult> GetNutritionSummary([FromQuery] string date)
     {
+        if (CurrentUser.IdOf(User) is not { } userId)
+            return Unauthorized();
+
         if (!DateOnly.TryParse(date, out var parsedDate))
             return BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
