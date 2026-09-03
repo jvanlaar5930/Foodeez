@@ -7,6 +7,8 @@ using Foodeez.Application.DTOs.Users;
 using Foodeez.Application.UseCases.Grocery;
 using Foodeez.Application.Interfaces.Services;
 using Foodeez.Domain.Entities;
+using Foodeez.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Application.UseCases.MealPlans;
 
@@ -16,17 +18,20 @@ public class GenerateAIMealPlanUseCase
     private readonly IAIService _aiService;
     private readonly IStreamingAIService _streaming;
     private readonly PlannedMealReader _plannedMeals;
+    private readonly ILogger<GenerateAIMealPlanUseCase> _logger;
 
     public GenerateAIMealPlanUseCase(
         IUnitOfWork unitOfWork,
         IAIService aiService,
         IStreamingAIService streaming,
-        PlannedMealReader plannedMeals)
+        PlannedMealReader plannedMeals,
+        ILogger<GenerateAIMealPlanUseCase> logger)
     {
         _unitOfWork = unitOfWork;
         _aiService = aiService;
         _streaming = streaming;
         _plannedMeals = plannedMeals;
+        _logger = logger;
     }
 
     public async Task<MealPlanDto> ExecuteAsync(GenerateMealPlanRequest request, CancellationToken ct = default)
@@ -70,13 +75,42 @@ public class GenerateAIMealPlanUseCase
         if (generated.Days.Count == 0)
         {
             // Same judgement as the blocking path: a plan with no days is an outage, not a
-            // plan, and saving it would hand the user a permanently blank week.
+            // plan, and saving it would hand the user a permanently blank week. Logging the
+            // raw text is what turns "it failed" into an actual diagnosis - a truncated
+            // response, a model that ignored the JSON-only instruction, and a genuine
+            // provider outage all reach here identically otherwise.
+            _logger.LogWarning(
+                "AI meal plan stream produced no usable days. Raw response ({Length} chars): {Response}",
+                transcript.Length, Truncate(transcript.ToString(), 4000));
+
             yield return AIStreamEvent.Error(
                 "The AI service could not produce a meal plan right now. Please try again in a moment.");
             yield break;
         }
 
         yield return AIStreamEvent.Result(await PersistAsync(request, generated));
+    }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "…";
+
+    /// <summary>
+    /// Tags are stored as one comma-separated string, capped at the column's 500 characters.
+    /// Whole tags are dropped rather than the string being cut mid-word, which would leave a
+    /// corrupted last tag behind.
+    /// </summary>
+    private static string? JoinTags(List<string> tags)
+    {
+        var kept = tags.Where(tag => !string.IsNullOrWhiteSpace(tag)).Select(tag => tag.Trim()).ToList();
+
+        var joined = string.Join(",", kept);
+        while (joined.Length > 500 && kept.Count > 0)
+        {
+            kept.RemoveAt(kept.Count - 1);
+            joined = string.Join(",", kept);
+        }
+
+        return joined.Length == 0 ? null : joined;
     }
 
     private async Task<UserProfileDto> LoadProfileAsync(Guid userId)
@@ -193,27 +227,40 @@ public class GenerateAIMealPlanUseCase
             IsAIGenerated = true
         };
 
+        // One recipe per distinct dish across the whole week: a plan that repeats the same
+        // breakfast five times should leave one recipe behind, not five identical ones.
+        var recipes = new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase);
+
         // Persist generated day entries
         foreach (var day in generated.Days)
         {
             foreach (var meal in day.Meals)
             {
-                // The name is the only part of a generated meal a reader actually sees:
-                // these entries have no Recipe row behind them, so RecipeName on the DTO is
-                // always null and Notes is the one field that reaches the card. Taking only
-                // RecipeDescription - which most providers never even parse - left every
-                // generated plan showing seven blank slots.
+                // Notes still carries the name: it is what the calendar card renders for an
+                // entry with nothing else to show, and taking only RecipeDescription - which
+                // most providers never even parse - left every generated plan showing seven
+                // blank slots.
                 var label = string.IsNullOrWhiteSpace(meal.RecipeName)
                     ? meal.RecipeDescription
                     : string.IsNullOrWhiteSpace(meal.RecipeDescription)
                         ? meal.RecipeName
                         : $"{meal.RecipeName} - {meal.RecipeDescription}";
 
+                // The model writes a whole recipe for every meal - method, ingredients,
+                // timings, macros - and all of it used to be dropped on the floor in favour
+                // of that one label. Keeping it as a real recipe is what lets someone open a
+                // planned meal and find out how to actually cook it.
+                var recipe = await ResolveRecipeAsync(request.UserId, meal, recipes);
+
                 plan.Entries.Add(new MealPlanEntry
                 {
                     MealPlanId = plan.Id,
                     EntryDate = day.Date,
                     MealType = meal.MealType,
+                    RecipeId = recipe?.Id,
+                    // Attached so the response carries the meal's name straight away, rather
+                    // than the client having to refetch the plan to learn what was saved.
+                    Recipe = recipe,
                     Notes = label,
                     Servings = meal.Servings > 0 ? meal.Servings : 1f
                 });
@@ -224,5 +271,84 @@ public class GenerateAIMealPlanUseCase
         await _unitOfWork.SaveChangesAsync();
 
         return GetMealPlanUseCase.MapToDto(plan);
+    }
+
+    /// <summary>
+    /// The recipe row behind one generated meal, reusing one this person already has under
+    /// the same name. Regenerating a week is routine, and without this every regeneration
+    /// would leave another copy of every dish in the library.
+    ///
+    /// Deliberately not bookmarked, unlike a recipe kept from the assistant on purpose:
+    /// filing twenty-one recipes into someone's saved list because they generated a week is
+    /// not something they asked for. The planned meal itself is how they reach these.
+    /// </summary>
+    private async Task<Recipe?> ResolveRecipeAsync(
+        Guid userId,
+        GeneratedMealEntryDto meal,
+        Dictionary<string, Recipe> seenThisPlan)
+    {
+        var name = meal.RecipeName?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            // Nothing to name a recipe after - the entry keeps whatever label it has.
+            return null;
+        }
+
+        if (seenThisPlan.TryGetValue(name, out var already))
+        {
+            return already;
+        }
+
+        var matches = await _unitOfWork.Recipes.SearchAsync(name);
+        var existing = matches.FirstOrDefault(r =>
+            r.CreatedByUserId == userId
+            && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        if (existing != null)
+        {
+            seenThisPlan[name] = existing;
+            return existing;
+        }
+
+        var recipe = new Recipe
+        {
+            Name = name,
+            Description = meal.RecipeDescription,
+            Instructions = meal.Instructions,
+            PrepTimeMinutes = meal.PrepTimeMinutes,
+            CookTimeMinutes = meal.CookTimeMinutes,
+            Servings = meal.Servings > 0 ? meal.Servings : 1,
+            Tags = JoinTags(meal.Tags),
+            ImageUrl = AiRecipeImage.Marker,
+            IsAIGenerated = true,
+            CreatedByUserId = userId,
+            SourceName = "Foodeez AI",
+            // The model is asked for per-meal figures and gives no fibre, sugar or sodium,
+            // so those stay zero rather than being invented here.
+            NutritionalInfoPerServing = new NutritionalInfo(
+                meal.EstimatedCalories,
+                meal.EstimatedProteinG,
+                meal.EstimatedCarbsG,
+                meal.EstimatedFatG,
+                0f,
+                0f,
+                0f)
+        };
+
+        foreach (var ingredient in meal.Ingredients)
+        {
+            recipe.Ingredients.Add(new RecipeIngredient
+            {
+                RecipeId = recipe.Id,
+                IngredientName = ingredient.Name,
+                Quantity = ingredient.Quantity,
+                Unit = ingredient.Unit,
+                Notes = ingredient.Notes
+            });
+        }
+
+        await _unitOfWork.Recipes.AddAsync(recipe);
+        seenThisPlan[name] = recipe;
+        return recipe;
     }
 }

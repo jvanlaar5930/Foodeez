@@ -97,9 +97,8 @@ public static class JsonExtraction
     /// <summary>The outermost JSON object in a model's answer, or null when there isn't one.</summary>
     public static JsonElement? ReadObject(string responseText)
     {
-        var start = responseText.IndexOf('{');
-        var end = responseText.LastIndexOf('}');
-        if (start < 0 || end <= start)
+        var span = FindBalancedObject(responseText);
+        if (span == null)
         {
             return null;
         }
@@ -107,13 +106,63 @@ public static class JsonExtraction
         try
         {
             // Clone: the document is disposed here, and an un-cloned element dies with it.
-            using var doc = JsonDocument.Parse(responseText[start..(end + 1)]);
+            using var doc = JsonDocument.Parse(span);
             return doc.RootElement.Clone();
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// The text from the first "{" to the "}" that actually closes it, tracking nesting and
+    /// skipping braces inside string literals. A model asked for "JSON, nothing after it"
+    /// still sometimes adds a closing remark of its own - `responseText.LastIndexOf('}')`
+    /// would grab a brace out of that instead of the real end of the object, and a response
+    /// cut short by a token limit never reaches a matching brace at all, which this reports
+    /// as absent rather than silently parsing a truncated slice.
+    /// </summary>
+    private static string? FindBalancedObject(string responseText)
+    {
+        var start = responseText.IndexOf('{');
+        if (start < 0)
+        {
+            return null;
+        }
+
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+
+        for (var i = start; i < responseText.Length; i++)
+        {
+            var c = responseText[i];
+
+            if (inString)
+            {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+
+            switch (c)
+            {
+                case '"': inString = true; break;
+                case '{': depth++; break;
+                case '}':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        return responseText[start..(i + 1)];
+                    }
+                    break;
+            }
+        }
+
+        // Depth never returned to zero - the object was cut off before it closed.
+        return null;
     }
 
     public static string ReadString(JsonElement element, string property) =>
