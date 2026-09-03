@@ -17,7 +17,9 @@ obj/
 *.suo
 .vs/
 .vscode/settings.json
-appsettings.Development.json
+# appsettings.Development.json is deliberately committed - it holds log levels and the
+# Kestrel endpoint, no secrets. Development secrets go in user-secrets, deployed ones in
+# environment variables. A local Production override could hold real values, so ignore it.
 appsettings.Production.json
 
 # React Native / Expo

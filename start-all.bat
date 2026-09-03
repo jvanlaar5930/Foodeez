@@ -1,6 +1,10 @@
 @echo off
 echo Starting Foodeez development environment...
 
+REM Development loads user-secrets and enables Swagger. launchSettings.json sets this too;
+REM it is repeated here so --no-launch-profile and IDE runs cannot disagree.
+set ASPNETCORE_ENVIRONMENT=Development
+
 echo Starting API (http://localhost:5000)...
 start "Foodeez API" cmd /k "cd /d %~dp0apps\api\src && dotnet run --project Foodeez.API"
 

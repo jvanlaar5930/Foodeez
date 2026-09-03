@@ -95,30 +95,37 @@ EXIT;
 
 All commands below are run from the `apps/api/` directory.
 
-### Step 1 — Configure settings
+### Step 1 — Configure secrets (first time only)
 
-Open `apps/api/src/Foodeez.API/appsettings.json` and fill in the three required values:
+`appsettings.json` is committed, so **no secret goes in it**. Locally they live in .NET's
+user-secrets store, which sits outside the repo and cannot be committed by accident.
 
-```json
-{
-  "ConnectionStrings": {
-    "Default": "Server=localhost;Database=foodeez;User=root;Password=foodeez123;Port=3306"
-  },
-  "Jwt": {
-    "Key": "any-random-string-that-is-at-least-32-characters-long",
-    "Issuer": "Foodeez",
-    "Audience": "FoodeezApp",
-    "ExpiryHours": 24
-  },
-  "Claude": {
-    "ApiKey": "sk-ant-...",
-    "Model": "claude-sonnet-4-6"
-  }
-}
+```
+cd apps/api/src/Foodeez.API
+
+dotnet user-secrets set "ConnectionStrings:Default" "Server=localhost;Database=foodeez;User=root;Password=foodeez123;Port=3306"
+dotnet user-secrets set "Jwt:Key" "any-random-string-that-is-at-least-32-characters-long"
+dotnet user-secrets set "Claude:ApiKey" "sk-ant-..."
 ```
 
-- **JWT Key** — any random string, minimum 32 characters. Example: `foodeez-super-secret-jwt-key-2024`
+Optional, only if you use them — `Spoonacular:ApiKey`, `FoodData:ApiKey`, `Gemini:ApiKey`,
+`Groq:ApiKey`. `dotnet user-secrets list` shows what is set.
+
+- **JWT Key** — any random string, minimum 32 characters. Changing it signs everyone out.
 - **Claude API Key** — get one at https://console.anthropic.com
+
+Everything that is *not* a secret — model names, Ollama/LocalAI URLs, token ceilings, log
+levels — stays in `appsettings.json`, where it is reviewable in diffs.
+
+> **Environments.** User-secrets are loaded only in Development. `launchSettings.json` and
+> `start-all.bat` both set `ASPNETCORE_ENVIRONMENT=Development`, which is also what enables
+> Swagger. Deployed environments get their configuration from environment variables instead
+> (`Jwt__Key`, `Claude__ApiKey`, ... — `:` becomes `__`); `docker-compose.yml` reads those
+> from a `.env` file, and `.env.example` is the template.
+>
+> The API refuses to start if `ConnectionStrings:Default`, `Jwt:Key`, `Jwt:Issuer` or
+> `Jwt:Audience` is missing, and names the offender — rather than failing later on someone's
+> first login.
 
 ### Step 2 — Restore packages
 
@@ -272,15 +279,24 @@ dotnet test --verbosity normal
 
 ## Environment Variables Reference
 
-### Backend — `apps/api/src/Foodeez.API/appsettings.json`
+### Backend
 
-| Key | Description | Example |
-|-----|-------------|---------|
-| `ConnectionStrings:Default` | MySQL connection string | `Server=localhost;Database=foodeez;User=root;Password=foodeez123;Port=3306` |
-| `Jwt:Key` | JWT signing secret (min 32 chars) | `foodeez-super-secret-jwt-key-2024` |
-| `Jwt:ExpiryHours` | How long tokens stay valid | `24` |
-| `Claude:ApiKey` | Anthropic API key | `sk-ant-api03-...` |
-| `Claude:Model` | Claude model to use | `claude-sonnet-4-6` |
+Secrets come from user-secrets in Development and environment variables when deployed
+(`:` becomes `__`, so `Jwt:Key` is `Jwt__Key`). Non-secrets live in `appsettings.json`.
+
+| Key | Secret? | Description | Example |
+|-----|---------|-------------|---------|
+| `ConnectionStrings:Default` | yes | MySQL connection string | `Server=localhost;Database=foodeez;User=root;Password=...;Port=3306` |
+| `Jwt:Key` | yes | JWT signing secret (min 32 chars) | a long random string |
+| `Jwt:Issuer` / `Jwt:Audience` | no | Token issuer and audience | `Foodeez` / `FoodeezApp` |
+| `Jwt:ExpiryHours` | no | How long tokens stay valid | `24` |
+| `Claude:ApiKey` | yes | Anthropic API key | `sk-ant-api03-...` |
+| `Claude:Model` | no | Claude model to use | `claude-sonnet-4-6` |
+| `Spoonacular:ApiKey` | yes | Recipe search | |
+| `FoodData:ApiKey` | yes | USDA food search | `DEMO_KEY` works for light use |
+| `Gemini:ApiKey` / `Groq:ApiKey` | yes | Alternative AI providers | |
+| `Ollama:*` / `LocalAI:*` | no | Self-hosted provider URL and model | see `appsettings.json` |
+| `Cors:AllowedOrigins` | no | Browser origins allowed outside Development. Empty is correct when the bundled nginx serves the web app, since that is same-origin. | `[]` |
 
 ### Mobile — `apps/mobile/.env`
 
@@ -303,7 +319,7 @@ dotnet tool install --global dotnet-ef
 
 ### MySQL connection refused
 - Confirm MySQL is running: `docker ps` (Docker) or check Services in Task Manager (native install)
-- Confirm the password in `appsettings.json` matches what you set during install
+- Confirm the password in your `ConnectionStrings:Default` user-secret matches what you set during install (`dotnet user-secrets list`)
 - Confirm port 3306 is not blocked by a firewall
 
 ### Expo / Metro bundler can't connect to API on physical device

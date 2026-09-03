@@ -1,4 +1,5 @@
 using System.Text;
+using Foodeez.API.Configuration;
 using Foodeez.API.Middleware;
 using Foodeez.Application.UseCases.AI;
 using Foodeez.Application.UseCases.FoodItems;
@@ -28,6 +29,10 @@ builder.WebHost.ConfigureKestrel(options =>
 {
     options.Limits.MinResponseDataRate = null;
 });
+
+// ── Configuration ─────────────────────────────────────────────────────────────
+// Fail here, naming the key, rather than on someone's first login.
+RequiredConfiguration.Validate(builder.Configuration, builder.Environment);
 
 // ── Infrastructure (DbContext, Repositories, Services) ────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -72,8 +77,7 @@ builder.Services.AddScoped<SavedRecipesUseCase>();
 builder.Services.AddScoped<SearchFoodItemsUseCase>();
 
 // ── JWT Authentication ────────────────────────────────────────────────────────
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key configuration is required.");
+var jwtKey = builder.Configuration["Jwt:Key"]!;   // validated above
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

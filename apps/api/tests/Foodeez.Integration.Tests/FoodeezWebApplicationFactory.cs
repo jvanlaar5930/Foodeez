@@ -16,6 +16,19 @@ public class FoodeezWebApplicationFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Testing");
 
+        // Program validates its required configuration at startup, and user-secrets only load
+        // in Development - so the test host has to supply these itself. They are deliberately
+        // throwaway: the database is swapped for the in-memory provider below, and nothing
+        // here signs a token that outlives the test run.
+        //
+        // UseSetting rather than ConfigureAppConfiguration: the validation runs while Program
+        // is still building, and ConfigureAppConfiguration sources are not visible until after
+        // builder.Build(). UseSetting lands in host configuration immediately.
+        builder.UseSetting("ConnectionStrings:Default", "InMemory");
+        builder.UseSetting("Jwt:Key", "integration-tests-signing-key-not-a-secret");
+        builder.UseSetting("Jwt:Issuer", "Foodeez");
+        builder.UseSetting("Jwt:Audience", "FoodeezApp");
+
         builder.ConfigureServices(services =>
         {
             // Remove the real MySQL registration. Taking out DbContextOptions<AppDbContext>
