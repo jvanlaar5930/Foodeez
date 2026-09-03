@@ -96,6 +96,7 @@
             :date="day"
             :meal-type="mealType.value"
             :entry="getEntry(day, mealType.value)"
+            :logged-label="getLoggedLabel(day, mealType.value)"
             class="border-l"
             @click="openSlot(day, mealType.value)"
           />
@@ -172,7 +173,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import DayMealSlot from '@/components/mealplan/DayMealSlot.vue';
@@ -181,7 +182,8 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
 import { useAuthStore } from '@/stores/auth';
-import { MealType, type MealPlanEntry, type MealPlanEntryRequest } from '@foodeez/shared';
+import { mealService } from '@/services/mealService';
+import { MealType, type MealLog, type MealPlanEntry, type MealPlanEntryRequest } from '@foodeez/shared';
 
 const authStore = useAuthStore();
 const planStore = useMealPlanStore();
@@ -213,8 +215,42 @@ function getEntry(date: Date, mealType: MealType): MealPlanEntry | undefined {
   return forDay.find(e => e.mealType === mealType);
 }
 
+// What was actually logged for the visible week, shown read-only alongside what was
+// planned - keyed by "date|mealType" since a day's logs are fetched as a flat list.
+const loggedLogs = ref<MealLog[]>([]);
+
+function loggedLabelKey(date: string, mealType: MealType) { return `${date}|${mealType}`; }
+
+const loggedLabels = computed(() => {
+  const map = new Map<string, string>();
+  for (const log of loggedLogs.value) {
+    const label = log.items.map(item => item.foodItem.name).filter(Boolean).join(', ');
+    if (label) map.set(loggedLabelKey(log.logDate, log.mealType), label);
+  }
+  return map;
+});
+
+function getLoggedLabel(date: Date, mealType: MealType): string | undefined {
+  return loggedLabels.value.get(loggedLabelKey(format(date, 'yyyy-MM-dd'), mealType));
+}
+
+async function fetchLoggedWeek() {
+  if (!authStore.user?.id) return;
+  try {
+    loggedLogs.value = await mealService.getLogsRange(
+      authStore.user.id,
+      format(weekDays.value[0], 'yyyy-MM-dd'),
+      format(weekDays.value[6], 'yyyy-MM-dd'),
+    );
+  } catch {
+    // Purely a display overlay on top of the plan grid - failing to load it should not
+    // block the calendar itself from rendering.
+    loggedLogs.value = [];
+  }
+}
+
 const hasEntriesThisWeek = computed(() =>
-  weekDays.value.some(d => MEAL_TYPES.some(mt => getEntry(d, mt.value) !== undefined))
+  weekDays.value.some(d => MEAL_TYPES.some(mt => getEntry(d, mt.value) !== undefined || getLoggedLabel(d, mt.value) !== undefined))
 );
 
 function prevWeek() { weekStart.value = addDays(weekStart.value, -7); }
@@ -313,7 +349,10 @@ async function handleGeneratePlan() {
   }
 }
 
+watch(weekStart, fetchLoggedWeek);
+
 onMounted(() => {
   if (authStore.user?.id) planStore.fetchPlans(authStore.user.id);
+  fetchLoggedWeek();
 });
 </script>

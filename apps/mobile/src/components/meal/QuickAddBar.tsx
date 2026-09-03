@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { mealService } from '@/services/mealService';
 import { mealTemplateService } from '@/services/mealTemplateService';
 import { useAuthStore } from '@/store/authStore';
+import { describeApiError } from '@/utils/apiError';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 import type { MealTemplateDto, QuickAddResultDto, RecentMealDto } from '@/types';
@@ -76,8 +77,13 @@ export function QuickAddBar({ onApplied, reloadToken = 0, onScanPress }: Props) 
       if (result.note) {
         Alert.alert('Added, with an assumption', result.note);
       }
-    } catch {
-      Alert.alert('Could not read that', 'Try again, or add the items by searching below.');
+    } catch (err: unknown) {
+      // A timeout reads as "no response" here just like a dropped connection would - both
+      // mean the answer never made it back, whatever the server ended up doing with it.
+      Alert.alert(
+        'Could not read that',
+        describeApiError(err, 'Try again, or add the items by searching below.'),
+      );
     } finally {
       setIsBusy(false);
     }
@@ -111,22 +117,28 @@ export function QuickAddBar({ onApplied, reloadToken = 0, onScanPress }: Props) 
 
   return (
     <View style={styles.container}>
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Describe the whole meal at once..."
-          placeholderTextColor={C.textHint}
-          editable={!isBusy}
-          multiline
-          returnKeyType="done"
-          blurOnSubmit
-          onSubmitEditing={submit}
-        />
+      <TextInput
+        style={styles.input}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Describe the whole meal at once..."
+        placeholderTextColor={C.textHint}
+        editable={!isBusy}
+        multiline
+        textAlignVertical="top"
+        returnKeyType="done"
+        blurOnSubmit
+        onSubmitEditing={submit}
+      />
+
+      {/* Stacked rather than squeezed beside the box, so both the text and the buttons
+          get room - two full-width taps instead of two buttons fighting the input for
+          width. */}
+      <View style={styles.buttonStack}>
         {onScanPress && (
-          <TouchableOpacity style={styles.iconButton} onPress={onScanPress} disabled={isBusy}>
-            <Ionicons name="camera-outline" size={20} color={C.primary} />
+          <TouchableOpacity style={styles.scanButton} onPress={onScanPress} disabled={isBusy}>
+            <Ionicons name="camera-outline" size={18} color={C.primary} />
+            <Text style={styles.scanButtonText}>Scan a photo instead</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -137,7 +149,7 @@ export function QuickAddBar({ onApplied, reloadToken = 0, onScanPress }: Props) 
           {isBusy ? (
             <ActivityIndicator size="small" color={C.surface} />
           ) : (
-            <Text style={styles.addButtonText}>Add</Text>
+            <Text style={styles.addButtonText}>Add to meal</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -196,15 +208,9 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingTop: Spacing.sm,
     gap: Spacing.xs,
   },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.xs,
-  },
   input: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 96,
+    minHeight: 90,
+    maxHeight: 160,
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.primary,
@@ -214,14 +220,23 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     fontSize: FontSize.md,
     color: C.text,
   },
-  iconButton: {
-    height: 44,
-    width: 44,
+  buttonStack: {
+    gap: Spacing.xs,
+  },
+  scanButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.xs,
+    height: 44,
     borderWidth: 1,
     borderColor: C.primary,
     borderRadius: BorderRadius.md,
+  },
+  scanButtonText: {
+    color: C.primary,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium,
   },
   addButton: {
     height: 44,
@@ -230,7 +245,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: C.primary,
     borderRadius: BorderRadius.md,
-    minWidth: 60,
   },
   addButtonDisabled: {
     opacity: 0.5,

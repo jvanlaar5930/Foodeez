@@ -82,6 +82,28 @@ public class PlannedMealReader
         return byRecipe;
     }
 
+    /// <summary>
+    /// What was actually logged as eaten across a stretch of dates. Kept separate from
+    /// <see cref="ReadAsync"/> - that method also feeds the grocery list, which should stay
+    /// about what is still planned to buy, not what has already been eaten.
+    /// </summary>
+    public async Task<List<PlannedMealSummary>> ReadLoggedAsync(Guid userId, DateOnly startDate, DateOnly endDate)
+    {
+        var logs = await _unitOfWork.MealLogs.GetByUserAndDateRangeAsync(userId, startDate, endDate);
+
+        return logs
+            .Select(log => new PlannedMealSummary(log.LogDate, log.MealType, Label(log), 1f, Array.Empty<string>()))
+            .Where(meal => meal.Label.Length > 0)
+            .OrderBy(meal => meal.Date)
+            .ThenBy(meal => meal.MealType)
+            .ToList();
+    }
+
+    private static string Label(MealLog log) =>
+        string.Join(", ", log.Items
+            .Select(item => item.FoodItem?.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name)));
+
     private static string Describe(RecipeIngredient ingredient)
     {
         var name = ingredient.FoodItem?.Name ?? ingredient.IngredientName ?? string.Empty;

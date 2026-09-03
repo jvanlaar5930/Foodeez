@@ -36,6 +36,7 @@ builder.Services.AddScoped<QuickAddMealUseCase>();
 builder.Services.AddScoped<MealTemplatesUseCase>();
 builder.Services.AddScoped<ParsedMealResolver>();
 builder.Services.AddScoped<GetDailyLogsUseCase>();
+builder.Services.AddScoped<GetMealLogsRangeUseCase>();
 builder.Services.AddScoped<GetNutritionSummaryUseCase>();
 builder.Services.AddScoped<GetMealPlanUseCase>();
 builder.Services.AddScoped<CreateMealPlanUseCase>();

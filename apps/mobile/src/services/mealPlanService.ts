@@ -1,4 +1,5 @@
 import { api } from './api';
+import { AI_REQUEST_TIMEOUT } from '@/constants/api';
 import type { GenerateMealPlanRequest, MealPlanDto } from '@/types';
 
 export async function getMealPlans(userId: string): Promise<MealPlanDto[]> {
@@ -24,7 +25,11 @@ export async function createMealPlan(data: {
 }
 
 export async function generateAIMealPlan(data: GenerateMealPlanRequest): Promise<MealPlanDto> {
-  const response = await api.post<MealPlanDto>('/meal-plans/generate', data);
+  // A week's worth of days and meals for the model to reason through routinely takes well
+  // past the app's ordinary 30s timeout to answer - same reasoning as the other AI calls.
+  const response = await api.post<MealPlanDto>('/meal-plans/generate', data, {
+    timeout: AI_REQUEST_TIMEOUT,
+  });
   return response.data;
 }
 

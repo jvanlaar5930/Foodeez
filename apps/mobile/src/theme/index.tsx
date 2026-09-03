@@ -60,7 +60,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const scheme: ColorScheme = mode === 'system' ? (systemScheme ?? 'light') : mode;
+  const scheme: ColorScheme = mode === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : mode;
 
   const value = useMemo<ThemeContextValue>(
     () => ({

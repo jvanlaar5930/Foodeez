@@ -17,6 +17,7 @@ public class MealLogsController : ControllerBase
     private readonly ParseMealImageUseCase _parseMealImageUseCase;
     private readonly QuickAddMealUseCase _quickAddMealUseCase;
     private readonly GetDailyLogsUseCase _getDailyLogsUseCase;
+    private readonly GetMealLogsRangeUseCase _getMealLogsRangeUseCase;
     private readonly GetNutritionSummaryUseCase _getNutritionSummaryUseCase;
     private readonly UpdateMealLogUseCase _updateMealLogUseCase;
     private readonly DeleteMealLogUseCase _deleteMealLogUseCase;
@@ -28,6 +29,7 @@ public class MealLogsController : ControllerBase
         ParseMealImageUseCase parseMealImageUseCase,
         QuickAddMealUseCase quickAddMealUseCase,
         GetDailyLogsUseCase getDailyLogsUseCase,
+        GetMealLogsRangeUseCase getMealLogsRangeUseCase,
         GetNutritionSummaryUseCase getNutritionSummaryUseCase,
         UpdateMealLogUseCase updateMealLogUseCase,
         DeleteMealLogUseCase deleteMealLogUseCase,
@@ -38,6 +40,7 @@ public class MealLogsController : ControllerBase
         _parseMealImageUseCase = parseMealImageUseCase;
         _quickAddMealUseCase = quickAddMealUseCase;
         _getDailyLogsUseCase = getDailyLogsUseCase;
+        _getMealLogsRangeUseCase = getMealLogsRangeUseCase;
         _getNutritionSummaryUseCase = getNutritionSummaryUseCase;
         _updateMealLogUseCase = updateMealLogUseCase;
         _deleteMealLogUseCase = deleteMealLogUseCase;
@@ -165,6 +168,22 @@ public class MealLogsController : ControllerBase
             return BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
         var logs = await _getDailyLogsUseCase.ExecuteAsync(userId, parsedDate);
+        return Ok(logs);
+    }
+
+    /// <summary>
+    /// Get all meal logs for a user across a date range - used to show what was actually
+    /// eaten alongside a calendar of what was planned.
+    /// </summary>
+    [HttpGet("range")]
+    [ProducesResponseType(typeof(List<MealLogDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMealLogsRange(
+        [FromQuery] Guid userId, [FromQuery] string startDate, [FromQuery] string endDate)
+    {
+        if (!DateOnly.TryParse(startDate, out var parsedStart) || !DateOnly.TryParse(endDate, out var parsedEnd))
+            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
+
+        var logs = await _getMealLogsRangeUseCase.ExecuteAsync(userId, parsedStart, parsedEnd);
         return Ok(logs);
     }
 

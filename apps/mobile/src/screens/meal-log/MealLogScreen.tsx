@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { addDays, subDays } from 'date-fns';
 import { MealSection } from '@/components/meal/MealSection';
+import { DayAnalysisCard } from '@/components/meal/DayAnalysisCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuthStore } from '@/store/authStore';
 import { useMealStore } from '@/store/mealStore';
@@ -143,6 +144,18 @@ export function MealLogScreen() {
             />
           ))
         )}
+
+        {user && dailyLogs.length > 0 && (
+          <View style={styles.dayAnalysis}>
+            <DayAnalysisCard
+              userId={user.id}
+              date={selectedDate}
+              dailyLogs={dailyLogs}
+              isToday={isToday(currentDate)}
+            />
+          </View>
+        )}
+
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -234,6 +247,9 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     backgroundColor: C.surface,
     borderWidth: 1.5,
     borderColor: C.secondary,
+  },
+  dayAnalysis: {
+    marginTop: Spacing.md,
   },
   bottomPadding: {
     height: 80,

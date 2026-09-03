@@ -14,6 +14,14 @@ export const mealService = {
     return response.data;
   },
 
+  /** What was actually logged across a date range - used to show logged meals on the calendar. */
+  async getLogsRange(userId: string, startDate: string, endDate: string): Promise<MealLog[]> {
+    const response = await api.get<MealLog[]>('/meal-logs/range', {
+      params: { userId, startDate, endDate },
+    });
+    return response.data;
+  },
+
   async updateMealLog(mealLogId: string, data: LogMealRequest): Promise<MealLog> {
     const response = await api.put<MealLog>(`/meal-logs/${mealLogId}`, data);
     return response.data;

@@ -370,7 +370,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   // Absolute fill sidesteps percentage-height resolution entirely: the image can only ever
   // be as big as the column above.
-  recipeImagePhoto: { ...StyleSheet.absoluteFillObject },
+  recipeImagePhoto: { ...StyleSheet.absoluteFill },
   // Extra room on the right so the save button never sits on top of a long title.
   recipeInfo: { flex: 1, padding: Spacing.md, paddingRight: Spacing.xl + Spacing.sm },
   saveButton: {

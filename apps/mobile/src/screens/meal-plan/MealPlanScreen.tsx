@@ -24,7 +24,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
 import { useAuthStore } from '@/store/authStore';
-import { MealPlanEntryDto, MealType } from '@/types';
+import { mealService } from '@/services/mealService';
+import { MealLogDto, MealPlanEntryDto, MealType } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -68,12 +69,36 @@ export function MealPlanScreen({ navigation }: Props) {
 
   const { user } = useAuthStore();
   const { plans, activePlan, isLoading, isGenerating, fetchPlans, generatePlan } = useMealPlanStore();
+  // What was actually logged for the visible week, shown read-only alongside what was
+  // planned - a display-only overlay, so a failed fetch just leaves the grid unannotated.
+  const [loggedLogs, setLoggedLogs] = useState<MealLogDto[]>([]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   useEffect(() => {
     if (user?.id) fetchPlans(user.id);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    mealService
+      .getLogsRange(user.id, format(weekStart, 'yyyy-MM-dd'), format(addDays(weekStart, 6), 'yyyy-MM-dd'))
+      .then((logs) => { if (!cancelled) setLoggedLogs(logs); })
+      .catch(() => { if (!cancelled) setLoggedLogs([]); });
+    return () => { cancelled = true; };
+  }, [user?.id, weekStart]);
+
+  const getLoggedLabel = useCallback(
+    (date: Date, mealType: MealType): string | undefined => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const log = loggedLogs.find((l) => l.logDate === dateStr && l.mealType === mealType);
+      if (!log) return undefined;
+      const label = log.items.map((item) => item.foodItem.name).filter(Boolean).join(', ');
+      return label.length > 0 ? label : undefined;
+    },
+    [loggedLogs]
+  );
 
   const getEntriesForDay = useCallback(
     (date: Date): MealPlanEntryDto[] => {
@@ -105,7 +130,8 @@ export function MealPlanScreen({ navigation }: Props) {
   };
 
   const selectedDayEntries = getEntriesForDay(selectedDay);
-  const hasEntriesThisWeek = weekDays.some(d => getEntriesForDay(d).length > 0);
+  const dayHasLoggedMeal = (date: Date) => loggedLogs.some((l) => l.logDate === format(date, 'yyyy-MM-dd'));
+  const hasEntriesThisWeek = weekDays.some(d => getEntriesForDay(d).length > 0 || dayHasLoggedMeal(d));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -139,7 +165,7 @@ export function MealPlanScreen({ navigation }: Props) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysRow} contentContainerStyle={styles.daysRowContent}>
         {weekDays.map(day => {
           const isSelected = isSameDay(day, selectedDay);
-          const hasMeals = getEntriesForDay(day).length > 0;
+          const hasMeals = getEntriesForDay(day).length > 0 || dayHasLoggedMeal(day);
           return (
             <TouchableOpacity
               key={day.toISOString()}
@@ -178,6 +204,7 @@ export function MealPlanScreen({ navigation }: Props) {
         ) : (
           MEAL_TYPES.map(mealType => {
             const entry = getEntryForDayAndMeal(selectedDay, mealType);
+            const loggedLabel = entry ? undefined : getLoggedLabel(selectedDay, mealType);
             return (
               <TouchableOpacity
                 key={mealType}
@@ -188,12 +215,16 @@ export function MealPlanScreen({ navigation }: Props) {
                   <Text style={styles.mealSlotType}>{MEAL_TYPE_LABELS[mealType]}</Text>
                   {entry ? (
                     <Text style={styles.mealSlotName} numberOfLines={2}>{entryLabel(entry)}</Text>
+                  ) : loggedLabel ? (
+                    <Text style={styles.mealSlotLogged} numberOfLines={2}>{loggedLabel} (logged)</Text>
                   ) : (
                     <Text style={styles.mealSlotEmpty}>Not planned</Text>
                   )}
                 </View>
                 {entry ? (
                   <Ionicons name="checkmark-circle" size={22} color={C.primary} />
+                ) : loggedLabel ? (
+                  <Ionicons name="restaurant" size={20} color={C.textSecondary} />
                 ) : (
                   <Ionicons name="add-circle-outline" size={22} color={C.textSecondary} />
                 )}
@@ -328,6 +359,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   mealSlotType: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
   mealSlotName: { fontSize: FontSize.md, color: C.text, fontWeight: FontWeight.semibold, marginTop: 2 },
   mealSlotEmpty: { fontSize: FontSize.md, color: C.textHint, fontStyle: 'italic', marginTop: 2 },
+  mealSlotLogged: { fontSize: FontSize.md, color: C.textSecondary, fontStyle: 'italic', marginTop: 2 },
   generateBanner: {
     backgroundColor: C.surface,
     borderRadius: BorderRadius.xl,

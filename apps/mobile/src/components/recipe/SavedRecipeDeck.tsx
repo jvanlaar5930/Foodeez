@@ -194,7 +194,7 @@ const makeStyles = (C: Palette) =>
       right: -24,
     },
     cardImagePlaceholder: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',
     },

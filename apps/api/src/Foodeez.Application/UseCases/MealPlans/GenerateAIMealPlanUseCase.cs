@@ -135,8 +135,15 @@ public class GenerateAIMealPlanUseCase
         var previousStart = previousEnd.AddDays(-(length - 1));
 
         var planned = await _plannedMeals.ReadAsync(request.UserId, previousStart, previousEnd);
+        var logged = await _plannedMeals.ReadLoggedAsync(request.UserId, previousStart, previousEnd);
 
-        request.PreviousPeriod = planned
+        // What was actually eaten is the more honest answer to "what happened last period" -
+        // a plan slot nothing was logged against falls back to what was merely planned for
+        // it, but a logged slot always wins, since that is what really happened.
+        var loggedSlots = logged.Select(meal => (meal.Date, meal.MealType)).ToHashSet();
+        var merged = logged.Concat(planned.Where(meal => !loggedSlots.Contains((meal.Date, meal.MealType))));
+
+        request.PreviousPeriod = merged
             .OrderBy(meal => meal.Date)
             .ThenBy(meal => meal.MealType)
             .Select(meal => $"{meal.Date:yyyy-MM-dd} {meal.MealType}: {meal.Label}")

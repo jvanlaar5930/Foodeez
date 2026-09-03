@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealLogStackParamList } from '@/navigation/types';
 import { mealService } from '@/services/mealService';
+import { describeApiError } from '@/utils/apiError';
 import { QuickAddItemDto } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
@@ -73,8 +74,11 @@ export function FoodScanScreen({ navigation }: Props) {
       setParsedItems(result.items);
       setSelectedItems(new Set(result.items.map((_, i) => i)));
       setScanState('results');
-    } catch {
-      Alert.alert('Analysis Failed', 'Could not analyze the food. Please try again or add manually.');
+    } catch (err: unknown) {
+      Alert.alert(
+        'Analysis Failed',
+        describeApiError(err, 'Could not analyze the food. Please try again or add manually.'),
+      );
       setScanState('camera');
     }
   };

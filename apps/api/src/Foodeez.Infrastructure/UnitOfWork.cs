@@ -1,6 +1,7 @@
 using Foodeez.Application.Common;
 using Foodeez.Application.Interfaces.Repositories;
 using Foodeez.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Foodeez.Infrastructure;
 
@@ -53,6 +54,14 @@ public class UnitOfWork : IUnitOfWork
 
     public async Task<int> SaveChangesAsync(CancellationToken ct = default)
     {
-        return await _context.SaveChangesAsync(ct);
+        try
+        {
+            return await _context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException(
+                "The save affected fewer rows than expected - it may have already applied.", ex);
+        }
     }
 }
