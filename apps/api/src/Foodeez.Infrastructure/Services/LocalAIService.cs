@@ -31,7 +31,6 @@ public class LocalAIService : IAIService, IStreamingAIService
     private const string DefaultBaseUrl = "http://localhost:1234/v1";   // LM Studio's default
     private const string DefaultModel = "local-model";
     private const int DefaultTimeoutSeconds = 300;
-    private const int MaxTokens = 4096;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -92,6 +91,21 @@ public class LocalAIService : IAIService, IStreamingAIService
         return TimeSpan.FromSeconds(seconds);
     }
 
+    /// <summary>
+    /// How much a loaded model can actually produce in one response is not something we can
+    /// learn from an OpenAI-compatible server - "/v1/models" does not carry it, and the model
+    /// picked in LM Studio's UI never reaches this app at all. Rather than guess a number and
+    /// risk it being too small for whatever is loaded (silently truncating a large plan, same
+    /// as the bug this replaced) or rejected as too large for a small one, this is left unset
+    /// unless an admin explicitly configures it - the server then falls back to its own
+    /// per-model default.
+    /// </summary>
+    private async Task<int?> MaxTokensAsync()
+    {
+        var raw = await ResolveAsync("local.maxTokens", "LocalAI:MaxTokens");
+        return int.TryParse(raw, out var parsed) && parsed > 0 ? parsed : null;
+    }
+
     // ────────────────────────── Transport ──────────────────────────
 
     private Task<string> SendAsync(string prompt, CancellationToken ct) =>
@@ -105,12 +119,12 @@ public class LocalAIService : IAIService, IStreamingAIService
         var model = await ResolveAsync("local.model", "LocalAI:Model") ?? DefaultModel;
         var apiKey = await ResolveAsync("local.apiKey", "LocalAI:ApiKey");
 
-        var body = new
+        var body = new Dictionary<string, object?>
         {
-            model,
-            max_tokens = MaxTokens,
-            stream = false,
-            messages
+            ["model"] = model,
+            ["max_tokens"] = await MaxTokensAsync(),
+            ["stream"] = false,
+            ["messages"] = messages
         };
 
         var request = new HttpRequestMessage(HttpMethod.Post, BuildChatCompletionsUrl(baseUrl))
@@ -460,12 +474,12 @@ public class LocalAIService : IAIService, IStreamingAIService
         var model = await ResolveAsync("local.model", "LocalAI:Model") ?? DefaultModel;
         var apiKey = await ResolveAsync("local.apiKey", "LocalAI:ApiKey");
 
-        var body = new
+        var body = new Dictionary<string, object?>
         {
-            model,
-            max_tokens = MaxTokens,
-            stream = true,
-            messages = new object[] { new { role = "user", content = prompt } }
+            ["model"] = model,
+            ["max_tokens"] = await MaxTokensAsync(),
+            ["stream"] = true,
+            ["messages"] = new object[] { new { role = "user", content = prompt } }
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildChatCompletionsUrl(baseUrl))

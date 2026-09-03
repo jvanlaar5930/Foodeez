@@ -167,13 +167,25 @@ public class ClaudeAIService : IAIService, IStreamingAIService
 
     // ────────────────────────── Private Helpers ──────────────────────────
 
+    /// <summary>
+    /// The output ceiling for a single response - how much room the configured model actually
+    /// has is a property of that model, not something this application should be guessing at
+    /// in code. Read from config (set to match whatever "Claude:Model" points at); the
+    /// fallback is Anthropic's default max output for the current Claude models, used only
+    /// when nobody has configured one.
+    /// </summary>
+    private int MaxOutputTokens() =>
+        int.TryParse(_configuration["Claude:MaxTokens"], out var configured) && configured > 0
+            ? configured
+            : 8192;
+
     private async Task<string> SendMessageAsync(string prompt, CancellationToken ct)
     {
         var model = _configuration["Claude:Model"] ?? "claude-sonnet-4-6";
         var requestBody = new
         {
             model,
-            max_tokens = 2048,
+            max_tokens = MaxOutputTokens(),
             messages = new[]
             {
                 new { role = "user", content = prompt }
@@ -533,7 +545,7 @@ public class ClaudeAIService : IAIService, IStreamingAIService
         var body = new
         {
             model = _configuration["Claude:Model"] ?? "claude-sonnet-4-6",
-            max_tokens = 2048,
+            max_tokens = MaxOutputTokens(),
             stream = true,
             messages = new[] { new { role = "user", content = prompt } }
         };

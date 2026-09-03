@@ -37,6 +37,17 @@ public class GroqAIService : IAIService, IStreamingAIService
         _logger = logger;
     }
 
+    /// <summary>
+    /// The output ceiling for a single response - how much room the configured model actually
+    /// has is a property of that model, not something this application should be guessing at
+    /// in code. Read from config (set to match whatever "Groq:Model" points at); the fallback
+    /// is used only when nobody has configured one.
+    /// </summary>
+    private int MaxOutputTokens() =>
+        int.TryParse(_configuration["Groq:MaxTokens"], out var configured) && configured > 0
+            ? configured
+            : 8192;
+
     private async Task<string> SendAsync(string prompt, CancellationToken ct)
     {
         var apiKey = _configuration["Groq:ApiKey"] ?? throw new InvalidOperationException("Groq:ApiKey is not configured.");
@@ -45,7 +56,7 @@ public class GroqAIService : IAIService, IStreamingAIService
         var body = new
         {
             model,
-            max_tokens = 2048,
+            max_tokens = MaxOutputTokens(),
             messages = new[] { new { role = "user", content = prompt } }
         };
 
@@ -287,7 +298,7 @@ public class GroqAIService : IAIService, IStreamingAIService
         var body = new
         {
             model,
-            max_tokens = 2048,
+            max_tokens = MaxOutputTokens(),
             stream = true,
             messages = new[] { new { role = "user", content = prompt } }
         };
