@@ -71,7 +71,10 @@ public class UpdateMealLogUseCaseTests
         result.Items[0].Quantity.Should().Be(300f);
         result.TotalNutrition.Calories.Should().BeApproximately(240f, 0.1f);
 
-        _mealLogRepoMock.Verify(r => r.Update(existingLog), Times.Once);
+        // The meal comes back from a tracking query, so the edits save themselves. Calling
+        // Update() would force the brand new items to Modified and update rows that do not
+        // exist yet, which surfaces as a phantom concurrency conflict.
+        _mealLogRepoMock.Verify(r => r.Update(It.IsAny<MealLog>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 

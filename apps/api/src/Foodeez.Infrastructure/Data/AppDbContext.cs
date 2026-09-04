@@ -43,6 +43,18 @@ public class AppDbContext : DbContext
                     property.SetColumnType("date");
                 }
             }
+
+            // Every id is assigned by BaseEntity's initialiser, never by the database. Saying so
+            // is what lets EF tell a new entity from an existing one: left as store-generated, a
+            // Guid that is already filled in reads as "this row exists", so a child added to a
+            // loaded parent (a new item on an edited meal log) is attached as Modified and saved
+            // as an UPDATE of a row that was never inserted - which comes back as 0 rows affected
+            // and surfaces as a phantom concurrency conflict.
+            if (typeof(Domain.Common.BaseEntity).IsAssignableFrom(entityType.ClrType)
+                && entityType.FindProperty(nameof(Domain.Common.BaseEntity.Id)) is { } idProperty)
+            {
+                idProperty.ValueGenerated = Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.Never;
+            }
         }
     }
 

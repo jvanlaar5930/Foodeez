@@ -29,8 +29,12 @@ public class UpdateMealLogUseCase
                 throw new KeyNotFoundException($"MealLog with id '{mealLogId}' was not found.");
             }
 
+            // No Update() call here: the meal was loaded by a tracking query, so the change
+            // tracker already picks up the edits, the removed items and the new ones. Calling
+            // Update() would instead force every freshly built item to Modified - their Ids are
+            // assigned in the constructor, so EF cannot tell them from existing rows - and the
+            // resulting UPDATE against rows that do not exist yet fails as a phantom conflict.
             await MealLogRequestApplier.ApplyAsync(mealLog, request, _unitOfWork);
-            _unitOfWork.MealLogs.Update(mealLog);
 
             try
             {
