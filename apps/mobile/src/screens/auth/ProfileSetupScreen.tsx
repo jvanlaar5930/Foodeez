@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/store/authStore';
+import { ChoiceList } from '@/components/profile/ChoiceList';
 import { useProfileStore } from '@/store/profileStore';
 import {
   ActivityLevel,
@@ -284,74 +285,25 @@ export function ProfileSetupScreen() {
             <View>
               <Text style={styles.stepTitle}>What's your goal?</Text>
               <Text style={styles.stepSubtitle}>Choose the goal that best fits your vision</Text>
-              <View style={styles.goalList}>
-                {GOAL_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[
-                      styles.goalCard,
-                      data.dietaryGoal === opt.value && styles.goalCardActive,
-                    ]}
-                    onPress={() => updateData('dietaryGoal', opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.goalEmoji}>{opt.emoji}</Text>
-                    <View style={styles.goalText}>
-                      <Text
-                        style={[
-                          styles.goalTitle,
-                          data.dietaryGoal === opt.value && styles.goalTitleActive,
-                        ]}
-                      >
-                        {opt.title}
-                      </Text>
-                      <Text style={styles.goalDesc}>{opt.description}</Text>
-                    </View>
-                    {data.dietaryGoal === opt.value && (
-                      <View style={styles.checkCircle}>
-                        <Text style={styles.checkMark}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <ChoiceList
+                options={GOAL_OPTIONS}
+                value={data.dietaryGoal}
+                onChange={(value) => updateData('dietaryGoal', value)}
+              />
             </View>
           )}
 
           {step === 3 && (
             <View>
               <Text style={styles.stepTitle}>How active are you?</Text>
-              <Text style={styles.stepSubtitle}>Your activity level affects your daily calorie needs</Text>
-              <View style={styles.goalList}>
-                {ACTIVITY_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[
-                      styles.goalCard,
-                      data.activityLevel === opt.value && styles.goalCardActive,
-                    ]}
-                    onPress={() => updateData('activityLevel', opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.goalText}>
-                      <Text
-                        style={[
-                          styles.goalTitle,
-                          data.activityLevel === opt.value && styles.goalTitleActive,
-                        ]}
-                      >
-                        {opt.title}
-                      </Text>
-                      <Text style={styles.goalDesc}>{opt.description}</Text>
-                    </View>
-                    {data.activityLevel === opt.value && (
-                      <View style={styles.checkCircle}>
-                        <Text style={styles.checkMark}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text style={styles.stepSubtitle}>
+                Your activity level affects your daily calorie needs
+              </Text>
+              <ChoiceList
+                options={ACTIVITY_OPTIONS}
+                value={data.activityLevel}
+                onChange={(value) => updateData('activityLevel', value)}
+              />
             </View>
           )}
 
@@ -511,58 +463,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   genderBtnTextActive: {
     color: C.primaryDark,
-  },
-  goalList: {
-    gap: Spacing.sm,
-  },
-  goalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1.5,
-    borderColor: C.divider,
-    gap: Spacing.md,
-  },
-  goalCardActive: {
-    borderColor: C.primary,
-    backgroundColor: C.primaryLight,
-  },
-  goalEmoji: {
-    fontSize: 28,
-    width: 36,
-    textAlign: 'center',
-  },
-  goalText: {
-    flex: 1,
-  },
-  goalTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-    color: C.text,
-    marginBottom: 2,
-  },
-  goalTitleActive: {
-    color: C.primaryDark,
-  },
-  goalDesc: {
-    fontSize: FontSize.sm,
-    color: C.textSecondary,
-    lineHeight: 18,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: C.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkMark: {
-    color: C.onPrimary,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
   },
   targetCard: {
     backgroundColor: C.surface,
