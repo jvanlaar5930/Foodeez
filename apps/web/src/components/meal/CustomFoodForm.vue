@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { extractErrorMessage } from '@/utils/apiError';
 import { ref } from 'vue';
 import AppInput from '@/components/ui/AppInput.vue';
 import AppButton from '@/components/ui/AppButton.vue';
@@ -131,8 +132,7 @@ async function save() {
     });
     emit('created', created);
   } catch (err: unknown) {
-    const e = err as { response?: { data?: { detail?: string; title?: string } } };
-    error.value = e.response?.data?.detail ?? e.response?.data?.title ?? 'Could not save this food.';
+    error.value = extractErrorMessage(err, 'Could not save this food.');
   } finally {
     isSaving.value = false;
   }

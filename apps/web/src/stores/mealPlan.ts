@@ -1,5 +1,7 @@
 import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
+import { extractErrorMessage } from '@/utils/apiError';
+import { useAsyncState } from '@/stores/asyncState';
 import { mealPlanService } from '@/services/mealPlanService';
 import type {
   CreateMealPlanRequest,
@@ -12,11 +14,10 @@ import type {
 export const useMealPlanStore = defineStore('mealPlan', () => {
   const plans = ref<MealPlan[]>([]);
   const activePlan = ref<MealPlan | null>(null);
-  const isLoading = ref(false);
   const isGenerating = ref(false);
   /** What the model has written so far this generation, for the view to show as it arrives. */
   const generationText = ref('');
-  const error = ref<string | null>(null);
+  const { isLoading, error, run, runOrThrow } = useAsyncState();
 
   const sortedPlans = computed(() =>
     [...plans.value].sort(
@@ -25,34 +26,21 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
   );
 
   async function fetchPlans(userId: string): Promise<void> {
-    isLoading.value = true;
-    error.value = null;
-    try {
+    await run('Your meal plans could not be loaded.', async () => {
       plans.value = await mealPlanService.getMealPlans(userId);
       if (plans.value.length > 0) {
         activePlan.value = plans.value[0];
       }
-    } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
-    } finally {
-      isLoading.value = false;
-    }
+    });
   }
 
   async function createPlan(data: CreateMealPlanRequest): Promise<MealPlan> {
-    isLoading.value = true;
-    error.value = null;
-    try {
+    return runOrThrow('That plan could not be created.', async () => {
       const plan = await mealPlanService.createMealPlan(data);
       plans.value.unshift(plan);
       activePlan.value = plan;
       return plan;
-    } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
-      throw err;
-    } finally {
-      isLoading.value = false;
-    }
+    });
   }
 
   // Held outside the action so cancelGeneration can reach the in-flight request.
@@ -192,23 +180,6 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
 
   function clearError(): void {
     error.value = null;
-  }
-
-  function extractErrorMessage(err: unknown): string {
-    if (err && typeof err === 'object' && 'response' in err) {
-      // `message` covers the plain-object errors this API returns (the 503 when the AI
-      // provider is unavailable); detail/title cover the ProblemDetails responses.
-      const e = err as {
-        response?: { data?: { message?: string; detail?: string; title?: string } };
-      };
-      return (
-        e.response?.data?.message ??
-        e.response?.data?.detail ??
-        e.response?.data?.title ??
-        'An error occurred'
-      );
-    }
-    return 'An error occurred';
   }
 
   return {

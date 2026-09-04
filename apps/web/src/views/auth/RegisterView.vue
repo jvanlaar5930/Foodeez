@@ -107,6 +107,7 @@
 </template>
 
 <script setup lang="ts">
+import { extractErrorMessage } from '@/utils/apiError';
 import { ref, computed } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
@@ -168,8 +169,8 @@ async function handleSubmit() {
       password: form.value.password,
     });
     router.push('/auth/setup');
-  } catch (err: any) {
-    apiError.value = err.response?.data?.detail ?? 'Registration failed. Please try again.';
+  } catch (err: unknown) {
+    apiError.value = extractErrorMessage(err, 'Registration failed. Please try again.');
   } finally {
     isLoading.value = false;
   }

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { extractErrorMessage } from '@/utils/apiError';
+
+const ANALYSIS_FAILED = 'The analysis could not be completed. Please try again.';
 import { computed, ref, watch } from 'vue';
 import type { DayAnalysis } from '@foodeez/shared';
 import { aiService } from '@/services/aiService';
@@ -78,25 +81,12 @@ async function runAnalysis(refresh: boolean) {
       streamedText.value += text;
     });
   } catch (err: unknown) {
-    error.value = err instanceof AIStreamError ? err.message : extractErrorMessage(err);
+    error.value = extractErrorMessage(err, ANALYSIS_FAILED);
   } finally {
     isAnalyzing.value = false;
   }
 }
 
-function extractErrorMessage(err: unknown): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const e = err as { response?: { data?: { message?: string; detail?: string; title?: string } } };
-    return (
-      e.response?.data?.message ??
-      e.response?.data?.detail ??
-      e.response?.data?.title ??
-      'The analysis could not be completed. Please try again.'
-    );
-  }
-
-  return 'The analysis could not be completed. Please try again.';
-}
 
 watch([() => props.date, () => props.userId, daySignature], loadStored, { immediate: true });
 </script>

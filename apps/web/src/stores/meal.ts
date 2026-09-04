@@ -2,87 +2,65 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 import { format } from 'date-fns';
 import { mealService } from '@/services/mealService';
+import { useAsyncState } from '@/stores/asyncState';
 import type { LogMealRequest, MealLog, NutritionSummary } from '@foodeez/shared';
 
 export const useMealStore = defineStore('meal', () => {
   const dailyLogs = ref<MealLog[]>([]);
   const nutritionSummary = ref<NutritionSummary | null>(null);
   const selectedDate = ref<string>(format(new Date(), 'yyyy-MM-dd'));
-  const isLoading = ref(false);
-  const error = ref<string | null>(null);
+  const { isLoading, error, run, runOrThrow } = useAsyncState();
 
   async function refreshDay(userId: string, date: string): Promise<void> {
     await Promise.all([fetchDailyLogs(userId, date), fetchNutritionSummary(userId, date)]);
   }
 
   async function fetchDailyLogs(userId: string, date: string): Promise<void> {
-    isLoading.value = true;
-    error.value = null;
-    try {
-      dailyLogs.value = await mealService.getDailyLogs(userId, date);
-    } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
-    } finally {
-      isLoading.value = false;
+    const logs = await run("That day's meals could not be loaded.", () =>
+      mealService.getDailyLogs(userId, date),
+    );
+
+    if (logs) {
+      dailyLogs.value = logs;
     }
   }
 
   async function fetchNutritionSummary(userId: string, date: string): Promise<void> {
-    try {
-      nutritionSummary.value = await mealService.getNutritionSummary(userId, date);
-    } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
+    const summary = await run("That day's totals could not be loaded.", () =>
+      mealService.getNutritionSummary(userId, date),
+    );
+
+    if (summary) {
+      nutritionSummary.value = summary;
     }
   }
 
+  // The three writes rethrow: each is triggered by a dialog or a row that has to know whether
+  // it may close or disappear.
+
   async function logMeal(data: LogMealRequest): Promise<void> {
-    isLoading.value = true;
-    error.value = null;
-    try {
+    await runOrThrow('That meal could not be saved.', async () => {
       await mealService.logMeal(data);
       await refreshDay(data.userId, data.logDate);
-    } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
-      throw err;
-    } finally {
-      isLoading.value = false;
-    }
+    });
   }
 
   async function updateMealLog(mealLogId: string, data: LogMealRequest): Promise<void> {
-    isLoading.value = true;
-    error.value = null;
-    try {
+    await runOrThrow('That meal could not be updated.', async () => {
       await mealService.updateMealLog(mealLogId, data);
       await refreshDay(data.userId, data.logDate);
-    } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
-      throw err;
-    } finally {
-      isLoading.value = false;
-    }
+    });
   }
 
   async function deleteMealLog(mealLogId: string, userId: string): Promise<void> {
-    try {
+    await runOrThrow('That meal could not be deleted.', async () => {
       await mealService.deleteMealLog(mealLogId);
       await refreshDay(userId, selectedDate.value);
-    } catch (err: unknown) {
-      error.value = extractErrorMessage(err);
-      throw err;
-    }
+    });
   }
 
   function setSelectedDate(date: string): void {
     selectedDate.value = date;
-  }
-
-  function extractErrorMessage(err: unknown): string {
-    if (err && typeof err === 'object' && 'response' in err) {
-      const e = err as { response?: { data?: { detail?: string; title?: string } } };
-      return e.response?.data?.detail ?? e.response?.data?.title ?? 'An error occurred';
-    }
-    return 'An error occurred';
   }
 
   return {

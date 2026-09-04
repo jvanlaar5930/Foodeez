@@ -13,14 +13,12 @@ import { profileService } from '@/services/profileService';
 import { useProfileStore } from './profile';
 
 /**
- * Characterization tests for the loading/error envelope every store repeats, and for the
- * divergence between the private `extractErrorMessage` copies.
+ * The loading/error envelope every store used to repeat by hand, now `useAsyncState`.
  *
- * The assertions about `message` being ignored describe a bug, not a desired behaviour. They
- * are written down so that consolidating the five copies onto `utils/apiError.ts` is a change
- * with a visible effect, rather than a refactor that silently alters what users are told.
- * When that consolidation happens, the two tests tagged BUG below should be updated to expect
- * the server's actual message.
+ * These began as characterization tests written against five diverging private copies of
+ * `extractErrorMessage`, with two of them tagged BUG to record what the reader was told
+ * instead of the truth. Both now assert the fixed behaviour: the message the server sent, and
+ * a connectivity failure named as one.
  */
 describe('profile store: async envelope', () => {
   const getProfile = vi.mocked(profileService.getProfile);
@@ -89,11 +87,9 @@ describe('profile store: async envelope', () => {
     expect(store.error).toBe('the title');
   });
 
-  it('BUG: ignores `message`, hiding the reason an AI request failed', async () => {
-    // The API sends { message } for its own errors - including the 503 when a provider is
-    // unavailable. utils/apiError.ts reads it; this store's private copy does not, so the
-    // reader is told nothing useful. The meal-plan store shows the real sentence for the very
-    // same response.
+  it('reads `message`, so the reason an AI request failed reaches the reader', async () => {
+    // Was a BUG test: only the meal-plan store's private copy read `message`, so the same
+    // 503 explained itself on the plan page and said nothing anywhere else.
     const store = useProfileStore();
     getProfile.mockRejectedValueOnce({
       response: { data: { message: 'The AI service is unavailable. Please try again.' } },
@@ -101,17 +97,43 @@ describe('profile store: async envelope', () => {
 
     await store.fetchProfile('user-1');
 
-    expect(store.error).toBe('An error occurred');
+    expect(store.error).toBe('The AI service is unavailable. Please try again.');
   });
 
-  it('BUG: reports a network error as a generic string', async () => {
-    // No `response` at all, so nothing distinguishes "the server is down" from any other
-    // failure. describeApiError on mobile already separates these.
+  it('names a connectivity failure as one', async () => {
+    // Was a BUG test. A request that never reached the server is not the same as one the
+    // server refused, and telling someone "an error occurred" sends them off rechecking a
+    // form that was fine.
     const store = useProfileStore();
-    getProfile.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
+    getProfile.mockRejectedValueOnce(
+      Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK', request: {} }),
+    );
 
     await store.fetchProfile('user-1');
 
-    expect(store.error).toBe('An error occurred');
+    expect(store.error).toContain("Can't reach the Foodeez server");
+  });
+
+  it('falls back to the caller\'s sentence when the body says nothing usable', async () => {
+    const store = useProfileStore();
+    getProfile.mockRejectedValueOnce({ response: { data: {} } });
+
+    await store.fetchProfile('user-1');
+
+    expect(store.error).toBe('Your profile could not be loaded.');
+  });
+
+  it('keeps the profile it already had when a refresh fails', async () => {
+    // `run` swallows, so the page shows the message over the data it was already showing
+    // rather than blanking it.
+    const store = useProfileStore();
+    getProfile.mockResolvedValueOnce({ userId: 'user-1' } as never);
+    await store.fetchProfile('user-1');
+
+    getProfile.mockRejectedValueOnce({ response: { data: { detail: 'later failure' } } });
+    await store.fetchProfile('user-1');
+
+    expect(store.profile).toEqual({ userId: 'user-1' });
+    expect(store.error).toBe('later failure');
   });
 });
