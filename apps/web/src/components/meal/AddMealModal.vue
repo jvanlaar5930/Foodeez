@@ -326,6 +326,7 @@ import { useMealStore } from '@/stores/meal';
 import { useAuthStore } from '@/stores/auth';
 import { mealTemplateService } from '@/services/mealTemplateService';
 import {
+  MEAL_TYPE_SHORT_LABELS,
   MealType,
   type FoodItem,
   type MealLog,
@@ -370,15 +371,6 @@ const analysisError = ref<string | null>(null);
 const mealEdited = ref(false);
 
 const isEditing = computed(() => Boolean(props.mealLog));
-
-const mealTypeLabels: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'AM Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'PM Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
 
 const mealTypes = [
   { value: MealType.Breakfast, label: 'Breakfast' },
@@ -640,7 +632,7 @@ async function analyzeMeal() {
       return;
     }
 
-    const mealLabel = mealTypeLabels[selectedMealType.value] ?? 'Meal';
+    const mealLabel = MEAL_TYPE_SHORT_LABELS[selectedMealType.value] ?? 'Meal';
     analysis.value = await aiService.analyzeMealStream(
       authStore.user?.id ?? '',
       mealLabel,

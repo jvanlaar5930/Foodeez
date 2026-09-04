@@ -3,33 +3,16 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MealLogItemRow } from './MealLogItemRow';
 import { FontSize, FontWeight, Spacing, BorderRadius } from '@/constants/theme';
+import { DEFAULT_MEAL_TYPE_ICON, MEAL_TYPE_ICONS } from '@/constants/mealTypes';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
-import { scoreColor } from '@/utils/analysisScore';
-import { MealType, type MealLogDto } from '@/types';
+import { scoreColor } from '@foodeez/shared';
+import { MEAL_TYPE_LABELS, MealType, type MealLogDto } from '@/types';
 
 interface MealSectionProps {
   mealLog: MealLogDto;
   onEditMeal?: (mealLog: MealLogDto) => void;
   onDeleteMeal?: (mealLog: MealLogDto) => void;
 }
-
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
-
-const MEAL_TYPE_ICONS: Record<MealType, keyof typeof Ionicons.glyphMap> = {
-  [MealType.Breakfast]: 'sunny-outline',
-  [MealType.MorningSnack]: 'cafe-outline',
-  [MealType.Lunch]: 'restaurant-outline',
-  [MealType.AfternoonSnack]: 'nutrition-outline',
-  [MealType.Dinner]: 'moon-outline',
-  [MealType.EveningSnack]: 'ice-cream-outline',
-};
 
 export function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionProps) {
   const C = useTheme();
@@ -38,7 +21,7 @@ export function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionPr
 
   const calories = Math.round(mealLog.totalNutrition.calories);
   const label = MEAL_TYPE_LABELS[mealLog.mealType] ?? mealLog.mealType;
-  const icon = MEAL_TYPE_ICONS[mealLog.mealType] ?? 'restaurant-outline';
+  const icon = MEAL_TYPE_ICONS[mealLog.mealType] ?? DEFAULT_MEAL_TYPE_ICON;
 
   return (
     <View style={styles.container}>

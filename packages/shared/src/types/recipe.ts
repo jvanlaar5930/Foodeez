@@ -29,5 +29,7 @@ export interface Recipe {
   detailUnavailable?: boolean;
   ingredients: RecipeIngredient[];
   nutritionalInfoPerServing: NutritionalInfo;
+  /** Who saved it, when it was not one of the built-in ones. Null for library recipes. */
+  createdByUserId?: string;
   createdAt: string;
 }

@@ -20,7 +20,7 @@ import { useProfileStore } from '@/store/profileStore';
 import { ActivityLevel, DietaryGoal, UnitSystem } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, useThemeMode, type Palette } from '@/theme';
-import { formatHeight, formatWeight } from '@/utils/units';
+import { calculateBMI, formatHeight, formatWeight } from '@foodeez/shared';
 import { describeApiError } from '@/utils/apiError';
 import type { ProfileStackParamList } from '@/navigation/types';
 
@@ -107,9 +107,7 @@ export function ProfileScreen() {
 
   const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : '??';
 
-  const bmi = profile
-    ? (profile.weightKg / Math.pow(profile.heightCm / 100, 2)).toFixed(1)
-    : null;
+  const bmi = profile ? calculateBMI(profile.weightKg, profile.heightCm) : null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

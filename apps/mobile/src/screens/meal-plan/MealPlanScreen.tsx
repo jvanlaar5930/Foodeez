@@ -25,29 +25,17 @@ import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
 import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
-import { MealLogDto, MealPlanEntryDto, MealType } from '@/types';
+import {
+  MEAL_TYPE_LABELS,
+  MealLogDto,
+  MealPlanEntryDto,
+  MealType,
+  ORDERED_MEAL_TYPES,
+} from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealPlanStackParamList, 'MealPlanHome'>;
-
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
-
-const MEAL_TYPES = [
-  MealType.Breakfast,
-  MealType.MorningSnack,
-  MealType.Lunch,
-  MealType.AfternoonSnack,
-  MealType.Dinner,
-  MealType.EveningSnack,
-];
 
 /**
  * What to call a planned meal. AI-generated entries have no Recipe or FoodItem row behind
@@ -202,7 +190,7 @@ export function MealPlanScreen({ navigation }: Props) {
         {isLoading ? (
           <ActivityIndicator size="large" color={C.primary} style={{ marginTop: Spacing.xl }} />
         ) : (
-          MEAL_TYPES.map(mealType => {
+          ORDERED_MEAL_TYPES.map(mealType => {
             const entry = getEntryForDayAndMeal(selectedDay, mealType);
             const loggedLabel = entry ? undefined : getLoggedLabel(selectedDay, mealType);
             return (

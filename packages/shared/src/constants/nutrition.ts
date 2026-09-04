@@ -63,6 +63,19 @@ export const DAILY_REFERENCE_VALUES = {
   sodium: 2300,
 } as const;
 
+/**
+ * The slots of a day, in the order they are eaten. Anywhere that renders a day's meals should
+ * iterate this rather than its own array, so the two clients cannot disagree about the order.
+ */
+export const ORDERED_MEAL_TYPES: readonly MealType[] = [
+  MealType.Breakfast,
+  MealType.MorningSnack,
+  MealType.Lunch,
+  MealType.AfternoonSnack,
+  MealType.Dinner,
+  MealType.EveningSnack,
+];
+
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   [MealType.Breakfast]: 'Breakfast',
   [MealType.MorningSnack]: 'Morning Snack',
@@ -70,4 +83,20 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   [MealType.AfternoonSnack]: 'Afternoon Snack',
   [MealType.Dinner]: 'Dinner',
   [MealType.EveningSnack]: 'Evening Snack',
+};
+
+/**
+ * Shorter forms, for tab strips and calendar cells where the full label does not fit.
+ *
+ * There were four of these in the two apps and they disagreed - the evening slot was variously
+ * "Evening Snack", "Evening" and "Eve Snack", and one badge collapsed both snacks to plain
+ * "Snack", so the same meal was named differently on two screens of the same app.
+ */
+export const MEAL_TYPE_SHORT_LABELS: Record<MealType, string> = {
+  [MealType.Breakfast]: 'Breakfast',
+  [MealType.MorningSnack]: 'AM Snack',
+  [MealType.Lunch]: 'Lunch',
+  [MealType.AfternoonSnack]: 'PM Snack',
+  [MealType.Dinner]: 'Dinner',
+  [MealType.EveningSnack]: 'Evening',
 };

@@ -4,7 +4,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { FontSize, FontWeight, Spacing, BorderRadius } from '@/constants/theme';
 import { AIPanelDark, AIPanelLight, type AIPanelColors } from '@/constants/aiPanel';
 import { useTheme, useThemeMode, type Palette } from '@/theme';
-import { scoreColor } from '@/utils/analysisScore';
+import { scoreColor } from '@foodeez/shared';
 import { getDayAnalysis, analyzeDayStream } from '@/services/aiService';
 import { AIStreamError } from '@/services/aiStream';
 import type { DayAnalysisDto, MealLogDto } from '@/types';

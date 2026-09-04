@@ -150,8 +150,11 @@ import AppLayout from '@/components/layout/AppLayout.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useProfileStore } from '@/stores/profile';
 import { useAuth } from '@/composables/useAuth';
-import { ActivityLevel, DietaryGoal,
+import {
+  ActivityLevel,
+  DietaryGoal,
   UnitSystem,
+  calculateBMI,
   formatHeight,
   formatWeight,
 } from '@foodeez/shared';
@@ -193,7 +196,7 @@ const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
 const bmi = computed(() => {
   const p = profile.value;
   if (!p) return null;
-  return (p.weightKg / Math.pow(p.heightCm / 100, 2)).toFixed(1);
+  return calculateBMI(p.weightKg, p.heightCm).toFixed(1);
 });
 
 const stats = computed(() => {

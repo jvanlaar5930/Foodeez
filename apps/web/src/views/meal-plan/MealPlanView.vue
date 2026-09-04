@@ -192,7 +192,14 @@ import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
 import { useAuthStore } from '@/stores/auth';
 import { mealService } from '@/services/mealService';
-import { MealType, type MealLog, type MealPlanEntry, type MealPlanEntryRequest } from '@foodeez/shared';
+import {
+  MEAL_TYPE_SHORT_LABELS,
+  MealType,
+  ORDERED_MEAL_TYPES,
+  type MealLog,
+  type MealPlanEntry,
+  type MealPlanEntryRequest,
+} from '@foodeez/shared';
 
 const authStore = useAuthStore();
 const planStore = useMealPlanStore();
@@ -205,12 +212,7 @@ const generationText = computed(() => planStore.generationText);
 const error = computed(() => planStore.error);
 
 const MEAL_TYPES = [
-  { value: MealType.Breakfast, label: 'Breakfast' },
-  { value: MealType.MorningSnack, label: 'AM Snack' },
-  { value: MealType.Lunch, label: 'Lunch' },
-  { value: MealType.AfternoonSnack, label: 'PM Snack' },
-  { value: MealType.Dinner, label: 'Dinner' },
-  { value: MealType.EveningSnack, label: 'Eve Snack' },
+  ...ORDERED_MEAL_TYPES.map((value) => ({ value, label: MEAL_TYPE_SHORT_LABELS[value] })),
 ];
 
 function getEntry(date: Date, mealType: MealType): MealPlanEntry | undefined {

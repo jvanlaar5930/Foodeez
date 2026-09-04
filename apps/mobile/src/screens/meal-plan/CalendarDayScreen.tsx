@@ -21,38 +21,20 @@ import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
 import { recipeService } from '@/services/recipeService';
 import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
-import { isAiRecipeImage, MealLogDto, MealPlanEntryDto, MealType, RecipeDto } from '@/types';
+import {
+  isAiRecipeImage,
+  MEAL_TYPE_LABELS,
+  MealLogDto,
+  MealPlanEntryDto,
+  MealType,
+  ORDERED_MEAL_TYPES,
+  RecipeDto,
+} from '@/types';
+import { MEAL_TYPE_ICONS } from '@/constants/mealTypes';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealPlanStackParamList, 'CalendarDay'>;
-
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
-
-const MEAL_TYPE_ICONS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'sunny-outline',
-  [MealType.MorningSnack]: 'cafe-outline',
-  [MealType.Lunch]: 'restaurant-outline',
-  [MealType.AfternoonSnack]: 'nutrition-outline',
-  [MealType.Dinner]: 'moon-outline',
-  [MealType.EveningSnack]: 'ice-cream-outline',
-};
-
-const ALL_MEAL_TYPES = [
-  MealType.Breakfast,
-  MealType.MorningSnack,
-  MealType.Lunch,
-  MealType.AfternoonSnack,
-  MealType.Dinner,
-  MealType.EveningSnack,
-];
 
 /**
  * What to call a planned meal. AI-generated entries have no Recipe or FoodItem row behind
@@ -250,7 +232,7 @@ export function CalendarDayScreen({ route, navigation }: Props) {
       </View>
 
       <FlatList
-        data={ALL_MEAL_TYPES}
+        data={ORDERED_MEAL_TYPES}
         keyExtractor={item => item.toString()}
         contentContainerStyle={styles.list}
         renderItem={({ item: mealType }) => {
@@ -260,7 +242,7 @@ export function CalendarDayScreen({ route, navigation }: Props) {
             <View style={styles.slotCard}>
               <View style={styles.slotHeader}>
                 <View style={styles.slotTypeRow}>
-                  <Ionicons name={MEAL_TYPE_ICONS[mealType] as any} size={18} color={C.primary} />
+                  <Ionicons name={MEAL_TYPE_ICONS[mealType]} size={18} color={C.primary} />
                   <Text style={styles.slotTypeName}>{MEAL_TYPE_LABELS[mealType]}</Text>
                 </View>
               </View>

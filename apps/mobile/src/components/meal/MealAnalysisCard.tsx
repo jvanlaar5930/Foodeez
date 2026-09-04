@@ -4,7 +4,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { FontSize, FontWeight, Spacing, BorderRadius } from '@/constants/theme';
 import { AIPanelDark, AIPanelLight, type AIPanelColors } from '@/constants/aiPanel';
 import { useTheme, useThemeMode, type Palette } from '@/theme';
-import { scoreColor } from '@/utils/analysisScore';
+import { scoreColor } from '@foodeez/shared';
 import type { MealAnalysisDto } from '@/types';
 
 const RADIUS = 24;

@@ -132,7 +132,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import AppAlert from '@/components/ui/AppAlert.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useMealStore } from '@/stores/meal';
-import { MealType } from '@foodeez/shared';
+import { MEAL_TYPE_LABELS, MealType } from '@foodeez/shared';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -158,15 +158,6 @@ const greeting = computed(() =>
 );
 
 const summary = computed(() => mealStore.nutritionSummary);
-
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
 
 onMounted(async () => {
   if (!authStore.user?.id) return;

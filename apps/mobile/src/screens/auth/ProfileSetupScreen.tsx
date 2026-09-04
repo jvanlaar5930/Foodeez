@@ -19,11 +19,8 @@ import {
   DietaryGoal,
   Gender,
 } from '@/types';
-import {
-  calculateTargets,
-  formatCalories,
-  formatMacro,
-} from '@/utils/nutritionUtils';
+import { calculateTargets } from '@foodeez/shared';
+import { formatCalories, formatMacro } from '@/utils/nutritionUtils';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -131,7 +128,7 @@ export function ProfileSetupScreen() {
     const height = parseFloat(data.heightCm);
     const age = parseInt(data.age, 10);
     if (!weight || !height || !age || !data.gender || !data.activityLevel || !data.dietaryGoal) {
-      return { calories: 2000, protein: 150, carbs: 250, fat: 67 };
+      return { calories: 2000, proteinG: 150, carbsG: 250, fatG: 67 };
     }
     // Same calculation the server will run on save, so this preview is what gets stored.
     return calculateTargets({
@@ -372,9 +369,9 @@ export function ProfileSetupScreen() {
                 <View style={styles.macroDivider} />
                 <View style={styles.macroGrid}>
                   {[
-                    { label: 'Protein', value: targets.protein, color: C.info },
-                    { label: 'Carbs', value: targets.carbs, color: C.secondary },
-                    { label: 'Fat', value: targets.fat, color: '#FFC107' },
+                    { label: 'Protein', value: targets.proteinG, color: C.info },
+                    { label: 'Carbs', value: targets.carbsG, color: C.secondary },
+                    { label: 'Fat', value: targets.fatG, color: '#FFC107' },
                   ].map((macro) => (
                     <View key={macro.label} style={styles.macroItem}>
                       <Text style={[styles.macroValue, { color: macro.color }]}>

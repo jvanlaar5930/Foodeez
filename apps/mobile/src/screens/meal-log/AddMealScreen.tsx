@@ -31,7 +31,9 @@ import { AIStreamError } from '@/services/aiStream';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 import {
+  MEAL_TYPE_SHORT_LABELS,
   MealType,
+  ORDERED_MEAL_TYPES,
   type FoodItemDto,
   type MealAnalysisDto,
   type QuickAddResultDto,
@@ -41,14 +43,10 @@ import type { MealLogStackParamList } from '@/navigation/types';
 
 type Props = NativeStackScreenProps<MealLogStackParamList, 'AddMeal'>;
 
-const MEAL_TYPES = [
-  { value: MealType.Breakfast, label: 'Breakfast' },
-  { value: MealType.MorningSnack, label: 'AM Snack' },
-  { value: MealType.Lunch, label: 'Lunch' },
-  { value: MealType.AfternoonSnack, label: 'PM Snack' },
-  { value: MealType.Dinner, label: 'Dinner' },
-  { value: MealType.EveningSnack, label: 'Evening' },
-];
+const MEAL_TYPES = ORDERED_MEAL_TYPES.map((value) => ({
+  value,
+  label: MEAL_TYPE_SHORT_LABELS[value],
+}));
 
 interface SelectedItem {
   foodItem: FoodItemDto;
