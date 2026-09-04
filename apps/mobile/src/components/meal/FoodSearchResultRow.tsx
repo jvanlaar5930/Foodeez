@@ -11,7 +11,13 @@ interface FoodSearchResultRowProps {
   isSelected?: boolean;
 }
 
-export function FoodSearchResultRow({ item, onSelect, isSelected = false }: FoodSearchResultRowProps) {
+/**
+ * One food in the search results.
+ *
+ * Memoised because this list is rebuilt on every keystroke: without it, typing
+ * re-renders every row on screen for a result set that has not changed yet.
+ */
+export const FoodSearchResultRow = React.memo(function FoodSearchResultRow({ item, onSelect, isSelected = false }: FoodSearchResultRowProps) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const calories = Math.round(item.nutritionalInfo.calories);
@@ -41,7 +47,7 @@ export function FoodSearchResultRow({ item, onSelect, isSelected = false }: Food
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const makeStyles = (C: Palette) => StyleSheet.create({
   container: {

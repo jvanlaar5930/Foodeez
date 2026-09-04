@@ -14,7 +14,13 @@ interface MealSectionProps {
   onDeleteMeal?: (mealLog: MealLogDto) => void;
 }
 
-export function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionProps) {
+/**
+ * One meal on the log screen - its foods, and what they add up to.
+ *
+ * Memoised: the screen holds several of these and re-renders whenever any part of the
+ * day changes, though only the meal that changed needs redrawing.
+ */
+export const MealSection = React.memo(function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionProps) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -86,7 +92,7 @@ export function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionPr
       )}
     </View>
   );
-}
+});
 
 const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
