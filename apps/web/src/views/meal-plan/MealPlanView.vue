@@ -73,7 +73,7 @@
         <LoadingSpinner />
       </div>
 
-      <div v-else class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm overflow-hidden">
+      <AppCard v-else padding="none">
         <!-- Day headers -->
         <div class="grid grid-cols-8 border-b">
           <div class="p-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase"></div>
@@ -101,7 +101,7 @@
             @click="openSlot(day, mealType.value)"
           />
         </div>
-      </div>
+      </AppCard>
 
       <!-- Empty state -->
       <div
@@ -186,6 +186,7 @@
 </template>
 
 <script setup lang="ts">
+import AppCard from '@/components/ui/AppCard.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';

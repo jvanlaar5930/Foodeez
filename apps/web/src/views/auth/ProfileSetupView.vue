@@ -12,7 +12,7 @@
         </div>
       </div>
 
-      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-8">
+      <AppCard padding="lg">
         <!-- Step 1: Basic info -->
         <div v-show="currentStep === 1">
           <div class="flex items-start justify-between mb-1">
@@ -250,12 +250,13 @@
             {{ isLoading ? 'Saving...' : 'Complete Setup' }}
           </button>
         </div>
-      </div>
+      </AppCard>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AppCard from '@/components/ui/AppCard.vue';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import FoodExclusionsInput from '@/components/profile/FoodExclusionsInput.vue';
