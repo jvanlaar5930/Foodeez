@@ -14,17 +14,10 @@ public static class FoodItemMapper
         ServingSize = item.ServingSize,
         ServingUnit = item.ServingUnit,
         Category = item.Category,
-        NutritionalInfo = ToDto(item.NutritionalInfo)
+        NutritionalInfo = NutritionMapper.ToDto(item.NutritionalInfo)
     };
 
-    public static NutritionalInfoDto ToDto(NutritionalInfo info) => new()
-    {
-        Calories = info.Calories,
-        Protein = info.Protein,
-        Carbohydrates = info.Carbohydrates,
-        Fat = info.Fat,
-        Fiber = info.Fiber,
-        Sugar = info.Sugar,
-        Sodium = info.Sodium
-    };
+    /// <summary>Kept so the many <c>FoodItemMapper.ToDto(nutrition)</c> call sites still read
+    /// naturally; <see cref="NutritionMapper"/> is where the copy actually lives.</summary>
+    public static NutritionalInfoDto ToDto(NutritionalInfo info) => NutritionMapper.ToDto(info);
 }

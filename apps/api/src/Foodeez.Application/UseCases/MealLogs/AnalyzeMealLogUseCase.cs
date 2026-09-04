@@ -129,9 +129,6 @@ public class AnalyzeMealLogUseCase
     }
 
     /// <summary>The owner's standing exclusions, which no suggestion may ignore.</summary>
-    private async Task<List<string>> ExclusionsAsync(Guid userId)
-    {
-        var user = await _unitOfWork.Users.GetByIdAsync(userId);
-        return user?.Profile?.ExcludedFoods.ToList() ?? new List<string>();
-    }
+    private Task<List<string>> ExclusionsAsync(Guid userId) =>
+        MealExclusions.LoadAsync(_unitOfWork, userId);
 }

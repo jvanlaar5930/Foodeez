@@ -178,9 +178,6 @@ public class GenerateGroceryListUseCase
     /// caller - a shopping list is a list of food to buy, and an allergy must not depend on
     /// a client remembering to send it.
     /// </summary>
-    private async Task<List<string>> ExclusionsAsync(Guid userId)
-    {
-        var user = await _unitOfWork.Users.GetByIdAsync(userId);
-        return user?.Profile?.ExcludedFoods.ToList() ?? new List<string>();
-    }
+    private Task<List<string>> ExclusionsAsync(Guid userId) =>
+        MealExclusions.LoadAsync(_unitOfWork, userId);
 }

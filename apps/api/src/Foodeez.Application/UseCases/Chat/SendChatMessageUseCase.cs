@@ -65,7 +65,8 @@ public class SendChatMessageUseCase
             new List<PlannedMealDto>(), new List<SuggestedRecipeDto>(), ct);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var prompt = NutritionChatPrompt.Build(ProfileOf(user), history, question, today);
+        var prompt = NutritionChatPrompt.Build(
+            UserProfileMapper.ToDtoOrNull(user), history, question, today);
 
         // Two builders: the transcript holds everything, including the JSON the suggestions
         // are read from, while the prose is what the reader saw and so what gets stored as
@@ -147,36 +148,5 @@ public class SendChatMessageUseCase
         await _unitOfWork.SaveChangesAsync(ct);
 
         return message;
-    }
-
-    /// <summary>
-    /// The profile the advice is built on, or null when it has not been filled in - which is
-    /// worth telling the model about rather than passing off as a profile full of zeroes.
-    /// </summary>
-    private static UserProfileDto? ProfileOf(User user)
-    {
-        if (user.Profile is not { } profile)
-        {
-            return null;
-        }
-
-        return new UserProfileDto
-        {
-            UserId = profile.UserId,
-            HeightCm = profile.HeightCm,
-            WeightKg = profile.WeightKg,
-            TargetWeightKg = profile.TargetWeightKg,
-            Age = profile.Age,
-            Gender = profile.Gender,
-            ActivityLevel = profile.ActivityLevel,
-            DietaryGoal = profile.DietaryGoal,
-            DailyCalorieTarget = profile.DailyCalorieTarget,
-            DailyProteinTargetG = profile.DailyProteinTargetG,
-            DailyCarbTargetG = profile.DailyCarbTargetG,
-            DailyFatTargetG = profile.DailyFatTargetG,
-            Notes = profile.Notes,
-            ExcludedFoods = profile.ExcludedFoods.ToList(),
-            ProfileCompleted = profile.ProfileCompleted
-        };
     }
 }

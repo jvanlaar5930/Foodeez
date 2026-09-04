@@ -143,24 +143,7 @@ public class GenerateAIMealPlanUseCase
         if (user.Profile == null)
             throw new InvalidOperationException("User profile must be completed before generating a meal plan.");
 
-        return new UserProfileDto
-        {
-            UserId = user.Profile.UserId,
-            HeightCm = user.Profile.HeightCm,
-            WeightKg = user.Profile.WeightKg,
-            TargetWeightKg = user.Profile.TargetWeightKg,
-            Age = user.Profile.Age,
-            Gender = user.Profile.Gender,
-            ActivityLevel = user.Profile.ActivityLevel,
-            DietaryGoal = user.Profile.DietaryGoal,
-            DailyCalorieTarget = user.Profile.DailyCalorieTarget,
-            DailyProteinTargetG = user.Profile.DailyProteinTargetG,
-            DailyCarbTargetG = user.Profile.DailyCarbTargetG,
-            DailyFatTargetG = user.Profile.DailyFatTargetG,
-            Notes = user.Profile.Notes,
-            ExcludedFoods = user.Profile.ExcludedFoods.ToList(),
-            ProfileCompleted = user.Profile.ProfileCompleted
-        };
+        return UserProfileMapper.ToDto(user.Profile);
     }
 
     /// <summary>

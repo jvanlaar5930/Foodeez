@@ -27,23 +27,7 @@ public class GetDietaryRecommendationsUseCase
         if (user.Profile == null)
             throw new InvalidOperationException("User profile must be completed to get dietary recommendations.");
 
-        var profileDto = new UserProfileDto
-        {
-            UserId = user.Profile.UserId,
-            HeightCm = user.Profile.HeightCm,
-            WeightKg = user.Profile.WeightKg,
-            TargetWeightKg = user.Profile.TargetWeightKg,
-            Age = user.Profile.Age,
-            Gender = user.Profile.Gender,
-            ActivityLevel = user.Profile.ActivityLevel,
-            DietaryGoal = user.Profile.DietaryGoal,
-            DailyCalorieTarget = user.Profile.DailyCalorieTarget,
-            DailyProteinTargetG = user.Profile.DailyProteinTargetG,
-            DailyCarbTargetG = user.Profile.DailyCarbTargetG,
-            DailyFatTargetG = user.Profile.DailyFatTargetG,
-            Notes = user.Profile.Notes,
-            ProfileCompleted = user.Profile.ProfileCompleted
-        };
+        var profileDto = UserProfileMapper.ToDto(user.Profile);
 
         // Aggregate last 7 days of nutrition
         var today = DateOnly.FromDateTime(DateTime.UtcNow);

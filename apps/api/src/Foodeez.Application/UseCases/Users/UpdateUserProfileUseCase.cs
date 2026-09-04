@@ -42,26 +42,7 @@ public class UpdateUserProfileUseCase
         _unitOfWork.Users.Update(user);
         await _unitOfWork.SaveChangesAsync();
 
-        return new UserProfileDto
-        {
-            UserId = profile.UserId,
-            HeightCm = profile.HeightCm,
-            WeightKg = profile.WeightKg,
-            TargetWeightKg = profile.TargetWeightKg,
-            Age = profile.Age,
-            Gender = profile.Gender,
-            ActivityLevel = profile.ActivityLevel,
-            DietaryGoal = profile.DietaryGoal,
-            DailyCalorieTarget = profile.DailyCalorieTarget,
-            DailyProteinTargetG = profile.DailyProteinTargetG,
-            DailyCarbTargetG = profile.DailyCarbTargetG,
-            DailyFatTargetG = profile.DailyFatTargetG,
-            Notes = profile.Notes,
-            ExcludedFoods = profile.ExcludedFoods.ToList(),
-            ProfileCompleted = profile.ProfileCompleted,
-            DarkMode = profile.DarkMode,
-            UnitSystem = profile.UnitSystem
-        };
+        return UserProfileMapper.ToDto(profile);
     }
 
     // A prompt has to carry every one of these, so the list is bounded at both ends: enough

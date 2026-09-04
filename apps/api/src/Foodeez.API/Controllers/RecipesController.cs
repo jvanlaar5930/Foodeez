@@ -89,7 +89,7 @@ public class RecipesController : ControllerBase
 
             return Ok(new PagedResult<RecipeDto>
             {
-                Items = matches.Skip((current - 1) * size).Take(size).Select(MapToDto).ToList(),
+                Items = matches.Skip((current - 1) * size).Take(size).Select(RecipeMapper.ToDto).ToList(),
                 Page = current,
                 PageSize = size,
                 HasMore = matches.Count > current * size,
@@ -162,36 +162,4 @@ public class RecipesController : ControllerBase
         return Ok(recipe);
     }
 
-    private static RecipeDto MapToDto(Recipe recipe) => new RecipeDto
-    {
-        Id = recipe.Id,
-        Name = recipe.Name,
-        Description = recipe.Description,
-        Instructions = recipe.Instructions,
-        PrepTimeMinutes = recipe.PrepTimeMinutes,
-        CookTimeMinutes = recipe.CookTimeMinutes,
-        Servings = recipe.Servings,
-        Tags = recipe.Tags,
-        ImageUrl = recipe.ImageUrl,
-        IsAIGenerated = recipe.IsAIGenerated,
-        CreatedByUserId = recipe.CreatedByUserId,
-        NutritionalInfoPerServing = new NutritionalInfoDto
-        {
-            Calories = recipe.NutritionalInfoPerServing.Calories,
-            Protein = recipe.NutritionalInfoPerServing.Protein,
-            Carbohydrates = recipe.NutritionalInfoPerServing.Carbohydrates,
-            Fat = recipe.NutritionalInfoPerServing.Fat,
-            Fiber = recipe.NutritionalInfoPerServing.Fiber,
-            Sugar = recipe.NutritionalInfoPerServing.Sugar,
-            Sodium = recipe.NutritionalInfoPerServing.Sodium
-        },
-        Ingredients = recipe.Ingredients.Select(i => new RecipeIngredientDto
-        {
-            FoodItemId = i.FoodItemId,
-            FoodItemName = i.FoodItem?.Name ?? i.IngredientName ?? string.Empty,
-            Quantity = i.Quantity,
-            Unit = i.Unit,
-            Notes = i.Notes
-        }).ToList()
-    };
 }

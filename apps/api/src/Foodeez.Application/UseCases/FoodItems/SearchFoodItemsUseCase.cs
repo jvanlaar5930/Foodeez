@@ -25,11 +25,11 @@ public class SearchFoodItemsUseCase
         var dbResults = await _unitOfWork.FoodItems.SearchAsync(query);
 
         if (dbResults.Count >= DbSufficientThreshold)
-            return dbResults.Select(MapToDto).ToList();
+            return dbResults.Select(FoodItemMapper.ToDto).ToList();
 
         var fdcResults = await _foodData.SearchFoodsAsync(query, 20, ct);
         if (fdcResults.Count == 0)
-            return dbResults.Select(MapToDto).ToList();
+            return dbResults.Select(FoodItemMapper.ToDto).ToList();
 
         var fdcIds = fdcResults.Select(r => r.FdcId).ToList();
         var existingByFdc = await _unitOfWork.FoodItems.GetByFdcIdsAsync(fdcIds);
@@ -52,7 +52,7 @@ public class SearchFoodItemsUseCase
         await _unitOfWork.SaveChangesAsync(ct);
 
         var refreshed = await _unitOfWork.FoodItems.SearchAsync(query);
-        return refreshed.Select(MapToDto).ToList();
+        return refreshed.Select(FoodItemMapper.ToDto).ToList();
     }
 
     private static FoodItem MapToEntity(FdcFoodResult fr, DateTime syncedAt) => new FoodItem
@@ -102,25 +102,6 @@ public class SearchFoodItemsUseCase
         );
     }
 
-    private static FoodItemDto MapToDto(FoodItem item) => new FoodItemDto
-    {
-        Id = item.Id,
-        Name = item.Name,
-        Brand = item.Brand,
-        ServingSize = item.ServingSize,
-        ServingUnit = item.ServingUnit,
-        Category = item.Category,
-        NutritionalInfo = new NutritionalInfoDto
-        {
-            Calories      = item.NutritionalInfo.Calories,
-            Protein       = item.NutritionalInfo.Protein,
-            Carbohydrates = item.NutritionalInfo.Carbohydrates,
-            Fat           = item.NutritionalInfo.Fat,
-            Fiber         = item.NutritionalInfo.Fiber,
-            Sugar         = item.NutritionalInfo.Sugar,
-            Sodium        = item.NutritionalInfo.Sodium,
-        }
-    };
 
     private static string Capitalize(string s)
     {

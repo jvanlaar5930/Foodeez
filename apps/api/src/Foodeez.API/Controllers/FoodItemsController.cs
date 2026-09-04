@@ -68,7 +68,7 @@ public class FoodItemsController : ControllerBase
         await _unitOfWork.FoodItems.AddAsync(foodItem);
         await _unitOfWork.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(Search), new { q = foodItem.Name }, MapToDto(foodItem));
+        return CreatedAtAction(nameof(Search), new { q = foodItem.Name }, FoodItemMapper.ToDto(foodItem));
     }
 
     /// <summary>The authenticated user's id, from the token's subject claim.</summary>
@@ -79,25 +79,6 @@ public class FoodItemsController : ControllerBase
         return Guid.TryParse(raw, out var id) ? id : null;
     }
 
-    private static FoodItemDto MapToDto(FoodItem item) => new FoodItemDto
-    {
-        Id = item.Id,
-        Name = item.Name,
-        Brand = item.Brand,
-        ServingSize = item.ServingSize,
-        ServingUnit = item.ServingUnit,
-        Category = item.Category,
-        NutritionalInfo = new NutritionalInfoDto
-        {
-            Calories = item.NutritionalInfo.Calories,
-            Protein = item.NutritionalInfo.Protein,
-            Carbohydrates = item.NutritionalInfo.Carbohydrates,
-            Fat = item.NutritionalInfo.Fat,
-            Fiber = item.NutritionalInfo.Fiber,
-            Sugar = item.NutritionalInfo.Sugar,
-            Sodium = item.NutritionalInfo.Sodium
-        }
-    };
 }
 
 public class CreateFoodItemRequest

@@ -50,8 +50,7 @@ internal static class MealLogRequestApplier
     /// </summary>
     private static async Task ApplyAnalysisAsync(MealLog mealLog, LogMealRequest request, IUnitOfWork unitOfWork)
     {
-        var user = await unitOfWork.Users.GetByIdAsync(request.UserId);
-        var excludedFoods = user?.Profile?.ExcludedFoods.ToList() ?? new List<string>();
+        var excludedFoods = await MealExclusions.LoadAsync(unitOfWork, request.UserId);
         var fingerprint = MealAnalysisFingerprint.For(mealLog, excludedFoods);
 
         if (request.Analysis is { } analysis)
