@@ -25,9 +25,6 @@ internal static class MealLogRequestApplier
             }
 
             var quantity = itemRequest.Quantity;
-            var scaleFactor = foodItem.ServingSize > 0
-                ? quantity / foodItem.ServingSize
-                : quantity;
 
             mealLog.Items.Add(new MealLogItem
             {
@@ -35,7 +32,7 @@ internal static class MealLogRequestApplier
                 FoodItemId = foodItem.Id,
                 Quantity = quantity,
                 Unit = itemRequest.Unit,
-                NutritionalInfo = foodItem.NutritionalInfo.Scale(scaleFactor),
+                NutritionalInfo = foodItem.NutritionFor(quantity),
                 FoodItem = foodItem
             });
         }

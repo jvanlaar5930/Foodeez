@@ -140,7 +140,7 @@ public class SaveMealPlanEntryUseCase
     /// <summary>The reason the request cannot be saved, or null when it can.</summary>
     private static string? Validate(MealPlan plan, MealPlanEntryRequest request)
     {
-        if (request.EntryDate < plan.StartDate || request.EntryDate > plan.EndDate)
+        if (!plan.Covers(request.EntryDate))
         {
             // An entry outside the plan's range would be saved and then never shown, since
             // the calendar only ever reads days the plan covers.
@@ -186,13 +186,10 @@ public class SaveMealPlanEntryUseCase
         entry.FoodItem = foodItem;
     }
 
+    /// <summary>Removes whatever the plan says is already in that slot.</summary>
     private void ClearSlot(MealPlan plan, DateOnly date, Domain.Enums.MealType mealType, Guid? exceptId)
     {
-        var occupants = plan.Entries
-            .Where(e => e.EntryDate == date && e.MealType == mealType && e.Id != exceptId)
-            .ToList();
-
-        foreach (var occupant in occupants)
+        foreach (var occupant in plan.OccupantsOf(date, mealType, exceptId))
         {
             plan.Entries.Remove(occupant);
             _unitOfWork.MealPlans.RemoveEntry(occupant);

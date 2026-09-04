@@ -72,7 +72,7 @@ public class MealTemplatesUseCase
                 FoodItemId = foodItem.Id,
                 Quantity = itemRequest.Quantity,
                 Unit = itemRequest.Unit,
-                NutritionalInfo = foodItem.NutritionalInfo.Scale(ScaleFor(foodItem, itemRequest.Quantity)),
+                NutritionalInfo = foodItem.NutritionFor(itemRequest.Quantity),
                 FoodItem = foodItem
             };
 
@@ -216,9 +216,6 @@ public class MealTemplatesUseCase
         }).ToList(),
         TotalNutrition = FoodItemMapper.ToDto(template.TotalNutrition)
     };
-
-    private static float ScaleFor(FoodItem foodItem, float quantity) =>
-        foodItem.ServingSize > 0 ? quantity / foodItem.ServingSize : quantity;
 
     /// <summary>
     /// What makes two meals "the same meal" for the purpose of not offering it twice: the same
