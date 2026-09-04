@@ -1,3 +1,4 @@
+using Foodeez.Application.DTOs.Admin;
 using Foodeez.Application.Interfaces.Repositories;
 using Foodeez.Domain.Entities;
 using Foodeez.Infrastructure.Data;
@@ -18,29 +19,53 @@ public class AppLogRepository : IAppLogRepository
         int page, int pageSize,
         string? level = null,
         string? search = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        await QueryAsync(
+            new AppLogQuery(Level: level, Search: search, Limit: pageSize, Offset: (page - 1) * pageSize), ct);
+
+    public async Task<(IReadOnlyList<AppLog> Items, int TotalCount)> QueryAsync(
+        AppLogQuery query, CancellationToken ct = default)
     {
-        var query = _context.AppLogs.AsQueryable();
+        // Logs are read to look at, never to edit, so there is nothing for the change tracker
+        // to do with several hundred of them.
+        var rows = _context.AppLogs.AsNoTracking();
 
-        if (!string.IsNullOrWhiteSpace(level))
-            query = query.Where(x => x.Level == level);
+        if (!string.IsNullOrWhiteSpace(query.Level))
+            rows = rows.Where(x => x.Level == query.Level);
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(query.Source))
+            rows = rows.Where(x => x.Source != null && x.Source.Contains(query.Source));
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var lower = search.ToLower();
-            query = query.Where(x =>
-                x.Message.ToLower().Contains(lower) ||
-                (x.Source != null && x.Source.ToLower().Contains(lower)) ||
-                (x.ExceptionMessage != null && x.ExceptionMessage.ToLower().Contains(lower)));
+            // No ToLower(): the MySQL collation this runs on compares case-insensitively
+            // already, and calling it stops the comparison using an index.
+            var search = query.Search;
+            rows = rows.Where(x =>
+                x.Message.Contains(search) ||
+                (x.Source != null && x.Source.Contains(search)) ||
+                (x.ExceptionMessage != null && x.ExceptionMessage.Contains(search)));
         }
 
-        var total = await query.CountAsync(ct);
-        var items = await query
+        if (query.From is { } from)
+            rows = rows.Where(x => x.Timestamp >= from.ToUniversalTime());
+
+        if (query.To is { } to)
+            rows = rows.Where(x => x.Timestamp <= to.ToUniversalTime());
+
+        var total = await rows.CountAsync(ct);
+        var items = await rows
             .OrderByDescending(x => x.Timestamp)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .Skip(query.Offset)
+            .Take(query.Limit)
             .ToListAsync(ct);
 
         return (items, total);
     }
+
+    public async Task<AppLog?> GetByIdAsync(long id, CancellationToken ct = default) =>
+        await _context.AppLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task<int> DeleteOlderThanAsync(DateTime cutoff, CancellationToken ct = default) =>
+        await _context.AppLogs.Where(x => x.Timestamp < cutoff).ExecuteDeleteAsync(ct);
 }

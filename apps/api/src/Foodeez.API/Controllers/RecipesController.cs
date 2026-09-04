@@ -1,7 +1,6 @@
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.DTOs.Recipes;
-using Foodeez.Application.Interfaces.Repositories;
 using Foodeez.Application.UseCases.Recipes;
 using Foodeez.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -18,20 +17,17 @@ namespace Foodeez.API.Controllers;
 [Route("api/recipes")]
 public class RecipesController : FoodeezController
 {
-    private readonly IUnitOfWork _unitOfWork;
     private readonly SearchRecipesUseCase _searchUseCase;
     private readonly AutocompleteRecipesUseCase _autocompleteUseCase;
     private readonly GetRecipeDetailUseCase _detailUseCase;
     private readonly SavedRecipesUseCase _savedUseCase;
 
     public RecipesController(
-        IUnitOfWork unitOfWork,
         SearchRecipesUseCase searchUseCase,
         AutocompleteRecipesUseCase autocompleteUseCase,
         GetRecipeDetailUseCase detailUseCase,
         SavedRecipesUseCase savedUseCase)
     {
-        _unitOfWork = unitOfWork;
         _searchUseCase = searchUseCase;
         _autocompleteUseCase = autocompleteUseCase;
         _detailUseCase = detailUseCase;
@@ -73,30 +69,8 @@ public class RecipesController : FoodeezController
     public async Task<IActionResult> GetRecipes(
         [FromQuery] string? tags,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = SearchRecipesUseCase.DefaultPageSize)
-    {
-        var size = Math.Clamp(pageSize, 1, SearchRecipesUseCase.MaxPageSize);
-        var current = Math.Max(1, page);
-
-        // Tags are stored as one comma-joined string, so there is no index to page against.
-        // Fetch the matches and slice here rather than pretending the database can do it.
-        if (!string.IsNullOrWhiteSpace(tags))
-        {
-            var tagList = tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var matches = await _unitOfWork.Recipes.GetByTagsAsync(tagList);
-
-            return Ok(new PagedResult<RecipeDto>
-            {
-                Items = matches.Skip((current - 1) * size).Take(size).Select(RecipeMapper.ToDto).ToList(),
-                Page = current,
-                PageSize = size,
-                HasMore = matches.Count > current * size,
-                TotalAvailable = matches.Count,
-            });
-        }
-
-        return Ok(await _searchUseCase.BrowseAsync(current, size));
-    }
+        [FromQuery] int pageSize = SearchRecipesUseCase.DefaultPageSize) =>
+        Ok(await _searchUseCase.BrowseAsync(tags, page, pageSize));
 
     // -- Saved recipes --------------------------------------------------------
     // The only authenticated routes on this controller. The literal segment "saved" can

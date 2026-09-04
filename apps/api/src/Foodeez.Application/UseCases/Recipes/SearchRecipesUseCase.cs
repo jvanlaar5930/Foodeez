@@ -133,20 +133,58 @@ public class SearchRecipesUseCase
         return ranked;
     }
 
-    /// <summary>Browse with no query: purely local, since there is nothing to ask upstream for.</summary>
-    public async Task<PagedResult<RecipeDto>> BrowseAsync(int page = 1, int pageSize = DefaultPageSize)
+    /// <summary>
+    /// Browse with no query: purely local, since there is nothing to ask upstream for.
+    /// Optionally narrowed to recipes carrying all of the given tags.
+    /// </summary>
+    public async Task<PagedResult<RecipeDto>> BrowseAsync(
+        string? tags = null, int page = 1, int pageSize = DefaultPageSize)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
+        var tagList = ParseTags(tags);
+        return tagList.Count > 0
+            ? await BrowseByTagsAsync(tagList, page, pageSize)
+            : await BrowsePageAsync(page, pageSize);
+    }
+
+    /// <summary>Tags arrive as one comma-separated query parameter.</summary>
+    private static List<string> ParseTags(string? tags) =>
+        string.IsNullOrWhiteSpace(tags)
+            ? []
+            : tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private async Task<PagedResult<RecipeDto>> BrowsePageAsync(int page, int pageSize)
+    {
+        // One row past the page, so "is there a next page" is answered without a count query.
         var rows = await _unitOfWork.Recipes.GetPagedAsync((page - 1) * pageSize, pageSize + 1);
 
         return new PagedResult<RecipeDto>
         {
-            Items = rows.Take(pageSize).Select(SpoonacularRecipeMapper.MapToDto).ToList(),
+            Items = rows.Take(pageSize).Select(RecipeMapper.ToDto).ToList(),
             Page = page,
             PageSize = pageSize,
             HasMore = rows.Count > pageSize,
+        };
+    }
+
+    /// <summary>
+    /// Tags are stored as one comma-joined string, so there is no index to page against.
+    /// The matches are fetched and sliced here rather than pretending the database can do it -
+    /// which is also why this reports TotalAvailable and the untagged page above does not.
+    /// </summary>
+    private async Task<PagedResult<RecipeDto>> BrowseByTagsAsync(List<string> tags, int page, int pageSize)
+    {
+        var matches = await _unitOfWork.Recipes.GetByTagsAsync(tags);
+
+        return new PagedResult<RecipeDto>
+        {
+            Items = matches.Skip((page - 1) * pageSize).Take(pageSize).Select(RecipeMapper.ToDto).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            HasMore = matches.Count > page * pageSize,
+            TotalAvailable = matches.Count,
         };
     }
 }
