@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { addDays, format, startOfWeek } from 'date-fns';
+import { ModalActions } from '@/components/ui/ModalActions';
+import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useGroceryStore } from '@/store/groceryStore';
 import { formatApiDate, parseApiDate } from '@/utils/dateUtils';
 import { GROCERY_CATEGORIES, type GroceryItemDto } from '@/types';
@@ -307,50 +308,42 @@ export function GroceryScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
 
-      <Modal
+      <ModalSheet
         visible={editing !== null}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setEditing(null)}
+        onClose={() => setEditing(null)}
+        title="Swap this item"
+        variant="bottom"
+        footer={
+          <ModalActions
+            confirmLabel="Save"
+            onConfirm={saveSwap}
+            onCancel={() => setEditing(null)}
+            confirmDisabled={editName.trim().length === 0}
+          />
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Swap this item</Text>
-            <Text style={styles.emptyText}>
-              Change it for whatever the shop actually had. Edited items are kept when the list
-              is rebuilt.
-            </Text>
+        <Text style={styles.emptyText}>
+          Change it for whatever the shop actually had. Edited items are kept when the list is
+          rebuilt.
+        </Text>
 
-            <TextInput
-              style={styles.addInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Item"
-              placeholderTextColor={C.textHint}
-            />
-            <TextInput
-              style={styles.addInput}
-              value={editQuantity}
-              onChangeText={setEditQuantity}
-              placeholder="Amount"
-              placeholderTextColor={C.textHint}
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setEditing(null)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalConfirm, editName.trim().length === 0 && styles.addDisabled]}
-                disabled={editName.trim().length === 0}
-                onPress={saveSwap}
-              >
-                <Text style={styles.modalConfirmText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <TextInput
+          style={styles.addInput}
+          value={editName}
+          onChangeText={setEditName}
+          placeholder="Item"
+          placeholderTextColor={C.textHint}
+          accessibilityLabel="Item"
+        />
+        <TextInput
+          style={styles.addInput}
+          value={editQuantity}
+          onChangeText={setEditQuantity}
+          placeholder="Amount"
+          placeholderTextColor={C.textHint}
+          accessibilityLabel="Amount"
+        />
+      </ModalSheet>
     </SafeAreaView>
   );
 }
@@ -482,35 +475,4 @@ const makeStyles = (C: Palette) =>
     addDisabled: { opacity: 0.4 },
     hint: { marginTop: Spacing.sm, fontSize: FontSize.sm, color: C.textHint },
     error: { color: C.error, fontSize: FontSize.md },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: C.overlay,
-      justifyContent: 'center',
-      padding: Spacing.xl,
-    },
-    modalContent: {
-      backgroundColor: C.surface,
-      borderRadius: BorderRadius.xl,
-      padding: Spacing.xl,
-      gap: Spacing.md,
-    },
-    modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: C.text },
-    modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm },
-    modalCancel: {
-      flex: 1,
-      borderWidth: 2,
-      borderColor: C.divider,
-      borderRadius: BorderRadius.lg,
-      paddingVertical: Spacing.md,
-      alignItems: 'center',
-    },
-    modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
-    modalConfirm: {
-      flex: 1,
-      backgroundColor: C.primary,
-      borderRadius: BorderRadius.lg,
-      paddingVertical: Spacing.md,
-      alignItems: 'center',
-    },
-    modalConfirmText: { color: C.onPrimary, fontWeight: FontWeight.semibold },
   });

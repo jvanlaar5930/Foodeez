@@ -1,14 +1,11 @@
 import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { FontSize, FontWeight, Spacing, BorderRadius } from '@/constants/theme';
 import { AIPanelDark, AIPanelLight, type AIPanelColors } from '@/constants/aiPanel';
+import { AnalysisSuggestionList, AnalysisTagList } from '@/components/ai/AnalysisLists';
+import { ScoreRing } from '@/components/ai/ScoreRing';
 import { useTheme, useThemeMode, type Palette } from '@/theme';
-import { scoreColor } from '@foodeez/shared';
 import type { MealAnalysisDto } from '@/types';
-
-const RADIUS = 24;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
  * The AI analysis panel shared by the add/edit meal screen and, in shape, the day analysis
@@ -63,24 +60,7 @@ export function MealAnalysisCard({
       {!isAnalyzing && analysis && (
         <View style={styles.panel}>
           <View style={styles.headRow}>
-            <View style={styles.ringWrap}>
-              <Svg width={56} height={56} viewBox="0 0 56 56">
-                <Circle cx={28} cy={28} r={RADIUS} stroke={AI.ringTrack} strokeWidth={5} fill="none" />
-                <Circle
-                  cx={28}
-                  cy={28}
-                  r={RADIUS}
-                  stroke={scoreColor(analysis.score)}
-                  strokeWidth={5}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={`${(analysis.score / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-                  rotation={-90}
-                  origin="28, 28"
-                />
-              </Svg>
-              <Text style={[styles.ringScore, { color: scoreColor(analysis.score) }]}>{analysis.score}</Text>
-            </View>
+            <ScoreRing score={analysis.score} trackColor={AI.ringTrack} />
             <View style={styles.flex}>
               <Text style={styles.headLabel}>Meal Score</Text>
               <Text style={styles.completeness}>{analysis.completeness}</Text>
@@ -88,30 +68,8 @@ export function MealAnalysisCard({
             </View>
           </View>
 
-          {analysis.missing.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Missing</Text>
-              <View style={styles.tagRow}>
-                {analysis.missing.map((item) => (
-                  <View key={item} style={styles.missingTag}>
-                    <Text style={styles.missingTagText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {analysis.suggestions.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Suggestions</Text>
-              {analysis.suggestions.map((suggestion) => (
-                <Text key={suggestion} style={styles.suggestion}>
-                  {'> '}
-                  {suggestion}
-                </Text>
-              ))}
-            </View>
-          )}
+          <AnalysisTagList label="Missing" items={analysis.missing} panel={AI} />
+          <AnalysisSuggestionList label="Suggestions" items={analysis.suggestions} panel={AI} />
         </View>
       )}
     </View>
@@ -147,8 +105,6 @@ const makeStyles = (C: Palette, AI: AIPanelColors) =>
     errorText: { fontSize: FontSize.sm, color: C.error },
     streamText: { fontSize: FontSize.sm, color: C.textSecondary, lineHeight: 20 },
     headRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    ringWrap: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
-    ringScore: { position: 'absolute', fontSize: FontSize.sm, fontWeight: FontWeight.bold },
     headLabel: {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.bold,
@@ -158,21 +114,4 @@ const makeStyles = (C: Palette, AI: AIPanelColors) =>
     },
     completeness: { fontSize: FontSize.sm, color: C.text, lineHeight: 19, marginTop: 2 },
     analyzedOn: { fontSize: FontSize.xs, color: C.textSecondary, marginTop: 2 },
-    section: { gap: 4 },
-    sectionLabel: {
-      fontSize: FontSize.xs,
-      fontWeight: FontWeight.semibold,
-      color: C.textSecondary,
-      letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
-    tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    missingTag: {
-      borderRadius: BorderRadius.full,
-      backgroundColor: AI.tagBg,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 3,
-    },
-    missingTagText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, color: AI.tagText },
-    suggestion: { fontSize: FontSize.sm, color: C.text, lineHeight: 19 },
   });

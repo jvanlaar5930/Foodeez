@@ -7,7 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Modal,
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +23,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
 import { entryLabel } from '@/utils/mealPlanLabels';
+import { ModalActions } from '@/components/ui/ModalActions';
+import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
 import {
@@ -249,44 +250,40 @@ export function MealPlanScreen({ navigation }: Props) {
       </ScrollView>
 
       {/* Generate confirm modal */}
-      <Modal visible={showGenerateModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="sparkles" size={40} color={C.secondary} />
-            <Text style={styles.modalTitle}>Generate Plan</Text>
-            <Text style={styles.modalText}>
-              A full week for {format(weekStart, 'MMM d')} –{' '}
-              {format(addDays(weekStart, 6), 'MMM d')}, built around your targets and the
-              foods you avoid.
-            </Text>
+      <ModalSheet
+        visible={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
+        title="Generate Plan"
+        footer={
+          <ModalActions
+            confirmLabel="Generate"
+            onConfirm={handleGeneratePlan}
+            onCancel={() => setShowGenerateModal(false)}
+          />
+        }
+      >
+        <Text style={styles.modalText}>
+          A full week for {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')},
+          built around your targets and the foods you avoid.
+        </Text>
 
-            <Text style={styles.modalLabel}>Anything specific? (optional)</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={guidance}
-              onChangeText={setGuidance}
-              placeholder="e.g. more variety in the dinners, and reuse last week's breakfasts"
-              placeholderTextColor={C.textSecondary}
-              multiline
-              numberOfLines={3}
-              maxLength={1000}
-              textAlignVertical="top"
-            />
-            <Text style={styles.modalHint}>
-              Mention last week and the plan you already have is used as the reference.
-            </Text>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowGenerateModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={handleGeneratePlan}>
-                <Text style={styles.modalConfirmText}>Generate</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <Text style={styles.modalLabel}>Anything specific? (optional)</Text>
+        <TextInput
+          style={styles.modalInput}
+          value={guidance}
+          onChangeText={setGuidance}
+          placeholder="e.g. more variety in the dinners, and reuse last week's breakfasts"
+          placeholderTextColor={C.textSecondary}
+          multiline
+          numberOfLines={3}
+          maxLength={1000}
+          textAlignVertical="top"
+          accessibilityLabel="Anything specific?"
+        />
+        <Text style={styles.modalHint}>
+          Mention last week and the plan you already have is used as the reference.
+        </Text>
+      </ModalSheet>
     </SafeAreaView>
   );
 }
@@ -378,9 +375,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   generatingState: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
   generatingText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: C.text },
   generatingSubText: { fontSize: FontSize.md, color: C.textSecondary },
-  modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
-  modalContent: { backgroundColor: C.surface, borderRadius: BorderRadius.xl, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md, width: '100%' },
-  modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: C.text },
   modalText: { fontSize: FontSize.md, color: C.textSecondary, textAlign: 'center', lineHeight: 22 },
   modalLabel: {
     alignSelf: 'flex-start',
@@ -408,9 +402,4 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     fontSize: FontSize.xs,
     color: C.textSecondary,
   },
-  modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm, width: '100%' },
-  modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
-  modalConfirm: { flex: 1, backgroundColor: C.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalConfirmText: { color: C.onPrimary, fontWeight: FontWeight.semibold },
 });

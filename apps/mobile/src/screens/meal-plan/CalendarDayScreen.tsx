@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   Alert,
-  Modal,
   TextInput,
   Image,
   ActivityIndicator,
@@ -18,6 +17,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
 import { entryLabel, loggedLabel } from '@/utils/mealPlanLabels';
+import { LinkedRecipeCard } from '@/components/mealplan/LinkedRecipeCard';
+import { ModalActions } from '@/components/ui/ModalActions';
+import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
 import { recipeService } from '@/services/recipeService';
@@ -297,88 +299,48 @@ export function CalendarDayScreen({ route, navigation }: Props) {
         }}
       />
 
-      <Modal visible={entryModalOpen} transparent animationType="fade" onRequestClose={closeEntryModal}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {getEntryForMeal(entryMealType) ? 'Edit' : 'Add'} {MEAL_TYPE_LABELS[entryMealType]}
-            </Text>
+      <ModalSheet
+        visible={entryModalOpen}
+        onClose={closeEntryModal}
+        title={`${getEntryForMeal(entryMealType) ? 'Edit' : 'Add'} ${MEAL_TYPE_LABELS[entryMealType]}`}
+        // A save is in flight; a stray tap on the backdrop should not throw it away.
+        dismissOnBackdrop={!saving}
+        footer={
+          <ModalActions
+            confirmLabel="Save"
+            onConfirm={handleSaveEntry}
+            onCancel={closeEntryModal}
+            busy={saving}
+          />
+        }
+      >
+        <Text style={styles.modalLabel}>Meal</Text>
+        <TextInput
+          style={styles.modalInput}
+          value={entryName}
+          onChangeText={onEntryNameChange}
+          placeholder="e.g. Grilled chicken salad"
+          placeholderTextColor={C.textSecondary}
+          accessibilityLabel="Meal"
+        />
 
-            <Text style={styles.modalLabel}>Meal</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={entryName}
-              onChangeText={onEntryNameChange}
-              placeholder="e.g. Grilled chicken salad"
-              placeholderTextColor={C.textSecondary}
-            />
+        {loadingRecipe ? <ActivityIndicator color={C.primary} style={styles.recipeLoading} /> : null}
 
-            {loadingRecipe && (
-              <ActivityIndicator color={C.primary} style={{ marginTop: Spacing.md }} />
-            )}
+        {!loadingRecipe && linkedRecipe ? (
+          <LinkedRecipeCard recipe={linkedRecipe} onOpen={openLinkedRecipe} />
+        ) : null}
 
-            {/* The recipe behind this slot: what the assistant actually planned, and where
-                someone goes looking for how to cook it. */}
-            {!loadingRecipe && linkedRecipe && (
-              <View style={styles.recipeCard}>
-                <View style={styles.recipeRow}>
-                  <View style={styles.recipeThumb}>
-                    {isAiRecipeImage(linkedRecipe.imageUrl) ? (
-                      <AiRecipeThumb size={20} />
-                    ) : linkedRecipe.imageUrl ? (
-                      <Image
-                        source={{ uri: linkedRecipe.imageUrl }}
-                        style={styles.recipeThumbImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Ionicons name="restaurant" size={20} color={C.primary} />
-                    )}
-                  </View>
+        <Text style={styles.modalLabel}>Servings</Text>
+        <TextInput
+          style={styles.modalInputSmall}
+          value={entryServings}
+          onChangeText={setEntryServings}
+          keyboardType="decimal-pad"
+          accessibilityLabel="Servings"
+        />
 
-                  <View style={styles.recipeInfo}>
-                    <Text style={styles.recipeName} numberOfLines={1}>{linkedRecipe.name}</Text>
-                    {linkedRecipe.description ? (
-                      <Text style={styles.recipeDesc} numberOfLines={2}>{linkedRecipe.description}</Text>
-                    ) : null}
-                    <Text style={styles.recipeMeta}>
-                      {linkedRecipe.prepTimeMinutes + linkedRecipe.cookTimeMinutes > 0
-                        ? `${linkedRecipe.prepTimeMinutes + linkedRecipe.cookTimeMinutes} min · `
-                        : ''}
-                      {Math.round(linkedRecipe.nutritionalInfoPerServing.calories)} kcal · serves{' '}
-                      {linkedRecipe.servings}
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity style={styles.recipeLink} onPress={openLinkedRecipe}>
-                  <Ionicons name="book-outline" size={16} color={C.primary} />
-                  <Text style={styles.recipeLinkText}>View full recipe</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <Text style={styles.modalLabel}>Servings</Text>
-            <TextInput
-              style={styles.modalInputSmall}
-              value={entryServings}
-              onChangeText={setEntryServings}
-              keyboardType="decimal-pad"
-            />
-
-            {entryError && <Text style={styles.modalError}>{entryError}</Text>}
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={closeEntryModal} disabled={saving}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={handleSaveEntry} disabled={saving}>
-                <Text style={styles.modalConfirmText}>{saving ? 'Saving...' : 'Save'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        {entryError ? <Text style={styles.modalError}>{entryError}</Text> : null}
+      </ModalSheet>
     </SafeAreaView>
   );
 }
@@ -447,9 +409,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   aiButtonText: { color: C.secondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
-  modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
-  modalContent: { backgroundColor: C.surface, borderRadius: BorderRadius.xl, padding: Spacing.xl, gap: Spacing.xs, width: '100%' },
-  modalTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text, marginBottom: Spacing.sm },
   modalLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: C.text, marginTop: Spacing.sm },
   modalInput: {
     borderWidth: 1,
@@ -473,6 +432,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     backgroundColor: C.background,
   },
   modalError: { fontSize: FontSize.sm, color: C.error, marginTop: Spacing.sm },
+  recipeLoading: { marginTop: Spacing.md },
   recipeCard: {
     marginTop: Spacing.md,
     borderWidth: 1,
@@ -505,9 +465,4 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     borderTopColor: C.divider,
   },
   recipeLinkText: { color: C.primary, fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-  modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.lg },
-  modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
-  modalConfirm: { flex: 1, backgroundColor: C.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalConfirmText: { color: C.onPrimary, fontWeight: FontWeight.semibold },
 });
