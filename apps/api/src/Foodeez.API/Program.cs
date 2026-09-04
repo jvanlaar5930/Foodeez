@@ -126,8 +126,16 @@ var app = builder.Build();
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── Auto-migrate on startup ───────────────────────────────────────────────────
-using (var scope = app.Services.CreateScope())
+// On by default in Development, where a schema that follows the branch you are on is exactly
+// what you want. Anywhere else it has to be asked for with Database:AutoMigrate, because
+// applying a migration is a one-way change to real data, made by whichever instance happened
+// to boot first, at a moment nobody chose.
+var autoMigrate = builder.Configuration.GetValue<bool?>("Database:AutoMigrate")
+                  ?? app.Environment.IsDevelopment();
+
+if (autoMigrate)
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
     // Migrations are a relational concept. Integration tests swap in the in-memory provider,
@@ -135,7 +143,9 @@ using (var scope = app.Services.CreateScope())
     // unconditional - the test host boots the real Program and would otherwise fail here
     // before reaching a single endpoint.
     if (db.Database.IsRelational())
+    {
         db.Database.Migrate();
+    }
 }
 
 // ── Middleware pipeline ───────────────────────────────────────────────────────

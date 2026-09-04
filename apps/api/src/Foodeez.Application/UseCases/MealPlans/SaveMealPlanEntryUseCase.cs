@@ -34,29 +34,15 @@ public class SaveMealPlanEntryUseCase
     public async Task<SaveEntryResult> AddAsync(
         Guid planId, Guid userId, MealPlanEntryRequest request, CancellationToken ct = default)
     {
-        var plan = await _unitOfWork.MealPlans.GetWithEntriesAsync(planId);
-        if (plan is null || plan.UserId != userId)
+        if (await LoadOwnedPlanAsync(planId, userId) is not { } plan)
         {
-            // Someone else's plan reads as missing rather than forbidden: confirming it
-            // exists would tell an unauthorised caller something they should not learn.
             return new SaveEntryResult(SaveEntryOutcome.PlanNotFound);
         }
 
-        if (Validate(plan, request) is { } reason)
+        var (refusal, recipe, foodItem) = await CheckAsync(plan, request);
+        if (refusal is not null)
         {
-            return new SaveEntryResult(SaveEntryOutcome.Rejected, Reason: reason);
-        }
-
-        var recipe = await ResolveRecipeAsync(request.RecipeId);
-        if (request.RecipeId.HasValue && recipe is null)
-        {
-            return new SaveEntryResult(SaveEntryOutcome.Rejected, Reason: "That recipe no longer exists.");
-        }
-
-        var foodItem = await ResolveFoodItemAsync(request.FoodItemId);
-        if (request.FoodItemId.HasValue && foodItem is null)
-        {
-            return new SaveEntryResult(SaveEntryOutcome.Rejected, Reason: "That food item no longer exists.");
+            return refusal;
         }
 
         // The calendar shows one meal per cell, so a second entry in the same slot would be
@@ -74,8 +60,7 @@ public class SaveMealPlanEntryUseCase
     public async Task<SaveEntryResult> UpdateAsync(
         Guid planId, Guid entryId, Guid userId, MealPlanEntryRequest request, CancellationToken ct = default)
     {
-        var plan = await _unitOfWork.MealPlans.GetWithEntriesAsync(planId);
-        if (plan is null || plan.UserId != userId)
+        if (await LoadOwnedPlanAsync(planId, userId) is not { } plan)
         {
             return new SaveEntryResult(SaveEntryOutcome.PlanNotFound);
         }
@@ -86,21 +71,10 @@ public class SaveMealPlanEntryUseCase
             return new SaveEntryResult(SaveEntryOutcome.EntryNotFound);
         }
 
-        if (Validate(plan, request) is { } reason)
+        var (refusal, recipe, foodItem) = await CheckAsync(plan, request);
+        if (refusal is not null)
         {
-            return new SaveEntryResult(SaveEntryOutcome.Rejected, Reason: reason);
-        }
-
-        var recipe = await ResolveRecipeAsync(request.RecipeId);
-        if (request.RecipeId.HasValue && recipe is null)
-        {
-            return new SaveEntryResult(SaveEntryOutcome.Rejected, Reason: "That recipe no longer exists.");
-        }
-
-        var foodItem = await ResolveFoodItemAsync(request.FoodItemId);
-        if (request.FoodItemId.HasValue && foodItem is null)
-        {
-            return new SaveEntryResult(SaveEntryOutcome.Rejected, Reason: "That food item no longer exists.");
+            return refusal;
         }
 
         // An edit can move a meal to a different day or slot, which has to displace whatever
@@ -117,8 +91,7 @@ public class SaveMealPlanEntryUseCase
     public async Task<SaveEntryResult> DeleteAsync(
         Guid planId, Guid entryId, Guid userId, CancellationToken ct = default)
     {
-        var plan = await _unitOfWork.MealPlans.GetWithEntriesAsync(planId);
-        if (plan is null || plan.UserId != userId)
+        if (await LoadOwnedPlanAsync(planId, userId) is not { } plan)
         {
             return new SaveEntryResult(SaveEntryOutcome.PlanNotFound);
         }
@@ -135,6 +108,53 @@ public class SaveMealPlanEntryUseCase
         _unitOfWork.MealPlans.RemoveEntry(entry);
         await _unitOfWork.SaveChangesAsync(ct);
         return new SaveEntryResult(SaveEntryOutcome.Saved);
+    }
+
+    /// <summary>
+    /// The plan, if it is this person's. Someone else's reads as missing rather than
+    /// forbidden: confirming it exists would tell an unauthorised caller something they
+    /// should not learn.
+    /// </summary>
+    private async Task<MealPlan?> LoadOwnedPlanAsync(Guid planId, Guid userId)
+    {
+        var plan = await _unitOfWork.MealPlans.GetWithEntriesAsync(planId);
+
+        return plan is not null && plan.UserId == userId ? plan : null;
+    }
+
+    /// <summary>
+    /// Everything that has to hold before a slot can be written, and the rows the request
+    /// pointed at. Adding and editing check exactly the same things, and used to check them
+    /// in two copies of the same twenty lines.
+    /// </summary>
+    /// <returns>
+    /// A refusal and nothing else, or no refusal and whatever the request referred to. A
+    /// request naming neither a recipe nor a food item is legitimate - a slot can hold a
+    /// typed-in note - so a null recipe is only a refusal when one was actually asked for.
+    /// </returns>
+    private async Task<(SaveEntryResult? Refusal, Recipe? Recipe, FoodItem? FoodItem)> CheckAsync(
+        MealPlan plan, MealPlanEntryRequest request)
+    {
+        if (Validate(plan, request) is { } reason)
+        {
+            return (new SaveEntryResult(SaveEntryOutcome.Rejected, Reason: reason), null, null);
+        }
+
+        var recipe = await ResolveRecipeAsync(request.RecipeId);
+        if (request.RecipeId.HasValue && recipe is null)
+        {
+            return (new SaveEntryResult(
+                SaveEntryOutcome.Rejected, Reason: "That recipe no longer exists."), null, null);
+        }
+
+        var foodItem = await ResolveFoodItemAsync(request.FoodItemId);
+        if (request.FoodItemId.HasValue && foodItem is null)
+        {
+            return (new SaveEntryResult(
+                SaveEntryOutcome.Rejected, Reason: "That food item no longer exists."), null, null);
+        }
+
+        return (null, recipe, foodItem);
     }
 
     /// <summary>The reason the request cannot be saved, or null when it can.</summary>

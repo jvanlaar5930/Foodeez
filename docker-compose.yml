@@ -22,6 +22,11 @@ services:
     restart: unless-stopped
     environment:
       ConnectionStrings__Default: "Server=mysql;Database=${MYSQL_DATABASE:-foodeez};User=${MYSQL_USER:-foodeez};Password=${MYSQL_PASSWORD};Port=3306"
+      # True keeps what this compose file has always done - the container applies pending
+      # migrations as it starts, which is what a single-instance deployment wants. It is a
+      # setting now rather than a hidden default, so DB_AUTO_MIGRATE=false turns it off for a
+      # deployment that would rather run them deliberately.
+      Database__AutoMigrate: ${DB_AUTO_MIGRATE:-true}
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: Foodeez
       Jwt__Audience: FoodeezApp

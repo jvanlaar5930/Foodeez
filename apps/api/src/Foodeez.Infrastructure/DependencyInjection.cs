@@ -45,6 +45,11 @@ public static class DependencyInjection
 
         // ── AI Services ──────────────────────────────────────────────────
         // Concrete implementations registered directly (DynamicAIService resolves by name)
+        // Deliberately not resilience-wrapped. A model call is not idempotent, is billed per
+        // attempt and can run for minutes, and the streaming ones hand back a response body
+        // that cannot be replayed. AIProviderBase already turns a failure into a fallback the
+        // caller can show, which is the right answer here - retrying silently would double the
+        // cost of an outage and stall the request while doing it.
         services.AddHttpClient<ClaudeAIService>();
         services.AddHttpClient<GeminiAIService>();
         services.AddHttpClient<GroqAIService>();
@@ -62,10 +67,16 @@ public static class DependencyInjection
         services.AddScoped<IStreamingAIService>(sp => sp.GetRequiredService<DynamicAIService>());
 
         // ── Spoonacular Service (typed HttpClient) ────────────────────────
-        services.AddHttpClient<ISpoonacularService, SpoonacularService>();
+        // Retried, unlike the AI clients above: these are idempotent GETs against a public
+        // API, so a 503 or a dropped connection is worth trying again rather than surfacing
+        // as an empty recipe search. The standard handler brings a retry with backoff and
+        // jitter, a circuit breaker and a per-attempt timeout.
+        services.AddHttpClient<ISpoonacularService, SpoonacularService>()
+            .AddStandardResilienceHandler();
 
         // ── USDA FoodData Service (typed HttpClient) ──────────────────────
-        services.AddHttpClient<IFoodDataService, UsdaFoodDataService>();
+        services.AddHttpClient<IFoodDataService, UsdaFoodDataService>()
+            .AddStandardResilienceHandler();
 
         // ── JWT Service ───────────────────────────────────────────────────
         services.AddSingleton<IJwtService, JwtService>();
