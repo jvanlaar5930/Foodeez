@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppAlert from '@/components/ui/AppAlert.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import type { GroceryItemRequest } from '@foodeez/shared';
@@ -203,12 +204,7 @@ function save(itemId: string, item: GroceryItemRequest) {
         </div>
       </template>
 
-      <p
-        v-if="groceryStore.error"
-        class="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300"
-      >
-        {{ groceryStore.error }}
-      </p>
+      <AppAlert v-if="groceryStore.error" variant="error" :message="groceryStore.error" class="mt-4" />
     </div>
   </AppLayout>
 </template>
