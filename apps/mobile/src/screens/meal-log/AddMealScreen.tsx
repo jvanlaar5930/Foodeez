@@ -66,7 +66,10 @@ export function AddMealScreen({ navigation, route }: Props) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const user = useAuthStore((state) => state.user);
-  const { logMeal, updateMealLog, selectedDate, isLoading } = useMealStore();
+  const logMeal = useMealStore((state) => state.logMeal);
+  const updateMealLog = useMealStore((state) => state.updateMealLog);
+  const selectedDate = useMealStore((state) => state.selectedDate);
+  const isLoading = useMealStore((state) => state.isLoading);
   const editingMealLog = route.params?.mealLog;
 
   const [selectedMealType, setSelectedMealType] = useState<MealType>(

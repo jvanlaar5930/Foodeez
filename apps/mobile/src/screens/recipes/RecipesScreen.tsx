@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,8 +30,9 @@ const FILTER_TAGS = ['Vegetarian', 'Vegan', 'High-Protein', 'Low-Carb', 'Quick',
 export function RecipesScreen({ navigation, route }: Props) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
+  /** Lets the search effect do the initial load without waiting out its debounce. */
+  const isFirstLoad = useRef(true);
   const [recipes, setRecipes] = useState<RecipeDto[]>([]);
-  const [filteredRecipes, setFilteredRecipes] = useState<RecipeDto[]>([]);
   const [search, setSearch] = useState('');
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -108,11 +109,6 @@ export function RecipesScreen({ navigation, route }: Props) {
     }
   }, [hasMore, isLoading, isLoadingMore, search]);
 
-  // Initial load
-  useEffect(() => {
-    loadRecipes();
-  }, []);
-
   // Saves can be made from the detail screen, so re-read them on the way back in.
   // The first fetch is unconditional; later ones only matter once something has loaded.
   useFocusEffect(
@@ -121,25 +117,39 @@ export function RecipesScreen({ navigation, route }: Props) {
     }, [savedHasLoaded, fetchSaved])
   );
 
-  // Debounced server search when text changes
+  /**
+   * The server search, debounced - and the first load too.
+   *
+   * There used to be a separate "initial load" effect as well, so opening the screen fired
+   * two identical requests for page one: this effect runs on mount like any other. It is the
+   * only one now, and skips the wait on that first pass so the list is not empty for 400ms
+   * before anything arrives.
+   */
   useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      loadRecipes(search);
+      return;
+    }
+
     const timer = setTimeout(() => {
       setIsLoading(true);
       loadRecipes(search);
     }, 400);
-    return () => clearTimeout(timer);
-  }, [search]);
 
-  // Client-side tag filter on top of server results
-  useEffect(() => {
+    return () => clearTimeout(timer);
+  }, [search, loadRecipes]);
+
+  /**
+   * The tag filter on top of the server's results. Derived, not stored: keeping it in state
+   * behind a third effect meant every search landed twice - once with the new recipes and the
+   * old filtered list, then again once the effect caught up.
+   */
+  const filteredRecipes = useMemo(() => {
     const tags = Array.from(activeTags);
-    setFilteredRecipes(
-      tags.length === 0
-        ? recipes
-        : recipes.filter(r =>
-            tags.every(t => r.tags?.toLowerCase().includes(t.toLowerCase()))
-          )
-    );
+    if (tags.length === 0) return recipes;
+
+    return recipes.filter((r) => tags.every((t) => r.tags?.toLowerCase().includes(t.toLowerCase())));
   }, [activeTags, recipes]);
 
   const toggleTag = (tag: string) => {

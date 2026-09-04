@@ -46,21 +46,19 @@ export function GroceryScreen() {
   const [editName, setEditName] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
 
-  const {
-    list,
-    plannedMealCount,
-    isLoading,
-    isGenerating,
-    generationText,
-    error,
-    load,
-    generate,
-    cancelGenerate,
-    addItem,
-    updateItem,
-    setChecked,
-    removeItem,
-  } = useGroceryStore();
+  const list = useGroceryStore((state) => state.list);
+  const plannedMealCount = useGroceryStore((state) => state.plannedMealCount);
+  const isLoading = useGroceryStore((state) => state.isLoading);
+  const isGenerating = useGroceryStore((state) => state.isGenerating);
+  const generationText = useGroceryStore((state) => state.generationText);
+  const error = useGroceryStore((state) => state.error);
+  const load = useGroceryStore((state) => state.load);
+  const generate = useGroceryStore((state) => state.generate);
+  const cancelGenerate = useGroceryStore((state) => state.cancelGenerate);
+  const addItem = useGroceryStore((state) => state.addItem);
+  const updateItem = useGroceryStore((state) => state.updateItem);
+  const setChecked = useGroceryStore((state) => state.setChecked);
+  const removeItem = useGroceryStore((state) => state.removeItem);
 
   useEffect(() => {
     void load(range.startDate, range.endDate);

@@ -53,8 +53,11 @@ export function ProfileScreen() {
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<ProfileNav>();
   const { mode, setMode } = useThemeMode();
-  const { user, logout } = useAuthStore();
-  const { profile, fetchProfile, updateProfile } = useProfileStore();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const profile = useProfileStore((state) => state.profile);
+  const fetchProfile = useProfileStore((state) => state.fetchProfile);
+  const updateProfile = useProfileStore((state) => state.updateProfile);
   const units = profile?.unitSystem ?? UnitSystem.Metric;
   const [weightReminderEnabled, setWeightReminderEnabled] = useState(true);
   const [trackingReminderEnabled, setTrackingReminderEnabled] = useState(true);

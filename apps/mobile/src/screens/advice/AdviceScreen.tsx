@@ -43,22 +43,20 @@ export function AdviceScreen() {
   const [showHistory, setShowHistory] = useState(false);
   const [planNotice, setPlanNotice] = useState<string | null>(null);
 
-  const {
-    conversations,
-    activeConversation,
-    isLoading,
-    isSending,
-    streamingText,
-    error,
-    fetchConversations,
-    openConversation,
-    startNew,
-    send,
-    cancelSend,
-    remove,
-    addSuggestionsToPlan,
-    saveRecipes,
-  } = useChatStore();
+  const conversations = useChatStore((state) => state.conversations);
+  const activeConversation = useChatStore((state) => state.activeConversation);
+  const isLoading = useChatStore((state) => state.isLoading);
+  const isSending = useChatStore((state) => state.isSending);
+  const streamingText = useChatStore((state) => state.streamingText);
+  const error = useChatStore((state) => state.error);
+  const fetchConversations = useChatStore((state) => state.fetchConversations);
+  const openConversation = useChatStore((state) => state.openConversation);
+  const startNew = useChatStore((state) => state.startNew);
+  const send = useChatStore((state) => state.send);
+  const cancelSend = useChatStore((state) => state.cancelSend);
+  const remove = useChatStore((state) => state.remove);
+  const addSuggestionsToPlan = useChatStore((state) => state.addSuggestionsToPlan);
+  const saveRecipes = useChatStore((state) => state.saveRecipes);
 
   // Straight back into the last thread: advice is a conversation, and starting every visit
   // from a blank page would throw away the context that makes it worth having.
@@ -141,7 +139,10 @@ export function AdviceScreen() {
           ref={scroller}
           style={styles.flex}
           contentContainerStyle={styles.thread}
-          onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}
+          // Not animated while a reply is streaming: this fires on every token, and each
+          // animated scroll queues behind the last, so the thread ends up chasing itself
+          // instead of following the text. A finished message still slides into view.
+          onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: !isSending })}
         >
           {isLoading && messages.length === 0 ? (
             <ActivityIndicator color={C.primary} style={styles.loader} />

@@ -23,7 +23,10 @@ export function DashboardScreen() {
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<DashboardNav>();
   const user = useAuthStore((state) => state.user);
-  const { dailyLogs, nutritionSummary, isLoading, refreshDay } = useMealStore();
+  const dailyLogs = useMealStore((state) => state.dailyLogs);
+  const nutritionSummary = useMealStore((state) => state.nutritionSummary);
+  const isLoading = useMealStore((state) => state.isLoading);
+  const refreshDay = useMealStore((state) => state.refreshDay);
   const { macrosSummary } = useNutrition();
   const [refreshing, setRefreshing] = useState(false);
   const [recipeSearch, setRecipeSearch] = useState('');

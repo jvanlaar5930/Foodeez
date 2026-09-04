@@ -107,7 +107,8 @@ export function ProfileSetupScreen() {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const user = useAuthStore((state) => state.user);
-  const { updateProfile, isLoading } = useProfileStore();
+  const updateProfile = useProfileStore((state) => state.updateProfile);
+  const isLoading = useProfileStore((state) => state.isLoading);
 
   const [step, setStep] = useState(1);
   const [data, setData] = useState<ProfileData>({

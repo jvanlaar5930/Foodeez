@@ -23,14 +23,12 @@ export function MealLogScreen() {
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<MealLogNav>();
   const user = useAuthStore((state) => state.user);
-  const {
-    dailyLogs,
-    selectedDate,
-    isLoading,
-    setSelectedDate,
-    refreshDay,
-    deleteMealLog,
-  } = useMealStore();
+  const dailyLogs = useMealStore((state) => state.dailyLogs);
+  const selectedDate = useMealStore((state) => state.selectedDate);
+  const isLoading = useMealStore((state) => state.isLoading);
+  const setSelectedDate = useMealStore((state) => state.setSelectedDate);
+  const refreshDay = useMealStore((state) => state.refreshDay);
+  const deleteMealLog = useMealStore((state) => state.deleteMealLog);
   const [refreshing, setRefreshing] = useState(false);
 
   const currentDate = parseApiDate(selectedDate);

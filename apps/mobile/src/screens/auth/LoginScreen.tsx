@@ -36,7 +36,8 @@ export function LoginScreen() {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<LoginNav>();
-  const { login, isLoading } = useAuthStore();
+  const login = useAuthStore((state) => state.login);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

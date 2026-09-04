@@ -23,6 +23,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
+import { entryLabel } from '@/utils/mealPlanLabels';
 import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
 import {
@@ -42,9 +43,6 @@ type Props = NativeStackScreenProps<MealPlanStackParamList, 'MealPlanHome'>;
  * them, so both names are null and the meal's own name is in `notes` - without this every
  * generated slot read "Custom meal".
  */
-function entryLabel(entry: MealPlanEntryDto): string {
-  return entry.recipeName ?? entry.foodItemName ?? entry.notes ?? 'Custom meal';
-}
 
 export function MealPlanScreen({ navigation }: Props) {
   const C = useTheme();
@@ -55,8 +53,13 @@ export function MealPlanScreen({ navigation }: Props) {
   /** Free text for the next generation. Held here so a failed attempt can be retried as asked. */
   const [guidance, setGuidance] = useState('');
 
-  const { user } = useAuthStore();
-  const { plans, activePlan, isLoading, isGenerating, fetchPlans, generatePlan } = useMealPlanStore();
+  const user = useAuthStore((state) => state.user);
+  const plans = useMealPlanStore((state) => state.plans);
+  const activePlan = useMealPlanStore((state) => state.activePlan);
+  const isLoading = useMealPlanStore((state) => state.isLoading);
+  const isGenerating = useMealPlanStore((state) => state.isGenerating);
+  const fetchPlans = useMealPlanStore((state) => state.fetchPlans);
+  const generatePlan = useMealPlanStore((state) => state.generatePlan);
   // What was actually logged for the visible week, shown read-only alongside what was
   // planned - a display-only overlay, so a failed fetch just leaves the grid unannotated.
   const [loggedLogs, setLoggedLogs] = useState<MealLogDto[]>([]);

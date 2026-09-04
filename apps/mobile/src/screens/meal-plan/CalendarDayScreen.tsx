@@ -17,6 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
+import { entryLabel, loggedLabel } from '@/utils/mealPlanLabels';
 import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
 import { recipeService } from '@/services/recipeService';
@@ -41,21 +42,19 @@ type Props = NativeStackScreenProps<MealPlanStackParamList, 'CalendarDay'>;
  * them, so both names are null and the meal's own name is in `notes` - without this every
  * generated slot read "Custom meal".
  */
-function entryLabel(entry: MealPlanEntryDto): string {
-  return entry.recipeName ?? entry.foodItemName ?? entry.notes ?? 'Custom meal';
-}
 
-function loggedLabel(log: MealLogDto): string {
-  return log.items.map((item) => item.foodItem.name).filter(Boolean).join(', ');
-}
 
 export function CalendarDayScreen({ route, navigation }: Props) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { date } = route.params;
   const parsedDate = parseISO(date);
-  const { user } = useAuthStore();
-  const { activePlan, ensurePlanFor, saveEntry, removeEntry, clearError } = useMealPlanStore();
+  const user = useAuthStore((state) => state.user);
+  const activePlan = useMealPlanStore((state) => state.activePlan);
+  const ensurePlanFor = useMealPlanStore((state) => state.ensurePlanFor);
+  const saveEntry = useMealPlanStore((state) => state.saveEntry);
+  const removeEntry = useMealPlanStore((state) => state.removeEntry);
+  const clearError = useMealPlanStore((state) => state.clearError);
 
   const [loggedLogs, setLoggedLogs] = useState<MealLogDto[]>([]);
   const [saving, setSaving] = useState(false);
