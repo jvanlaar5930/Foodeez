@@ -7,6 +7,8 @@ import type { GenerateMealPlanRequest, MealPlanDto, MealPlanEntryRequest } from 
 interface MealPlanState {
   plans: MealPlanDto[];
   activePlan: MealPlanDto | null;
+  /** Whether the plan list has been fetched this session - see `ensurePlanFor`. */
+  hasLoaded: boolean;
   isLoading: boolean;
   isGenerating: boolean;
   error: string | null;
@@ -29,6 +31,7 @@ interface MealPlanState {
 export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   plans: [],
   activePlan: null,
+  hasLoaded: false,
   isLoading: false,
   isGenerating: false,
   error: null,
@@ -36,7 +39,7 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   fetchPlans: async (userId: string) => {
     await runAsync(set, { fallback: 'Your meal plans could not be loaded.' }, async () => {
       const plans = await mealPlanService.getMealPlans(userId);
-      set({ plans, activePlan: plans.length > 0 ? plans[0] : null });
+      set({ plans, activePlan: plans.length > 0 ? plans[0] : null, hasLoaded: true });
     });
   },
 
@@ -61,6 +64,11 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   },
 
   ensurePlanFor: async (userId: string, startDate: string, endDate: string, name: string) => {
+    // The recipe screen can reach this without the meal-plan tab ever having been opened, and
+    // a never-fetched list looks exactly like a user with no plans - which would quietly make
+    // a second plan for a week that already has one.
+    if (!get().hasLoaded) await get().fetchPlans(userId);
+
     const existing = get().plans.find((p) => p.startDate <= startDate && p.endDate >= endDate);
     if (existing) return existing;
 

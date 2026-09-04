@@ -17,8 +17,17 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Watch the whole workspace, so edits in packages/shared trigger a rebuild.
-config.watchFolders = [workspaceRoot];
+// Watch what the app can actually import: the shared package's source, and the hoisted
+// node_modules the resolver falls back to.
+//
+// Watching the whole workspace was enough to make the bundle work, but it also put the .NET
+// API's bin/obj, the web app's dist and .git into Metro's file crawl - thousands of files no
+// bundle can reach, at a cost on Windows that shows up as a first bundle slow enough for
+// Expo Go to give up on it ("failed to download remote update").
+config.watchFolders = [
+  path.resolve(workspaceRoot, 'packages/shared'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
 
 // Look in the app's node_modules first, then the hoisted root one.
 config.resolver.nodeModulesPaths = [

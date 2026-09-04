@@ -203,16 +203,21 @@ From the repo root (if not already done):
 npm install
 ```
 
-### Step 2 — Configure the API URL
+### Step 2 — Configure the API URL (usually not needed)
 
-Create `apps/mobile/.env` with:
+The app works this out for itself: on an emulator it uses the emulator's alias for your host,
+and on a physical device it takes the host out of the address the bundle arrived from. Set it
+by hand only to point somewhere else — a staging API, or a tunnelled dev server — by creating
+`apps/mobile/.env` with:
 
 ```
-EXPO_PUBLIC_API_URL=http://10.0.2.2:5000
+EXPO_PUBLIC_API_URL=http://192.168.1.50:5000/api
 ```
 
-> `10.0.2.2` is the Android emulator's address for `localhost` on your host machine.
-> For a physical device on the same Wi-Fi, replace with your machine's local IP (e.g. `http://192.168.1.50:5000`).
+> The `/api` suffix is part of the value: it is the base every request is appended to, so
+> without it every call 404s and login fails.
+> `10.0.2.2` is the Android emulator's address for `localhost` on your host machine; a
+> physical device needs your machine's local IP on the same Wi-Fi.
 
 ### Step 3 — Start the app
 
@@ -302,7 +307,7 @@ Secrets come from user-secrets in Development and environment variables when dep
 
 | Key | Description | Example |
 |-----|-------------|---------|
-| `EXPO_PUBLIC_API_URL` | Backend API base URL | `http://10.0.2.2:5000` (emulator) or `http://192.168.x.x:5000` (physical device) |
+| `EXPO_PUBLIC_API_URL` | Backend API base URL, including `/api`. Optional — the app derives it from the dev server address otherwise. | `http://10.0.2.2:5000/api` (emulator) or `http://192.168.x.x:5000/api` (physical device) |
 
 ---
 
@@ -322,12 +327,41 @@ dotnet tool install --global dotnet-ef
 - Confirm the password in your `ConnectionStrings:Default` user-secret matches what you set during install (`dotnet user-secrets list`)
 - Confirm port 3306 is not blocked by a firewall
 
+### Expo Go: `java.io.IOException: failed to download remote update`
+Expo Go could not fetch the JS bundle from Metro on your machine — this happens before any
+screen renders, so it is not a login failure even when it looks like one. In order of
+likelihood:
+
+1. **An older Metro is still holding port 8081.** A dev server left over from a previous
+   session answers the QR code but may no longer be serving a usable bundle. Find and stop it,
+   then start a fresh one:
+   ```
+   Get-NetTCPConnection -LocalPort 8081 -State Listen | Select-Object OwningProcess
+   Stop-Process -Id <that pid>
+   npm run mobile
+   ```
+2. **Windows Firewall is blocking node on the private network.** Run once, in an elevated
+   PowerShell:
+   ```
+   New-NetFirewallRule -DisplayName "Expo Metro 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Private
+   ```
+3. **The phone is not on the same network**, or the Wi-Fi has client isolation on (common on
+   guest networks). Check that the IP in the Metro banner matches your `ipconfig` IPv4 address,
+   and that the phone can open `http://<that IP>:8081` in its browser.
+4. **Neither is fixable right now** — go over Expo's relay, which needs no LAN path:
+   ```
+   npm run mobile:tunnel
+   ```
+   A tunnelled dev server is not an address the API is reachable on, so set
+   `EXPO_PUBLIC_API_URL=http://192.168.x.x:5000/api` in `apps/mobile/.env` for that session.
+5. **A stale bundler cache**, after a dependency change: `npm run mobile -- --clear`.
+
 ### Expo / Metro bundler can't connect to API on physical device
 Use your machine's local IP address instead of `10.0.2.2`:
 ```
 ipconfig   # find your IPv4 address under Wi-Fi adapter
 ```
-Then set `EXPO_PUBLIC_API_URL=http://192.168.x.x:5000` in `apps/mobile/.env`.
+Then set `EXPO_PUBLIC_API_URL=http://192.168.x.x:5000/api` in `apps/mobile/.env`.
 
 ### `npm install` fails with workspace errors
 Make sure you are running `npm install` from the **repo root** (`c:\dev\Foodeez`), not inside a sub-folder.
@@ -338,4 +372,4 @@ Enable hardware acceleration in Android Studio:
 - Or enable HAXM / Hyper-V in your BIOS settings
 
 ### Port 5000 already in use
-Change the API port in `apps/api/src/Foodeez.API/Properties/launchSettings.json`, then update `EXPO_PUBLIC_API_URL` and the Vite proxy in `apps/web/vite.config.ts` accordingly.
+Change the API port in `apps/api/src/Foodeez.API/Properties/launchSettings.json`, then update `API_PORT` in `apps/mobile/src/constants/api.ts` (and `EXPO_PUBLIC_API_URL`, if you set one) and the Vite proxy in `apps/web/vite.config.ts` accordingly.

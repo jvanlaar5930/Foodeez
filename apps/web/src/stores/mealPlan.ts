@@ -14,6 +14,12 @@ import type {
 export const useMealPlanStore = defineStore('mealPlan', () => {
   const plans = ref<MealPlan[]>([]);
   const activePlan = ref<MealPlan | null>(null);
+  /**
+   * Whether the plan list has been fetched this session. Screens other than the calendar
+   * can now write into a plan, and `ensurePlanFor` would create a second plan for a week
+   * that already has one if it decided from an empty, never-fetched list.
+   */
+  const hasLoaded = ref(false);
   const isGenerating = ref(false);
   /** What the model has written so far this generation, for the view to show as it arrives. */
   const generationText = ref('');
@@ -28,6 +34,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
   async function fetchPlans(userId: string): Promise<void> {
     await run('Your meal plans could not be loaded.', async () => {
       plans.value = await mealPlanService.getMealPlans(userId);
+      hasLoaded.value = true;
       if (plans.value.length > 0) {
         activePlan.value = plans.value[0];
       }
@@ -119,6 +126,10 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     endDate: string,
     name: string,
   ): Promise<MealPlan> {
+    // A never-fetched list looks the same as a user with no plans, and guessing wrong here
+    // makes a duplicate plan for the week.
+    if (!hasLoaded.value) await fetchPlans(userId);
+
     const existing = planCovering(startDate);
     if (existing) return existing;
     return createPlan({ userId, name, startDate, endDate });
@@ -185,6 +196,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
   return {
     plans,
     activePlan,
+    hasLoaded,
     cancelGeneration,
     sortedPlans,
     isLoading,

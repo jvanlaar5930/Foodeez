@@ -69,20 +69,29 @@
       @retry="retryDetail"
     >
       <template #actions>
-        <RouterLink
-          to="/meal-plan"
+        <button
+          type="button"
           class="block w-full rounded-xl bg-green-600 py-3 text-center font-semibold text-white transition-colors hover:bg-green-700"
+          @click="planningRecipe = selectedRecipe"
         >
           Add to Meal Plan
-        </RouterLink>
+        </button>
       </template>
     </RecipeDetailModal>
+
+    <!-- Outside the detail dialog so it is not clipped by the panel it was opened from. -->
+    <AddToMealPlanModal
+      v-if="planningRecipe"
+      :model-value="true"
+      :recipe="planningRecipe"
+      @update:model-value="planningRecipe = null"
+    />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRoute, useRouter, RouterLink } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -90,14 +99,18 @@ import AppAlert from '@/components/ui/AppAlert.vue';
 import RecipeSearchBar from '@/components/recipe/RecipeSearchBar.vue';
 import RecipeCard from '@/components/recipe/RecipeCard.vue';
 import RecipeDetailModal from '@/components/recipe/RecipeDetailModal.vue';
+import AddToMealPlanModal from '@/components/mealplan/AddToMealPlanModal.vue';
 import { usePagedRecipes } from '@/composables/usePagedRecipes';
 import { useRecipeDetail } from '@/composables/useRecipeDetail';
 import type { RecipeSuggestion } from '@/services/recipeService';
+import type { Recipe } from '@foodeez/shared';
 
 const route = useRoute();
 const router = useRouter();
 
 const searchQuery = ref((route.query.q as string) ?? '');
+/** The recipe being placed in the calendar, which is what opens the day picker. */
+const planningRecipe = ref<Recipe | null>(null);
 const activeTags = ref(new Set<string>());
 
 const {

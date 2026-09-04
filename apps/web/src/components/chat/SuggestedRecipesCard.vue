@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { SuggestedRecipe } from '@foodeez/shared';
+import { formatQuantity, type SuggestedRecipe } from '@foodeez/shared';
 
 const props = defineProps<{
   recipes: SuggestedRecipe[];
@@ -26,7 +26,7 @@ function totalTime(recipe: SuggestedRecipe): number {
 
 /** "300 g flour", or just the name when the model gave no measurement. */
 function ingredientLine(ingredient: SuggestedRecipe['ingredients'][number]): string {
-  const amount = [ingredient.quantity > 0 ? ingredient.quantity : '', ingredient.unit]
+  const amount = [ingredient.quantity > 0 ? formatQuantity(ingredient.quantity) : '', ingredient.unit]
     .filter(Boolean)
     .join(' ')
     .trim();

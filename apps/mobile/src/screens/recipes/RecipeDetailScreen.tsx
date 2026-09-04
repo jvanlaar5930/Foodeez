@@ -14,12 +14,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RecipesStackParamList } from '@/navigation/types';
 import { recipeService } from '@/services/recipeService';
+import { foodItemForRecipe } from '@/services/foodItemService';
 import { useSavedRecipeStore } from '@/store/savedRecipeStore';
+import { AddToMealPlanSheet } from '@/components/mealplan/AddToMealPlanSheet';
 import { isAiRecipeImage, RecipeDto } from '@/types';
 import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
+import { formatQuantity } from '@foodeez/shared';
 
 type Props = NativeStackScreenProps<RecipesStackParamList, 'RecipeDetail'>;
 
@@ -30,6 +33,8 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
   const [recipe, setRecipe] = useState<RecipeDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [isLogging, setIsLogging] = useState(false);
 
   const savedIds = useSavedRecipeStore((s) => s.savedIds);
   const savedPending = useSavedRecipeStore((s) => s.pending);
@@ -79,6 +84,40 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
       </SafeAreaView>
     );
   }
+
+  /**
+   * Logging a recipe means logging one serving of it. Meal logs are made of food items and a
+   * recipe is not one, so the recipe is turned into a food item carrying its per-serving
+   * nutrition and handed to the add-meal screen, where the meal type, the amount and the day
+   * are all still editable before anything is saved.
+   */
+  const logThisMeal = async () => {
+    setIsLogging(true);
+    try {
+      const foodItem = await foodItemForRecipe(recipe);
+      // Crosses from the Recipes tab's own stack into the Meal Log tab's, which is typed to
+      // accept these nested params - see navigation/types.ts.
+      navigation.getParent<any>()?.navigate('MealLog', {
+        screen: 'AddMeal',
+        params: {
+          parsedItems: [
+            {
+              foodItem,
+              quantity: 1,
+              unit: foodItem.servingUnit,
+              // The numbers are the recipe's own, not a guess made just now.
+              source: 'Matched',
+              confidence: 1,
+            },
+          ],
+        },
+      });
+    } catch {
+      Alert.alert('Log This Meal', 'That could not be opened just now. Please try again.');
+    } finally {
+      setIsLogging(false);
+    }
+  };
 
   const isSaved = savedIds.has(recipe.id);
   const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes;
@@ -189,7 +228,7 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
               <View key={`${ing.foodItemName}-${i}`} style={styles.ingredientRow}>
                 <View style={styles.ingredientBullet} />
                 <Text style={styles.ingredientText}>
-                  <Text style={styles.ingredientQty}>{ing.quantity} {ing.unit} </Text>
+                  <Text style={styles.ingredientQty}>{formatQuantity(ing.quantity)} {ing.unit} </Text>
                   {ing.foodItemName}
                   {ing.notes ? <Text style={styles.ingredientNotes}> ({ing.notes})</Text> : null}
                 </Text>
@@ -234,23 +273,32 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
 
           {/* Actions */}
           <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => Alert.alert('Add to Meal Plan', 'Feature coming soon!')}
-            >
+            <TouchableOpacity style={styles.actionButton} onPress={() => setPlanOpen(true)}>
               <Ionicons name="calendar-outline" size={20} color={C.onPrimary} />
               <Text style={styles.actionButtonText}>Add to Meal Plan</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.actionButtonSecondary]}
-              onPress={() => Alert.alert('Log Meal', 'Feature coming soon!')}
+              disabled={isLogging}
+              onPress={logThisMeal}
             >
-              <Ionicons name="add-circle-outline" size={20} color={C.primary} />
+              {isLogging ? (
+                <ActivityIndicator size="small" color={C.primary} />
+              ) : (
+                <Ionicons name="add-circle-outline" size={20} color={C.primary} />
+              )}
               <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>Log This Meal</Text>
             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
+
+      <AddToMealPlanSheet
+        visible={planOpen}
+        recipe={recipe}
+        onClose={() => setPlanOpen(false)}
+        onViewPlan={() => navigation.getParent<any>()?.navigate('MealPlan')}
+      />
     </SafeAreaView>
   );
 }

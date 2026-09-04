@@ -5,6 +5,7 @@ import { RecipePanelDark, RecipePanelLight, type RecipePanelColors } from '@/con
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useThemeMode } from '@/theme';
 import type { SuggestedRecipeDto } from '@/types';
+import { formatQuantity } from '@foodeez/shared';
 
 interface RecipesCardProps {
   recipes: SuggestedRecipeDto[];
@@ -17,7 +18,7 @@ interface RecipesCardProps {
 
 /** "300 g flour", or just the name when the model gave no measurement. */
 function ingredientLine(ingredient: SuggestedRecipeDto['ingredients'][number]): string {
-  const amount = [ingredient.quantity > 0 ? String(ingredient.quantity) : '', ingredient.unit]
+  const amount = [ingredient.quantity > 0 ? formatQuantity(ingredient.quantity) : '', ingredient.unit]
     .filter(Boolean)
     .join(' ')
     .trim();

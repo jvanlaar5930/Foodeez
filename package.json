@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "mobile": "npm run start --workspace=@foodeez/mobile",
+    "mobile:tunnel": "npm run start:tunnel --workspace=@foodeez/mobile",
     "android": "npm run android --workspace=@foodeez/mobile",
     "web": "npm run dev --workspace=@foodeez/web",
     "web:build": "npm run build --workspace=@foodeez/web",

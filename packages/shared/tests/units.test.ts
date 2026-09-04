@@ -7,6 +7,7 @@ import {
   feetInchesToCm,
   flOzToMl,
   formatHeight,
+  formatQuantity,
   formatServing,
   formatWeight,
   gToOz,
@@ -124,5 +125,42 @@ describe('formatServing', () => {
     expect(formatServing(1, 'slice', UnitSystem.US)).toBe('1 slice');
     expect(formatServing(2, 'cups', UnitSystem.US)).toBe('2 cups');
     expect(formatServing(3, 'medium', UnitSystem.US)).toBe('3 medium');
+  });
+});
+
+describe('formatQuantity', () => {
+  it('writes the fractions a measuring cup has', () => {
+    expect(formatQuantity(0.333333334)).toBe('1/3');
+    expect(formatQuantity(0.5)).toBe('1/2');
+    expect(formatQuantity(0.25)).toBe('1/4');
+    expect(formatQuantity(0.75)).toBe('3/4');
+    expect(formatQuantity(0.125)).toBe('1/8');
+    expect(formatQuantity(0.666666687)).toBe('2/3');
+  });
+
+  it('keeps the whole part alongside the fraction', () => {
+    expect(formatQuantity(1.5)).toBe('1 1/2');
+    expect(formatQuantity(2.25)).toBe('2 1/4');
+    expect(formatQuantity(1.333333334)).toBe('1 1/3');
+  });
+
+  it('leaves whole numbers whole', () => {
+    expect(formatQuantity(0)).toBe('0');
+    expect(formatQuantity(1)).toBe('1');
+    expect(formatQuantity(300)).toBe('300');
+    expect(formatQuantity(2.001)).toBe('2');
+  });
+
+  it('rounds to two decimals when no fraction is close enough', () => {
+    expect(formatQuantity(0.3)).toBe('0.3');
+    expect(formatQuantity(0.6)).toBe('0.6');
+    expect(formatQuantity(1.99)).toBe('1.99');
+    expect(formatQuantity(12.456)).toBe('12.46');
+    expect(formatQuantity(150.5)).toBe('150 1/2');
+  });
+
+  it('keeps the sign, and says nothing about a number that is not one', () => {
+    expect(formatQuantity(-0.5)).toBe('-1/2');
+    expect(formatQuantity(Number.NaN)).toBe('');
   });
 });
