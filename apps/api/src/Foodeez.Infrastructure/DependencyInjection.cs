@@ -53,9 +53,13 @@ public static class DependencyInjection
         // spend minutes on one prompt, so the deadline is set per request instead of by HttpClient.
         services.AddHttpClient<LocalAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         // DynamicAIService is the active IAIService — reads provider from AppSettings at runtime
-        services.AddScoped<IAIService, DynamicAIService>();
-        // Streaming is a capability of the same active service, not a second provider.
-        services.AddScoped<IStreamingAIService>(sp => (IStreamingAIService)sp.GetRequiredService<IAIService>());
+        // Registered once and shared by both interfaces, so streaming and non-streaming calls
+        // in one request go to the same instance and reuse its resolved provider. The previous
+        // form cast IAIService to IStreamingAIService, which would have thrown at runtime for
+        // any provider that did not implement both.
+        services.AddScoped<DynamicAIService>();
+        services.AddScoped<IAIService>(sp => sp.GetRequiredService<DynamicAIService>());
+        services.AddScoped<IStreamingAIService>(sp => sp.GetRequiredService<DynamicAIService>());
 
         // ── Spoonacular Service (typed HttpClient) ────────────────────────
         services.AddHttpClient<ISpoonacularService, SpoonacularService>();
