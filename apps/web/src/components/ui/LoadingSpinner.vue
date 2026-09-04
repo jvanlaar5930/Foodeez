@@ -6,7 +6,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   size: 'md',
-  color: '#16a34a',
+  color: 'var(--color-green-600)',
 });
 
 const sizeMap: Record<string, string> = {

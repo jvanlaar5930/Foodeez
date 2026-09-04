@@ -40,9 +40,9 @@
           </div>
 
           <div class="space-y-3">
-            <MacroBar label="Protein" :current="summary?.totalProtein ?? 0" :target="summary?.targetProtein ?? 150" color="#3B82F6" unit="g" />
-            <MacroBar label="Carbs" :current="summary?.totalCarbs ?? 0" :target="summary?.targetCarbs ?? 250" color="#F97316" unit="g" />
-            <MacroBar label="Fat" :current="summary?.totalFat ?? 0" :target="summary?.targetFat ?? 65" color="#EAB308" unit="g" />
+            <MacroBar label="Protein" :current="summary?.totalProtein ?? 0" :target="summary?.targetProtein ?? 150" :color="MACRO_COLORS.protein.swatch" unit="g" />
+            <MacroBar label="Carbs" :current="summary?.totalCarbs ?? 0" :target="summary?.targetCarbs ?? 250" :color="MACRO_COLORS.carbs.swatch" unit="g" />
+            <MacroBar label="Fat" :current="summary?.totalFat ?? 0" :target="summary?.targetFat ?? 65" :color="MACRO_COLORS.fat.swatch" unit="g" />
           </div>
         </div>
 
@@ -122,6 +122,7 @@
 </template>
 
 <script setup lang="ts">
+import { MACRO_COLORS } from '@/utils/macroColors';
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { format } from 'date-fns';

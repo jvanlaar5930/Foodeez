@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EmptyState from '@/components/ui/EmptyState.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import type { GroceryItemRequest } from '@foodeez/shared';
 import AppLayout from '@/components/layout/AppLayout.vue';
@@ -99,22 +100,22 @@ function save(itemId: string, item: GroceryItemRequest) {
       <!-- Nothing planned: a shopping list cannot be conjured from an empty calendar. -->
       <div
         v-else-if="groceryStore.plannedMealCount === 0"
-        class="rounded-2xl bg-white px-6 py-14 text-center shadow-sm dark:bg-gray-900"
+        class="rounded-2xl bg-white shadow-sm dark:bg-gray-900"
       >
-        <p class="mb-2 text-4xl">🛒</p>
-        <p class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-          No meals planned for these dates
-        </p>
-        <p class="mx-auto mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
-          Plan some meals on the calendar - or ask for a few in the Advice tab - and the list
-          will follow.
-        </p>
-        <RouterLink
-          to="/meal-plan"
-          class="mt-5 inline-block rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+        <EmptyState
+          emoji="🛒"
+          title="No meals planned for these dates"
+          description="Plan some meals on the calendar - or ask for a few in the Advice tab - and the list will follow."
         >
-          Go to meal plan
-        </RouterLink>
+          <template #actions>
+            <RouterLink
+              to="/meal-plan"
+              class="inline-block rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+            >
+              Go to meal plan
+            </RouterLink>
+          </template>
+        </EmptyState>
       </div>
 
       <!-- Planned, not yet compiled. -->

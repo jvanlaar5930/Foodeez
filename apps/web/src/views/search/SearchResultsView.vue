@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EmptyState from '@/components/ui/EmptyState.vue';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import PublicLayout from '@/components/layout/PublicLayout.vue';
@@ -239,29 +240,27 @@ onMounted(load);
       </div>
 
       <!-- Empty -->
-      <div v-else-if="filteredRecipes.length === 0" class="py-20 text-center">
-        <p class="text-5xl">🔍</p>
-        <h2 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          No recipes found
-        </h2>
-        <p class="mx-auto mt-2 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+      <EmptyState v-else-if="filteredRecipes.length === 0" emoji="🔍" title="No recipes found">
+        <template #description>
           <template v-if="activeTags.size">
             Nothing matches every filter at once. Try clearing a filter or two.
           </template>
           <template v-else>
-            Try a broader term — an ingredient like "salmon" or a dish like "curry" usually works
-            better than a full sentence.
+            Try a broader term — an ingredient like "salmon" or a dish like "curry" usually
+            works better than a full sentence.
           </template>
-        </p>
-        <button
-          v-if="activeTags.size"
-          type="button"
-          class="mt-5 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
-          @click="activeTags = new Set()"
-        >
-          Clear filters
-        </button>
-      </div>
+        </template>
+
+        <template v-if="activeTags.size" #actions>
+          <button
+            type="button"
+            class="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+            @click="activeTags = new Set()"
+          >
+            Clear filters
+          </button>
+        </template>
+      </EmptyState>
 
       <!-- Results -->
       <div v-else class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

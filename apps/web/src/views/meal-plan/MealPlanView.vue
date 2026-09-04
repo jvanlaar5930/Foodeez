@@ -104,10 +104,15 @@
       </div>
 
       <!-- Empty state -->
-      <div v-if="!isLoading && !hasEntriesThisWeek" class="mt-6 text-center py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-sm">
-        <p class="text-4xl mb-3">📅</p>
-        <p class="font-semibold text-gray-700 dark:text-gray-200">No meals planned this week</p>
-        <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Click a slot to add a meal or use AI to generate a full plan</p>
+      <div
+        v-if="!isLoading && !hasEntriesThisWeek"
+        class="mt-6 rounded-2xl bg-white shadow-sm dark:bg-gray-900"
+      >
+        <EmptyState
+          emoji="📅"
+          title="No meals planned this week"
+          description="Click a slot to add a meal, or use AI to generate a full plan"
+        />
       </div>
 
       <!-- Generate dialog: the guidance box is optional, so Enter-to-submit and an empty
@@ -181,6 +186,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/ui/EmptyState.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';

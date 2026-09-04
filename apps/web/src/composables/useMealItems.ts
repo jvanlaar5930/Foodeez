@@ -1,4 +1,5 @@
 import { computed, ref, type Ref } from 'vue';
+import { MACRO_COLORS } from '@/utils/macroColors';
 import type { FoodItem, QuickAddSource } from '@foodeez/shared';
 
 /** One line in the meal being built: a food, and how much of it. */
@@ -81,7 +82,7 @@ export interface MealItems {
  * row, the totals panel and the analysis request all agree about what "150 g" means.
  *
  * @param onChange Called after any edit. The dialog uses it to retire a stale AI score:
- * a analysis of a meal is only about the meal it was run on.
+ * an analysis of a meal is only about the meal it was run on.
  */
 export function useMealItems(onChange?: () => void): MealItems {
   const items = ref<MealItem[]>([]);
@@ -146,10 +147,10 @@ export function useMealItems(onChange?: () => void): MealItems {
     }
 
     return [
-      { label: 'Calories', value: Math.round(sum.calories), unit: 'kcal', color: 'text-green-600 dark:text-green-400' },
-      { label: 'Protein', value: Math.round(sum.protein), unit: 'g', color: 'text-blue-600 dark:text-blue-400' },
-      { label: 'Carbs', value: Math.round(sum.carbs), unit: 'g', color: 'text-orange-500 dark:text-orange-400' },
-      { label: 'Fat', value: Math.round(sum.fat), unit: 'g', color: 'text-amber-500' },
+      { label: 'Calories', value: Math.round(sum.calories), unit: 'kcal', color: MACRO_COLORS.calories.text },
+      { label: 'Protein', value: Math.round(sum.protein), unit: 'g', color: MACRO_COLORS.protein.text },
+      { label: 'Carbs', value: Math.round(sum.carbs), unit: 'g', color: MACRO_COLORS.carbs.text },
+      { label: 'Fat', value: Math.round(sum.fat), unit: 'g', color: MACRO_COLORS.fat.text },
     ];
   });
 
