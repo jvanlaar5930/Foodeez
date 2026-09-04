@@ -1,8 +1,10 @@
 import { create } from 'zustand';
+import { describeApiError } from '@/utils/apiError';
 import { useSavedRecipeStore } from './savedRecipeStore';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import * as SecureStore from 'expo-secure-store';
 import * as authService from '@/services/authService';
+import { setAuthBridge } from '@/services/authBridge';
 import type { LoginRequest, RegisterRequest, UserDto } from '@/types';
 
 interface AuthState {
@@ -51,9 +53,11 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (err: unknown) {
-          const message =
-            err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
-          set({ isLoading: false, error: message, isAuthenticated: false });
+          set({
+            isLoading: false,
+            error: describeApiError(err, 'Could not sign you in. Check your email and password.'),
+            isAuthenticated: false,
+          });
           throw err;
         }
       },
@@ -70,9 +74,11 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (err: unknown) {
-          const message =
-            err instanceof Error ? err.message : 'Registration failed. Please try again.';
-          set({ isLoading: false, error: message, isAuthenticated: false });
+          set({
+            isLoading: false,
+            error: describeApiError(err, 'Could not create your account. Please try again.'),
+            isAuthenticated: false,
+          });
           throw err;
         }
       },
@@ -116,3 +122,10 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+// Registered once, at module load, so the services can read the session without importing
+// this store and creating a cycle.
+setAuthBridge({
+  getToken: () => useAuthStore.getState().token,
+  logout: () => useAuthStore.getState().logout(),
+});

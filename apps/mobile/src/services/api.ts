@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAuthToken, logoutFromApi } from './authBridge';
 import { API_URL } from '@/constants/api';
 
 // Surface the resolved host in the Metro console - the usual cause of a failing dev login
@@ -13,11 +14,8 @@ export const api = axios.create({
   timeout: 30000,
 });
 
-// We import the store lazily to avoid circular dependency issues
 api.interceptors.request.use((config) => {
-  // Lazy import to avoid circular dependency
-  const { useAuthStore } = require('@/store/authStore');
-  const token = useAuthStore.getState().token;
+  const token = getAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -27,9 +25,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (error) => {
+    // A 401 means the token is gone or no longer valid; a permission failure is a 403.
     if (error.response?.status === 401) {
-      const { useAuthStore } = require('@/store/authStore');
-      useAuthStore.getState().logout();
+      logoutFromApi();
     }
     return Promise.reject(error);
   },

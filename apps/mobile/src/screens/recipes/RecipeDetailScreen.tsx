@@ -90,7 +90,7 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
         {/* Hero */}
         <View style={styles.hero}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={C.surface} />
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.saveButton}
@@ -101,7 +101,7 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={22}
-              color={C.surface}
+              color="#FFFFFF"
             />
           </TouchableOpacity>
           {isAiRecipeImage(recipe.imageUrl)
@@ -237,7 +237,7 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
               style={styles.actionButton}
               onPress={() => Alert.alert('Add to Meal Plan', 'Feature coming soon!')}
             >
-              <Ionicons name="calendar-outline" size={20} color={C.surface} />
+              <Ionicons name="calendar-outline" size={20} color={C.onPrimary} />
               <Text style={styles.actionButtonText}>Add to Meal Plan</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -346,7 +346,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  stepNumberText: { color: C.surface, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  stepNumberText: { color: C.onPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
   stepText: { flex: 1, fontSize: FontSize.md, color: C.text, lineHeight: 22 },
   actions: { gap: Spacing.md, marginBottom: Spacing.xxl },
   actionButton: {
@@ -359,7 +359,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   actionButtonSecondary: { backgroundColor: C.surface, borderWidth: 2, borderColor: C.primary },
-  actionButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  actionButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
   actionButtonTextSecondary: { color: C.primary },
   errorText: { fontSize: FontSize.lg, color: C.text, marginBottom: Spacing.md },
   backLink: { color: C.primary, fontWeight: FontWeight.semibold },

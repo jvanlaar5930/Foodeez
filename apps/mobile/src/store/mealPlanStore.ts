@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { describeApiError } from '@/utils/apiError';
+import { runAsync } from '@/store/asyncState';
 import * as mealPlanService from '@/services/mealPlanService';
 import type { GenerateMealPlanRequest, MealPlanDto, MealPlanEntryRequest } from '@/types';
 
@@ -32,15 +34,10 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   error: null,
 
   fetchPlans: async (userId: string) => {
-    set({ isLoading: true, error: null });
-    try {
+    await runAsync(set, { fallback: 'Your meal plans could not be loaded.' }, async () => {
       const plans = await mealPlanService.getMealPlans(userId);
-      const activePlan = plans.length > 0 ? plans[0] : null;
-      set({ plans, activePlan, isLoading: false });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch meal plans.';
-      set({ isLoading: false, error: message });
-    }
+      set({ plans, activePlan: plans.length > 0 ? plans[0] : null });
+    });
   },
 
   generatePlan: async (data: GenerateMealPlanRequest) => {
@@ -50,8 +47,7 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
       const currentPlans = get().plans;
       set({ plans: [newPlan, ...currentPlans], activePlan: newPlan, isGenerating: false });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to generate meal plan.';
-      set({ isGenerating: false, error: message });
+      set({ isGenerating: false, error: describeApiError(err, 'That plan could not be generated.') });
       throw err;
     }
   },
@@ -87,8 +83,7 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
       const active = plans.find((p) => p.id === planId) ?? plans[0] ?? null;
       set({ plans, activePlan: active });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save the meal.';
-      set({ error: message });
+      set({ error: describeApiError(err, 'That meal could not be saved.') });
       throw err;
     }
   },
@@ -101,8 +96,7 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
       const active = plans.find((p) => p.id === planId) ?? plans[0] ?? null;
       set({ plans, activePlan: active });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove the meal.';
-      set({ error: message });
+      set({ error: describeApiError(err, 'That meal could not be removed.') });
       throw err;
     }
   },

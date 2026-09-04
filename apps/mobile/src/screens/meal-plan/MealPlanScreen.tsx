@@ -230,7 +230,7 @@ export function MealPlanScreen({ navigation }: Props) {
               Get a personalized meal plan based on your dietary goals and preferences.
             </Text>
             <TouchableOpacity style={styles.generateButton} onPress={() => setShowGenerateModal(true)}>
-              <Ionicons name="sparkles" size={18} color={C.surface} />
+              <Ionicons name="sparkles" size={18} color={C.onPrimary} />
               <Text style={styles.generateButtonText}>Generate Plan</Text>
             </TouchableOpacity>
           </View>
@@ -316,7 +316,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   dayPillSelected: { backgroundColor: C.primary, borderColor: C.primary },
   dayPillName: { fontSize: FontSize.xs, color: C.textSecondary, fontWeight: FontWeight.medium },
   dayPillNumber: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text, marginTop: 2 },
-  dayPillTextSelected: { color: C.surface },
+  dayPillTextSelected: { color: C.onPrimary },
   dayDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary, marginTop: 2 },
   dayDotSelected: { backgroundColor: C.surface },
   todayIndicator: {
@@ -371,7 +371,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     borderRadius: BorderRadius.lg,
     marginTop: Spacing.sm,
   },
-  generateButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  generateButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
   generatingState: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
   generatingText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: C.text },
   generatingSubText: { fontSize: FontSize.md, color: C.textSecondary },
@@ -409,5 +409,5 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
   modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
   modalConfirm: { flex: 1, backgroundColor: C.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalConfirmText: { color: C.surface, fontWeight: FontWeight.semibold },
+  modalConfirmText: { color: C.onPrimary, fontWeight: FontWeight.semibold },
 });

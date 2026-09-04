@@ -125,7 +125,7 @@ export function FoodScanScreen({ navigation }: Props) {
             >
               <View style={styles.resultCheckbox}>
                 {selectedItems.has(index) && (
-                  <Ionicons name="checkmark" size={16} color={C.surface} />
+                  <Ionicons name="checkmark" size={16} color={C.onPrimary} />
                 )}
               </View>
               <View style={styles.resultContent}>
@@ -165,7 +165,7 @@ export function FoodScanScreen({ navigation }: Props) {
             <Text style={styles.confirmButtonText}>
               Add {selectedItems.size} Item{selectedItems.size !== 1 ? 's' : ''}
             </Text>
-            <Ionicons name="arrow-forward" size={20} color={C.surface} />
+            <Ionicons name="arrow-forward" size={20} color={C.onPrimary} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -177,7 +177,7 @@ export function FoodScanScreen({ navigation }: Props) {
       <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
         <SafeAreaView style={styles.cameraOverlay}>
           <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={28} color={C.surface} />
+            <Ionicons name="close" size={28} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.scanFrame} />
           <Text style={styles.scanHint}>Center your food in the frame</Text>
@@ -186,7 +186,7 @@ export function FoodScanScreen({ navigation }: Props) {
               style={styles.flipButton}
               onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
             >
-              <Ionicons name="camera-reverse-outline" size={28} color={C.surface} />
+              <Ionicons name="camera-reverse-outline" size={28} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.captureButton} onPress={handleCapture}>
               <View style={styles.captureButtonInner} />
@@ -220,13 +220,16 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     height: 280,
     alignSelf: 'center',
     borderWidth: 2,
-    borderColor: C.surface,
+    // Drawn over the camera preview, so white regardless of theme.
+    borderColor: '#FFFFFF',
     borderRadius: BorderRadius.lg,
     backgroundColor: 'transparent',
   },
   scanHint: {
     textAlign: 'center',
-    color: C.surface,
+    // On a black scrim over the live camera, so it is white in both themes - the theme's
+    // on-accent ink would be unreadable there.
+    color: '#FFFFFF',
     fontSize: FontSize.md,
     backgroundColor: 'rgba(0,0,0,0.4)',
     paddingHorizontal: Spacing.md,
@@ -275,7 +278,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
   },
-  permissionButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  permissionButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
   analyzingText: { fontSize: FontSize.xl, fontWeight: FontWeight.semibold, color: C.text },
   analyzingSubText: { fontSize: FontSize.md, color: C.textSecondary },
   resultsHeader: { padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: C.divider },
@@ -340,5 +343,5 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   confirmButtonDisabled: { backgroundColor: C.textHint },
-  confirmButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  confirmButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
 });

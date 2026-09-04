@@ -296,7 +296,7 @@ export function GroceryScreen() {
                   disabled={newItem.trim().length === 0}
                   onPress={onAdd}
                 >
-                  <Ionicons name="add" size={20} color={C.surface} />
+                  <Ionicons name="add" size={20} color={C.onPrimary} />
                 </TouchableOpacity>
               </View>
               <Text style={styles.hint}>
@@ -426,7 +426,7 @@ const makeStyles = (C: Palette) =>
       paddingHorizontal: Spacing.xl,
       paddingVertical: Spacing.md,
     },
-    primaryButtonText: { color: '#FFFFFF', fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+    primaryButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
     progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     progressText: { fontSize: FontSize.md, color: C.textSecondary },
     linkText: { fontSize: FontSize.md, color: C.primary, fontWeight: FontWeight.semibold },
@@ -514,5 +514,5 @@ const makeStyles = (C: Palette) =>
       paddingVertical: Spacing.md,
       alignItems: 'center',
     },
-    modalConfirmText: { color: '#FFFFFF', fontWeight: FontWeight.semibold },
+    modalConfirmText: { color: C.onPrimary, fontWeight: FontWeight.semibold },
   });

@@ -155,7 +155,7 @@ export function DashboardScreen() {
 
         <View style={styles.tipCard}>
           <View style={styles.tipHeader}>
-            <Ionicons name="bulb-outline" size={20} color={C.surface} />
+            <Ionicons name="bulb-outline" size={20} color={C.onPrimary} />
             <Text style={styles.tipTitle}>AI Tip</Text>
           </View>
           <Text style={styles.tipText}>
@@ -223,7 +223,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    color: C.surface,
+    color: C.onPrimary,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.md,
   },
@@ -304,12 +304,12 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   tipTitle: {
-    color: C.surface,
+    color: C.onPrimary,
     fontWeight: FontWeight.semibold,
     fontSize: FontSize.md,
   },
   tipText: {
-    color: C.surface,
+    color: C.onPrimary,
     fontSize: FontSize.sm,
     lineHeight: 20,
     opacity: 0.9,

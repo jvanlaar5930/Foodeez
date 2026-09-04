@@ -675,7 +675,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     color: C.textSecondary,
   },
   mealTypeLabelActive: {
-    color: C.surface,
+    color: C.onPrimary,
   },
   searchBar: {
     flexDirection: 'row',

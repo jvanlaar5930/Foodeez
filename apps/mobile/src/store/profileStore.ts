@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { api } from '@/services/api';
+import { profileService } from '@/services/profileService';
+import { runAsync } from '@/store/asyncState';
 import type { UpdateProfileRequest, UserProfileDto } from '@/types';
 
 interface ProfileState {
@@ -17,26 +18,20 @@ export const useProfileStore = create<ProfileState>()((set) => ({
   error: null,
 
   fetchProfile: async (userId: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await api.get<UserProfileDto>(`/users/${userId}/profile`);
-      set({ profile: response.data, isLoading: false });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch profile.';
-      set({ isLoading: false, error: message });
-    }
+    await runAsync(set, { fallback: 'Your profile could not be loaded.' }, async () => {
+      set({ profile: await profileService.get(userId) });
+    });
   },
 
+  // Rethrown: the edit screen only navigates back once the save has gone through.
   updateProfile: async (userId: string, data: UpdateProfileRequest) => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await api.put<UserProfileDto>(`/users/${userId}/profile`, data);
-      set({ profile: response.data, isLoading: false });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update profile.';
-      set({ isLoading: false, error: message });
-      throw err;
-    }
+    await runAsync(
+      set,
+      { fallback: 'Your profile could not be saved.', rethrow: true },
+      async () => {
+        set({ profile: await profileService.update(userId, data) });
+      },
+    );
   },
 
   clearError: () => {

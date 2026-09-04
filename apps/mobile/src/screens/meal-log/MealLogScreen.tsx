@@ -167,7 +167,7 @@ export function MealLogScreen() {
           <Ionicons name="camera-outline" size={22} color={C.secondary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('AddMeal', {})}>
-          <Ionicons name="add" size={28} color={C.surface} />
+          <Ionicons name="add" size={28} color={C.onPrimary} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -559,7 +559,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     alignItems: 'center',
   },
   checkMark: {
-    color: C.surface,
+    color: C.onPrimary,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.bold,
   },

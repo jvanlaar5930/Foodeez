@@ -510,5 +510,5 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
   modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
   modalConfirm: { flex: 1, backgroundColor: C.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalConfirmText: { color: C.surface, fontWeight: FontWeight.semibold },
+  modalConfirmText: { color: C.onPrimary, fontWeight: FontWeight.semibold },
 });

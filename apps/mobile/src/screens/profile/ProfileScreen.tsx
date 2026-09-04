@@ -199,7 +199,7 @@ export function ProfileScreen() {
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Weight History</Text>
             <TouchableOpacity style={styles.logWeightButton} onPress={() => setShowLogWeightModal(true)}>
-              <Ionicons name="add" size={16} color={C.surface} />
+              <Ionicons name="add" size={16} color={C.onPrimary} />
               <Text style={styles.logWeightButtonText}>Log Weight</Text>
             </TouchableOpacity>
           </View>
@@ -426,7 +426,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   segmentActive: { backgroundColor: C.primary, borderColor: C.primary },
   segmentText: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium },
   segmentHint: { fontSize: FontSize.xs, color: C.textHint },
-  segmentTextActive: { color: '#FFFFFF' },
+  segmentTextActive: { color: C.onPrimary },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',

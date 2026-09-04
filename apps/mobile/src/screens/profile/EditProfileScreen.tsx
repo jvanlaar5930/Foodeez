@@ -302,7 +302,7 @@ const makeStyles = (C: Palette) =>
     },
     chipActive: { backgroundColor: C.primary, borderColor: C.primary },
     chipText: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium },
-    chipTextActive: { color: '#FFFFFF' },
+    chipTextActive: { color: C.onPrimary },
     footnote: {
       fontSize: FontSize.sm,
       color: C.textSecondary,

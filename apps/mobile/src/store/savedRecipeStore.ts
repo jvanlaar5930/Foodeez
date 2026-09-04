@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { describeApiError } from '@/utils/apiError';
 import { recipeService } from '@/services/recipeService';
 import type { RecipeDto } from '@/types';
 
@@ -37,9 +38,12 @@ export const useSavedRecipeStore = create<SavedRecipeState>()((set, get) => ({
         hasLoaded: true,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load saved recipes.';
       // hasLoaded stays true so the UI settles on an error state rather than a spinner.
-      set({ isLoading: false, hasLoaded: true, error: message });
+      set({
+        isLoading: false,
+        hasLoaded: true,
+        error: describeApiError(err, 'Your saved recipes could not be loaded.'),
+      });
     }
   },
 
@@ -73,7 +77,6 @@ export const useSavedRecipeStore = create<SavedRecipeState>()((set, get) => ({
       if (wasSaved) await recipeService.unsave(recipe.id);
       else await recipeService.save(recipe.id);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not update your saved recipes.';
       const current = get();
       const revertedIds = new Set(current.savedIds);
 
@@ -85,7 +88,7 @@ export const useSavedRecipeStore = create<SavedRecipeState>()((set, get) => ({
         recipes: wasSaved
           ? [recipe, ...current.recipes.filter((r) => r.id !== recipe.id)]
           : current.recipes.filter((r) => r.id !== recipe.id),
-        error: message,
+        error: describeApiError(err, 'Could not update your saved recipes.'),
       });
     } finally {
       const stillPending = new Set(get().pending);

@@ -12,16 +12,6 @@ export async function getDietaryRecommendations(userId: string): Promise<Dietary
   return response.data;
 }
 
-export async function getUserProfile(userId: string) {
-  const response = await api.get(`/users/${userId}/profile`);
-  return response.data;
-}
-
-export async function updateUserProfile(userId: string, data: Record<string, unknown>) {
-  const response = await api.put(`/users/${userId}/profile`, data);
-  return response.data;
-}
-
 /** A home-cooked dish described in the cook's own terms. */
 export interface EstimateNutritionRequest {
   name: string;

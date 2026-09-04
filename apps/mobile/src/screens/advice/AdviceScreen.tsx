@@ -23,7 +23,8 @@ import {
   type SuggestedRecipeDto,
 } from '@/types';
 import { BorderRadius, FontSize, FontWeight, Shadows, Spacing } from '@/constants/theme';
-import { useTheme, useThemedStyles, type Palette } from '@/theme';
+import { useTheme, useThemedStyles, type ColorScheme, type Palette } from '@/theme';
+import { RecipePanelDark, RecipePanelLight } from '@/constants/aiPanel';
 
 /** The openers worth one tap, for a tab with nothing in it yet. */
 const STARTERS = [
@@ -210,7 +211,7 @@ export function AdviceScreen() {
               disabled={draft.trim().length === 0}
               onPress={() => void onSend(draft)}
             >
-              <Ionicons name="arrow-up" size={20} color={C.surface} />
+              <Ionicons name="arrow-up" size={20} color={C.onPrimary} />
             </TouchableOpacity>
           )}
         </View>
@@ -414,7 +415,13 @@ function RecipesCard({
                   {recipe.calories > 0 ? ` · ${Math.round(recipe.calories)} kcal each` : ''}
                 </Text>
               </View>
-              <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#B45309" />
+              {/* Read off the themed style so the chevron and the label it sits beside can
+                  never disagree about which amber they are. */}
+              <Ionicons
+                name={isOpen ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={styles.recipesLabel.color}
+              />
             </TouchableOpacity>
 
             {isOpen ? (
@@ -459,8 +466,12 @@ function RecipesCard({
   );
 }
 
-const makeStyles = (C: Palette) =>
-  StyleSheet.create({
+const makeStyles = (C: Palette, scheme: ColorScheme) => {
+  // The assistant's recipe cards carry their own amber pair, the way the AI analysis
+  // panels carry a purple one - see constants/aiPanel.
+  const R = scheme === 'dark' ? RecipePanelDark : RecipePanelLight;
+
+  return StyleSheet.create({
     container: { flex: 1, backgroundColor: C.background },
     flex: { flex: 1 },
     header: {
@@ -508,7 +519,7 @@ const makeStyles = (C: Palette) =>
     },
     userBubble: { backgroundColor: C.primary },
     assistantBubble: { backgroundColor: C.surface, ...Shadows.sm },
-    userText: { color: '#FFFFFF', fontSize: FontSize.md, lineHeight: 21 },
+    userText: { color: C.onPrimary, fontSize: FontSize.md, lineHeight: 21 },
     assistantText: { color: C.text, fontSize: FontSize.md, lineHeight: 21 },
     suggestions: {
       marginTop: Spacing.sm,
@@ -542,7 +553,7 @@ const makeStyles = (C: Palette) =>
       paddingVertical: Spacing.sm,
       alignItems: 'center',
     },
-    suggestionsButtonText: { color: '#FFFFFF', fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+    suggestionsButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
     // Amber rather than the palette green, so a recipe offer reads as a different action
     // from a plan offer when a reply carries both.
     recipes: {
@@ -550,55 +561,55 @@ const makeStyles = (C: Palette) =>
       maxWidth: '88%',
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
-      borderColor: '#FCD34D',
-      backgroundColor: '#FFFBEB',
+      borderColor: R.panelBorder,
+      backgroundColor: R.panelBg,
       padding: Spacing.md,
     },
     recipesLabel: {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.bold,
-      color: '#B45309',
+      color: R.accentText,
       letterSpacing: 0.5,
       marginBottom: Spacing.xs,
     },
     recipeItem: {
       borderRadius: BorderRadius.md,
-      backgroundColor: '#FFFFFF',
+      backgroundColor: R.itemBg,
       padding: Spacing.sm,
       marginBottom: Spacing.xs,
     },
     recipeHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    recipeName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: '#1F2937' },
-    recipeMeta: { fontSize: FontSize.xs, color: '#6B7280', marginTop: 2 },
+    recipeName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: R.title },
+    recipeMeta: { fontSize: FontSize.xs, color: R.meta, marginTop: 2 },
     recipeBody: {
       marginTop: Spacing.sm,
       borderTopWidth: 1,
-      borderTopColor: '#FDE68A',
+      borderTopColor: R.itemDivider,
       paddingTop: Spacing.sm,
     },
-    recipeDesc: { fontSize: FontSize.xs, color: '#4B5563', marginBottom: Spacing.xs },
+    recipeDesc: { fontSize: FontSize.xs, color: R.body, marginBottom: Spacing.xs },
     recipeSection: {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.semibold,
-      color: '#374151',
+      color: R.title,
       marginTop: Spacing.xs,
       marginBottom: 2,
     },
-    recipeDetail: { fontSize: FontSize.xs, color: '#4B5563', lineHeight: 18 },
+    recipeDetail: { fontSize: FontSize.xs, color: R.body, lineHeight: 18 },
     recipesDone: {
       marginTop: Spacing.xs,
       fontSize: FontSize.md,
       fontWeight: FontWeight.semibold,
-      color: '#B45309',
+      color: R.accentText,
     },
     recipesButton: {
       marginTop: Spacing.xs,
-      backgroundColor: '#D97706',
+      backgroundColor: R.buttonBg,
       borderRadius: BorderRadius.lg,
       paddingVertical: Spacing.sm,
       alignItems: 'center',
     },
-    recipesButtonText: { color: '#FFFFFF', fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+    recipesButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
     notice: {
       marginHorizontal: Spacing.md,
       marginBottom: Spacing.sm,
@@ -682,4 +693,5 @@ const makeStyles = (C: Palette) =>
     },
     historyTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: C.text },
     historyPreview: { fontSize: FontSize.sm, color: C.textHint, marginTop: 2 },
-  });
+    });
+};

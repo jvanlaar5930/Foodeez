@@ -91,10 +91,14 @@ export function useThemeMode() {
  *
  * Screens declare `const makeStyles = (C: Palette) => StyleSheet.create({...})` at module
  * level, so the factory identity is stable and the memo actually holds.
+ *
+ * The scheme is passed as well, for the handful of panels that carry their own light/dark
+ * pair alongside the palette - the AI analysis panels and the assistant's recipe cards. A
+ * factory that does not need it simply ignores the second argument.
  */
-export function useThemedStyles<T>(factory: (colors: Palette) => T): T {
-  const colors = useTheme();
-  return useMemo(() => factory(colors), [factory, colors]);
+export function useThemedStyles<T>(factory: (colors: Palette, scheme: ColorScheme) => T): T {
+  const { colors, scheme } = useContext(ThemeContext);
+  return useMemo(() => factory(colors, scheme), [factory, colors, scheme]);
 }
 
 export type { Palette };
