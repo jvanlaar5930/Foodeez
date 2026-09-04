@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { useScrollLock } from '@/composables/useScrollLock';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import AiRecipeThumb from './AiRecipeThumb.vue';
 import { isAiRecipeImage, type Recipe } from '@foodeez/shared';
@@ -52,15 +53,11 @@ function onEscape(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close');
 }
 
-onMounted(() => {
-  document.addEventListener('keydown', onEscape);
-  document.body.style.overflow = 'hidden';
-});
+// Rendered behind a v-if, so being mounted is what "open" means here.
+useScrollLock(ref(true));
 
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onEscape);
-  document.body.style.overflow = '';
-});
+onMounted(() => document.addEventListener('keydown', onEscape));
+onBeforeUnmount(() => document.removeEventListener('keydown', onEscape));
 </script>
 
 <template>

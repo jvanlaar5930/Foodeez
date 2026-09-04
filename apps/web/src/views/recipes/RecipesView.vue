@@ -20,6 +20,8 @@
         </button>
       </div>
 
+      <AppAlert v-if="error" variant="error" :message="error" class="mb-6" />
+
       <!-- Loading -->
       <div v-if="isLoading" class="flex justify-center py-16">
         <LoadingSpinner size="lg" />
@@ -63,7 +65,7 @@
       v-if="selectedRecipe"
       :recipe="selectedRecipe"
       :loading="isDetailLoading"
-      @close="selectedRecipe = null"
+      @close="closeDetail"
       @retry="retryDetail"
     >
       <template #actions>
@@ -79,31 +81,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import AppAlert from '@/components/ui/AppAlert.vue';
 import RecipeSearchBar from '@/components/recipe/RecipeSearchBar.vue';
 import RecipeCard from '@/components/recipe/RecipeCard.vue';
 import RecipeDetailModal from '@/components/recipe/RecipeDetailModal.vue';
-import { recipeService, type RecipeSuggestion } from '@/services/recipeService';
-import type { Recipe } from '@foodeez/shared';
+import { usePagedRecipes } from '@/composables/usePagedRecipes';
+import { useRecipeDetail } from '@/composables/useRecipeDetail';
+import type { RecipeSuggestion } from '@/services/recipeService';
 
 const route = useRoute();
 const router = useRouter();
-const recipes = ref<Recipe[]>([]);
-const selectedRecipe = ref<Recipe | null>(null);
-const isDetailLoading = ref(false);
+
 const searchQuery = ref((route.query.q as string) ?? '');
 const activeTags = ref(new Set<string>());
-const isLoading = ref(true);
-const isLoadingMore = ref(false);
-const hasMore = ref(false);
 
-const sentinel = ref<HTMLElement | null>(null);
-let observer: IntersectionObserver | null = null;
-let currentPage = 1;
+const {
+  recipes,
+  isLoading,
+  isLoadingMore,
+  hasMore,
+  error,
+  sentinel,
+  load: loadPage,
+  loadMore,
+} = usePagedRecipes();
+
+const {
+  selected: selectedRecipe,
+  isLoading: isDetailLoading,
+  open: openRecipe,
+  openById,
+  retry: retryDetail,
+  close: closeDetail,
+} = useRecipeDetail();
 
 const FILTER_TAGS = ['Vegetarian', 'Vegan', 'High-Protein', 'Low-Carb', 'Quick', 'Gluten-Free', 'Dairy-Free'];
 
@@ -116,114 +131,17 @@ const filteredRecipes = computed(() => {
   );
 });
 
-/**
- * Show the card's data straight away so the modal opens instantly, then swap in the full
- * record. Search results carry no ingredients or steps - the API fills those in on first read.
- */
-async function openRecipe(recipe: Recipe) {
-  selectedRecipe.value = recipe;
-  if (recipe.ingredients.length && recipe.instructions) return;
-
-  isDetailLoading.value = true;
-  try {
-    const full = await recipeService.getRecipeById(recipe.id);
-    // Guard against a slow response landing after the user has moved on.
-    if (selectedRecipe.value?.id === recipe.id) selectedRecipe.value = full;
-  } catch {
-    // Leave the partial record on screen; the modal says which parts are missing.
-  } finally {
-    isDetailLoading.value = false;
-  }
-}
-
-/**
- * Re-requests the recipe after the method failed to load. Worth a button of its own: the
- * server retries upstream on every read, so a second attempt genuinely can succeed where
- * the first did not.
- */
-async function retryDetail() {
-  const current = selectedRecipe.value;
-  if (!current) return;
-
-  isDetailLoading.value = true;
-  try {
-    const full = await recipeService.getRecipeById(current.id);
-    if (selectedRecipe.value?.id === current.id) selectedRecipe.value = full;
-  } catch {
-    // Keep what is on screen; the panel still offers another try.
-  } finally {
-    isDetailLoading.value = false;
-  }
-}
-
 function toggleTag(tag: string) {
   const next = new Set(activeTags.value);
   if (next.has(tag)) next.delete(tag); else next.add(tag);
   activeTags.value = next;
 }
 
-async function fetchRecipes(query?: string) {
-  isLoading.value = true;
-  currentPage = 1;
-  try {
-    const q = (query ?? searchQuery.value).trim();
-    const result = q
-      ? await recipeService.searchRecipes(q, 1)
-      : await recipeService.getRecipes(1);
-    recipes.value = result.items;
-    hasMore.value = result.hasMore;
-  } finally {
-    isLoading.value = false;
-    await nextTick();
-    observeSentinel();
-  }
-}
-
-/** Appends the next page; guarded against overlapping scroll events. */
-async function loadMore() {
-  if (isLoadingMore.value || isLoading.value || !hasMore.value) return;
-
-  isLoadingMore.value = true;
-  const next = currentPage + 1;
-
-  try {
-    const q = searchQuery.value.trim();
-    const result = q
-      ? await recipeService.searchRecipes(q, next)
-      : await recipeService.getRecipes(next);
-
-    const seen = new Set(recipes.value.map((r) => r.id));
-    recipes.value = [...recipes.value, ...result.items.filter((r) => !seen.has(r.id))];
-    currentPage = next;
-    hasMore.value = result.hasMore && result.items.length > 0;
-  } catch {
-    hasMore.value = false;
-  } finally {
-    isLoadingMore.value = false;
-  }
-}
-
-function observeSentinel() {
-  observer?.disconnect();
-  if (!sentinel.value) return;
-
-  observer = new IntersectionObserver(
-    (entries) => {
-      if (entries.some((e) => e.isIntersecting)) loadMore();
-    },
-    { rootMargin: '400px 0px' },
-  );
-  observer.observe(sentinel.value);
-}
-
 // Committing a search rewrites the URL; the route watcher below does the fetching.
 async function runSearch(q: string, suggestion?: RecipeSuggestion) {
   if (suggestion?.recipeId) {
-    try {
-      selectedRecipe.value = await recipeService.getRecipeById(suggestion.recipeId);
-    } catch {
-      // Fall through to the plain text search below.
-    }
+    // Opens the picked recipe straight away; the text search below still runs behind it.
+    await openById(suggestion.recipeId);
   }
   router.push({ path: '/recipes', query: { q } });
 }
@@ -231,9 +149,8 @@ async function runSearch(q: string, suggestion?: RecipeSuggestion) {
 // Re-fetch when route query changes (navigated from dashboard)
 watch(() => route.query.q, (q) => {
   searchQuery.value = (q as string) ?? '';
-  fetchRecipes(searchQuery.value);
+  loadPage(searchQuery.value);
 });
 
-onMounted(() => fetchRecipes());
-onBeforeUnmount(() => observer?.disconnect());
+onMounted(() => loadPage(searchQuery.value));
 </script>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { toRef } from 'vue';
+import { useScrollLock } from '@/composables/useScrollLock';
 
 interface Props {
   modelValue: boolean;
@@ -19,16 +20,7 @@ function close() {
   emit('update:modelValue', false);
 }
 
-watch(
-  () => props.modelValue,
-  (open) => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-  },
-);
+useScrollLock(toRef(props, 'modelValue'));
 
 const sizeClasses: Record<string, string> = {
   sm: 'max-w-sm',

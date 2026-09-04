@@ -6,6 +6,7 @@ import AppModal from '@/components/ui/AppModal.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import AiRecipeThumb from '@/components/recipe/AiRecipeThumb.vue';
 import RecipeDetailModal from '@/components/recipe/RecipeDetailModal.vue';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { recipeService } from '@/services/recipeService';
 import { MEAL_TYPE_LABELS, MealType, isAiRecipeImage } from '@foodeez/shared';
 import type { MealPlanEntry, MealPlanEntryRequest, Recipe } from '@foodeez/shared';
@@ -30,9 +31,12 @@ const emit = defineEmits<{
 const name = ref('');
 const recipeId = ref<string | undefined>(undefined);
 const servings = ref(1);
-const results = ref<Recipe[]>([]);
-const searching = ref(false);
 const validation = ref<string | null>(null);
+
+// Search-as-you-type over the recipe library, so a slot can be filled by picking rather
+// than typing a name the calendar cannot link to anything.
+const { results, isSearching: searching, onInput: searchByName, reset: clearSearch } =
+  useDebouncedSearch(async (query) => (await recipeService.searchRecipes(query, 1, 6)).items);
 
 /**
  * The recipe this slot is linked to, loaded in full. A meal the assistant planned writes a
@@ -101,7 +105,7 @@ function reset(): void {
   name.value = e?.recipeName ?? e?.foodItemName ?? e?.notes ?? '';
   recipeId.value = e?.recipeId;
   servings.value = e?.servings ?? 1;
-  results.value = [];
+  clearSearch();
   validation.value = null;
   recipeDetailOpen.value = false;
   void loadRecipe(e?.recipeId);
@@ -110,9 +114,6 @@ function reset(): void {
 // Seeded on open rather than on mount: one dialog serves every slot in the grid.
 watch(() => props.modelValue, (open) => { if (open) reset(); }, { immediate: true });
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let searchToken = 0;
-
 function onNameInput(): void {
   // The text no longer describes the picked recipe, so the link goes with it.
   recipeId.value = undefined;
@@ -120,34 +121,13 @@ function onNameInput(): void {
   recipeToken++;
   validation.value = null;
 
-  clearTimeout(searchTimer);
-  const query = name.value.trim();
-  if (query.length < 2) {
-    results.value = [];
-    searching.value = false;
-    return;
-  }
-
-  searching.value = true;
-  searchTimer = setTimeout(async () => {
-    const token = ++searchToken;
-    try {
-      const page = await recipeService.searchRecipes(query, 1, 6);
-      // A slower earlier search must not overwrite the results for what is typed now.
-      if (token === searchToken) results.value = page.items;
-    } catch {
-      // Search is a convenience here; the typed name still works on its own.
-      if (token === searchToken) results.value = [];
-    } finally {
-      if (token === searchToken) searching.value = false;
-    }
-  }, 300);
+  searchByName(name.value);
 }
 
 function pick(recipe: Recipe): void {
   name.value = recipe.name;
   recipeId.value = recipe.id;
-  results.value = [];
+  clearSearch();
   // Search results carry no ingredients or steps, so this refetches the whole recipe rather
   // than showing a panel with the method missing.
   void loadRecipe(recipe.id);
@@ -157,13 +137,8 @@ function close(): void {
   emit('update:modelValue', false);
 }
 
-/**
- * The detail modal releases the page's scroll lock as it unmounts, but this dialog is still
- * open behind it and put that lock there - so it goes back on.
- */
 function closeRecipeDetail(): void {
   recipeDetailOpen.value = false;
-  if (props.modelValue) document.body.style.overflow = 'hidden';
 }
 
 function submit(): void {
