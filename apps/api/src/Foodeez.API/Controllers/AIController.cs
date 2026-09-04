@@ -6,10 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/ai")]
 [Authorize]
-public class AIController : ControllerBase
+public class AIController : FoodeezController
 {
     private readonly GetDietaryRecommendationsUseCase _getRecommendationsUseCase;
     private readonly AnalyzeMealUseCase _analyzeMealUseCase;
@@ -48,7 +47,7 @@ public class AIController : ControllerBase
     public async Task<IActionResult> AnalyzeMeal([FromBody] MealAnalysisRequest request, CancellationToken ct)
     {
         if (request.Items.Count == 0)
-            return BadRequest("At least one food item is required.");
+            return BadRequest(Failure("At least one food item is required."));
 
         var result = await _analyzeMealUseCase.ExecuteAsync(request, ct);
         return Ok(result);
@@ -83,7 +82,7 @@ public class AIController : ControllerBase
     public async Task<IActionResult> EstimateNutrition([FromBody] EstimateNutritionRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
-            return BadRequest("A dish name is required.");
+            return BadRequest(Failure("A dish name is required."));
 
         return Ok(await _estimateNutritionUseCase.ExecuteAsync(request, ct));
     }

@@ -7,7 +7,6 @@ using Foodeez.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
-using System.Security.Claims;
 
 namespace Foodeez.API.Controllers;
 
@@ -16,9 +15,8 @@ namespace Foodeez.API.Controllers;
 /// requires an account. Saving one does, so [AllowAnonymous] is applied per action -
 /// at class level it would outrank the [Authorize] on the saved-recipe routes.
 /// </summary>
-[ApiController]
 [Route("api/recipes")]
-public class RecipesController : ControllerBase
+public class RecipesController : FoodeezController
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly SearchRecipesUseCase _searchUseCase;
@@ -63,7 +61,7 @@ public class RecipesController : ControllerBase
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(q))
-            return BadRequest("Query parameter 'q' is required.");
+            return BadRequest(Failure("Query parameter 'q' is required."));
 
         return Ok(await _searchUseCase.ExecuteAsync(q, page, pageSize, ct));
     }
@@ -110,8 +108,7 @@ public class RecipesController : ControllerBase
     [ProducesResponseType(typeof(List<RecipeDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSavedRecipes(CancellationToken ct)
     {
-        if (CurrentUserId() is not { } userId) return Unauthorized();
-        return Ok(await _savedUseCase.ListAsync(userId, ct));
+        return Ok(await _savedUseCase.ListAsync(UserId, ct));
     }
 
     /// <summary>Save a recipe to the signed-in user's collection. Idempotent.</summary>
@@ -121,9 +118,7 @@ public class RecipesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SaveRecipe([FromRoute] Guid id, CancellationToken ct)
     {
-        if (CurrentUserId() is not { } userId) return Unauthorized();
-
-        return await _savedUseCase.SaveAsync(userId, id, ct)
+        return await _savedUseCase.SaveAsync(UserId, id, ct)
             ? NoContent()
             : NotFound($"Recipe with id '{id}' was not found.");
     }
@@ -134,19 +129,10 @@ public class RecipesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> UnsaveRecipe([FromRoute] Guid id, CancellationToken ct)
     {
-        if (CurrentUserId() is not { } userId) return Unauthorized();
-
-        await _savedUseCase.UnsaveAsync(userId, id, ct);
+        await _savedUseCase.UnsaveAsync(UserId, id, ct);
         return NoContent();
     }
 
-    /// <summary>The authenticated user's id, from the token's subject claim.</summary>
-    private Guid? CurrentUserId()
-    {
-        var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                  ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        return Guid.TryParse(raw, out var id) ? id : null;
-    }
 
     /// <summary>Get a specific recipe by ID, including the full ingredient list and steps.</summary>
     [HttpGet("{id:guid}")]

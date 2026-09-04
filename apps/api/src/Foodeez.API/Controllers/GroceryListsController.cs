@@ -10,10 +10,9 @@ namespace Foodeez.API.Controllers;
 /// The grocery tab: what a stretch of the meal plan adds up to in the shop, and the edits
 /// made to it while shopping.
 /// </summary>
-[ApiController]
 [Route("api/grocery-lists")]
 [Authorize]
-public class GroceryListsController : ControllerBase
+public class GroceryListsController : FoodeezController
 {
     private readonly GenerateGroceryListUseCase _generate;
     private readonly EditGroceryListUseCase _edit;
@@ -33,11 +32,11 @@ public class GroceryListsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetList([FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
+        var userId = UserId;
 
         if (endDate < startDate)
         {
-            return BadRequest(new { message = "Pick an end date on or after the start date." });
+            return BadRequest(Failure("Pick an end date on or after the start date."));
         }
 
         var list = await _generate.PeekAsync(userId, startDate, endDate);
@@ -59,14 +58,8 @@ public class GroceryListsController : ControllerBase
     [Produces("text/event-stream")]
     public async Task GenerateStream([FromBody] GenerateGroceryListRequest request, CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId)
-        {
-            Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
-
         await ServerSentEventStream.WriteAsync(
-            Response, _generate.ExecuteStreamAsync(userId, request, ct), ct);
+            Response, _generate.ExecuteStreamAsync(UserId, request, ct), ct);
     }
 
     /// <summary>Add something the plan never knew about.</summary>
@@ -76,11 +69,9 @@ public class GroceryListsController : ControllerBase
     public async Task<IActionResult> AddItem(
         [FromRoute] Guid listId, [FromBody] GroceryItemRequest request, CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
         // 200 rather than 201: the item has no address of its own to point a Location header
         // at - it is only ever read as part of the list it belongs to.
-        var item = await _edit.AddAsync(userId, listId, request, ct);
+        var item = await _edit.AddAsync(UserId, listId, request, ct);
         return item == null ? NotFound() : Ok(item);
     }
 
@@ -94,9 +85,7 @@ public class GroceryListsController : ControllerBase
         [FromBody] GroceryItemRequest request,
         CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
-        var item = await _edit.UpdateAsync(userId, listId, itemId, request, ct);
+        var item = await _edit.UpdateAsync(UserId, listId, itemId, request, ct);
         return item == null ? NotFound() : Ok(item);
     }
 
@@ -110,9 +99,7 @@ public class GroceryListsController : ControllerBase
         [FromBody] SetGroceryItemCheckedRequest request,
         CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
-        var item = await _edit.SetCheckedAsync(userId, listId, itemId, request.IsChecked, ct);
+        var item = await _edit.SetCheckedAsync(UserId, listId, itemId, request.IsChecked, ct);
         return item == null ? NotFound() : Ok(item);
     }
 
@@ -122,8 +109,6 @@ public class GroceryListsController : ControllerBase
     public async Task<IActionResult> DeleteItem(
         [FromRoute] Guid listId, [FromRoute] Guid itemId, CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
-        return await _edit.DeleteAsync(userId, listId, itemId, ct) ? NoContent() : NotFound();
+        return await _edit.DeleteAsync(UserId, listId, itemId, ct) ? NoContent() : NotFound();
     }
 }

@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.Admin;
 using Microsoft.AspNetCore.Authorization;
@@ -6,10 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/admin")]
 [Authorize(Roles = "Admin")]
-public class AdminController : ControllerBase
+public class AdminController : FoodeezController
 {
     private readonly IUnitOfWork _unitOfWork;
 
@@ -73,9 +71,9 @@ public class AdminController : ControllerBase
     [HttpPut("users/{id:guid}/toggle-admin")]
     public async Task<IActionResult> ToggleAdmin(Guid id)
     {
-        var requesterId = GetCurrentUserId();
+        var requesterId = UserId;
         if (requesterId == id)
-            return BadRequest(new { detail = "You cannot change your own admin status." });
+            return BadRequest(Failure("You cannot change your own admin status."));
 
         var user = await _unitOfWork.Users.GetByIdAsync(id);
         if (user is null) return NotFound();
@@ -90,9 +88,9 @@ public class AdminController : ControllerBase
     [HttpPut("users/{id:guid}/toggle-active")]
     public async Task<IActionResult> ToggleActive(Guid id)
     {
-        var requesterId = GetCurrentUserId();
+        var requesterId = UserId;
         if (requesterId == id)
-            return BadRequest(new { detail = "You cannot disable your own account." });
+            return BadRequest(Failure("You cannot disable your own account."));
 
         var user = await _unitOfWork.Users.GetByIdAsync(id);
         if (user is null) return NotFound();
@@ -131,12 +129,6 @@ public class AdminController : ControllerBase
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private Guid GetCurrentUserId()
-    {
-        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
-               ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(sub, out var id) ? id : Guid.Empty;
-    }
 
     private static string MaskSecret(string value)
     {

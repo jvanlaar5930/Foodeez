@@ -5,10 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/logs")]
 [Authorize(Roles = "Admin")]
-public class LogsController : ControllerBase
+public class LogsController : FoodeezController
 {
     private readonly AppDbContext _db;
 

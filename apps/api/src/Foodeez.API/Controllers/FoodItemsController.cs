@@ -4,16 +4,14 @@ using Foodeez.Application.Interfaces.Repositories;
 using Foodeez.Application.UseCases.FoodItems;
 using Foodeez.Domain.Entities;
 using Foodeez.Domain.ValueObjects;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/food-items")]
-public class FoodItemsController : ControllerBase
+public class FoodItemsController : FoodeezController
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly SearchFoodItemsUseCase _searchUseCase;
@@ -30,7 +28,7 @@ public class FoodItemsController : ControllerBase
     public async Task<IActionResult> Search([FromQuery] string? q, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(q))
-            return BadRequest("Search query is required.");
+            return BadRequest(Failure("Search query is required."));
 
         var dtos = await _searchUseCase.ExecuteAsync(q, ct);
         return Ok(dtos);
@@ -54,7 +52,7 @@ public class FoodItemsController : ControllerBase
             IsCustom = true,
             // Ownership comes from the token, never the request body: a client should not be
             // able to file its custom foods under somebody else's account.
-            CreatedByUserId = CurrentUserId(),
+            CreatedByUserId = UserIdOrNull,
             NutritionalInfo = new NutritionalInfo(
                 request.Calories,
                 request.Protein,
@@ -71,13 +69,6 @@ public class FoodItemsController : ControllerBase
         return CreatedAtAction(nameof(Search), new { q = foodItem.Name }, FoodItemMapper.ToDto(foodItem));
     }
 
-    /// <summary>The authenticated user's id, from the token's subject claim.</summary>
-    private Guid? CurrentUserId()
-    {
-        var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                  ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        return Guid.TryParse(raw, out var id) ? id : null;
-    }
 
 }
 

@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.Auth;
 using Foodeez.Application.DTOs.Users;
@@ -9,9 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/auth")]
-public class AuthController : ControllerBase
+public class AuthController : FoodeezController
 {
     private readonly RegisterUseCase _registerUseCase;
     private readonly LoginUseCase _loginUseCase;
@@ -40,7 +38,7 @@ public class AuthController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return Conflict(new { detail = ex.Message });
+            return Conflict(Failure(ex.Message, StatusCodes.Status409Conflict));
         }
     }
 
@@ -61,11 +59,7 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Me()
     {
-        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(sub, out var userId))
-            return Unauthorized();
-
-        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        var user = await _unitOfWork.Users.GetByIdAsync(UserId);
         if (user is null)
             return Unauthorized();
 

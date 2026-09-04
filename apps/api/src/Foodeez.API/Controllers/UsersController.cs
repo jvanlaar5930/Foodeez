@@ -5,10 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/users")]
 [Authorize]
-public class UsersController : ControllerBase
+public class UsersController : FoodeezController
 {
     private readonly GetUserProfileUseCase _getProfileUseCase;
     private readonly UpdateUserProfileUseCase _updateProfileUseCase;
@@ -54,5 +53,5 @@ public class UsersController : ControllerBase
     /// is the caller's own - otherwise any signed-in user could read or overwrite anyone's
     /// profile just by changing the number in the path.
     /// </summary>
-    private bool IsSelf(Guid id) => CurrentUser.IdOf(User) == id;
+    private bool IsSelf(Guid id) => UserIdOrNull == id;
 }

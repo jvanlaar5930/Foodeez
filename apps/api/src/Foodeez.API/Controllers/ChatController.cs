@@ -12,10 +12,9 @@ namespace Foodeez.API.Controllers;
 /// The advice tab: a kept conversation with the nutrition assistant, and the way a plan that
 /// comes out of one reaches the calendar.
 /// </summary>
-[ApiController]
 [Route("api/chat")]
 [Authorize]
-public class ChatController : ControllerBase
+public class ChatController : FoodeezController
 {
     private readonly GetConversationsUseCase _conversations;
     private readonly SendChatMessageUseCase _sendMessage;
@@ -39,9 +38,7 @@ public class ChatController : ControllerBase
     [ProducesResponseType(typeof(List<ChatConversationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetConversations()
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
-        return Ok(await _conversations.ExecuteAsync(userId));
+        return Ok(await _conversations.ExecuteAsync(UserId));
     }
 
     /// <summary>One thread, with everything said in it.</summary>
@@ -50,9 +47,7 @@ public class ChatController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetConversation([FromRoute] Guid conversationId)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
-        var conversation = await _conversations.GetAsync(userId, conversationId);
+        var conversation = await _conversations.GetAsync(UserId, conversationId);
         return conversation == null ? NotFound() : Ok(conversation);
     }
 
@@ -61,9 +56,7 @@ public class ChatController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteConversation([FromRoute] Guid conversationId, CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
-        return await _conversations.DeleteAsync(userId, conversationId, ct) ? NoContent() : NotFound();
+        return await _conversations.DeleteAsync(UserId, conversationId, ct) ? NoContent() : NotFound();
     }
 
     /// <summary>
@@ -75,14 +68,8 @@ public class ChatController : ControllerBase
     [Produces("text/event-stream")]
     public async Task SendMessageStream([FromBody] SendChatMessageRequest request, CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId)
-        {
-            Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
-
         await ServerSentEventStream.WriteAsync(
-            Response, _sendMessage.ExecuteStreamAsync(userId, request, ct), ct);
+            Response, _sendMessage.ExecuteStreamAsync(UserId, request, ct), ct);
     }
 
     /// <summary>
@@ -98,15 +85,13 @@ public class ChatController : ControllerBase
         [FromBody] AcceptSuggestionsRequest? request,
         CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
         var result = await _acceptSuggestions.ExecuteAsync(
-            userId, messageId, request?.Indexes ?? new List<int>(), ct);
+            UserId, messageId, request?.Indexes ?? new List<int>(), ct);
 
         return result.Outcome switch
         {
             AcceptOutcome.Added => Ok(result.Plans),
-            AcceptOutcome.NothingToAdd => BadRequest(new { message = "That reply has no meals to add." }),
+            AcceptOutcome.NothingToAdd => BadRequest(Failure("That reply has no meals to add.")),
             _ => NotFound()
         };
     }
@@ -125,15 +110,13 @@ public class ChatController : ControllerBase
         [FromBody] SaveChatRecipesRequest? request,
         CancellationToken ct)
     {
-        if (CurrentUser.IdOf(User) is not { } userId) return Unauthorized();
-
         var result = await _saveRecipes.ExecuteAsync(
-            userId, messageId, request?.Indexes ?? new List<int>(), ct);
+            UserId, messageId, request?.Indexes ?? new List<int>(), ct);
 
         return result.Outcome switch
         {
             SaveRecipesOutcome.Saved => Ok(result.Recipes),
-            SaveRecipesOutcome.NothingToSave => BadRequest(new { message = "That reply has no recipes to save." }),
+            SaveRecipesOutcome.NothingToSave => BadRequest(Failure("That reply has no recipes to save.")),
             _ => NotFound()
         };
     }
