@@ -12,7 +12,7 @@
             @click="openGenerate"
             :disabled="isGenerating"
             class="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-semibold px-4 py-2 rounded-xl transition-colors">
-            <span v-if="isGenerating" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <LoadingSpinner v-if="isGenerating" size="sm" color="currentColor" />
             <span v-else>✨</span>
             {{ isGenerating ? 'Generating...' : 'Generate Plan' }}
           </button>

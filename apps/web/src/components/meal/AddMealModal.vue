@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { computed, ref, watch } from 'vue';
 import QuickAddPanel from '@/components/meal/QuickAddPanel.vue';
 import MealTypePicker from '@/components/meal/MealTypePicker.vue';
@@ -276,10 +277,7 @@ async function handleSave(): Promise<void> {
           class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
           @click="handleSave"
         >
-          <span
-            v-if="isSaving"
-            class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-          />
+          <LoadingSpinner v-if="isSaving" size="sm" color="currentColor" />
           {{ isSaving ? 'Saving...' : isEditing ? 'Update Meal' : 'Save Meal' }}
         </button>
       </div>

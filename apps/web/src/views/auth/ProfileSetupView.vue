@@ -246,7 +246,7 @@
             :disabled="isLoading"
             class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
             @click="handleComplete">
-            <span v-if="isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <LoadingSpinner v-if="isLoading" size="sm" color="currentColor" />
             {{ isLoading ? 'Saving...' : 'Complete Setup' }}
           </button>
         </div>
@@ -256,6 +256,7 @@
 </template>
 
 <script setup lang="ts">
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import AppCard from '@/components/ui/AppCard.vue';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';

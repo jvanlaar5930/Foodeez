@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { computed } from 'vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import AnalysisGapList from '@/components/ai/AnalysisGapList.vue';
@@ -40,10 +41,7 @@ const analyzedOn = computed(() =>
       :disabled="isAnalyzing"
       @click="emit('analyze')"
     >
-      <span
-        v-if="isAnalyzing"
-        class="h-4 w-4 animate-spin rounded-full border-2 border-purple-400 border-t-transparent"
-      />
+      <LoadingSpinner v-if="isAnalyzing" size="sm" color="currentColor" />
       <span v-else aria-hidden="true">*</span>
       {{ label }}
     </button>
