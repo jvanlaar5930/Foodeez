@@ -5,10 +5,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foodeez.Infrastructure.Repositories;
 
+/// <summary>
+/// Read-only queries here use AsNoTracking: nothing they return is written back, and tracking
+/// a week of meals with every item and food row is work the change tracker does for nobody.
+/// The one query whose result is edited stays tracked, and says so.
+/// </summary>
 public class MealLogRepository : BaseRepository<MealLog>, IMealLogRepository
 {
     public MealLogRepository(AppDbContext context) : base(context) { }
 
+    /// <summary>Tracked: the caller edits this meal and saves it.</summary>
     public async Task<MealLog?> GetDetailedByIdAsync(Guid id)
     {
         return await _dbSet
@@ -20,6 +26,7 @@ public class MealLogRepository : BaseRepository<MealLog>, IMealLogRepository
     public async Task<IReadOnlyList<MealLog>> GetByUserAndDateAsync(Guid userId, DateOnly date)
     {
         return await _dbSet
+            .AsNoTracking()
             .Where(m => m.UserId == userId && m.LogDate == date)
             .Include(m => m.Items)
                 .ThenInclude(i => i.FoodItem)
@@ -30,6 +37,7 @@ public class MealLogRepository : BaseRepository<MealLog>, IMealLogRepository
     public async Task<IReadOnlyList<MealLog>> GetRecentAsync(Guid userId, int limit)
     {
         return await _dbSet
+            .AsNoTracking()
             .Where(m => m.UserId == userId)
             .Include(m => m.Items)
                 .ThenInclude(i => i.FoodItem)
@@ -42,6 +50,7 @@ public class MealLogRepository : BaseRepository<MealLog>, IMealLogRepository
     public async Task<IReadOnlyList<MealLog>> GetByUserAndDateRangeAsync(Guid userId, DateOnly start, DateOnly end)
     {
         return await _dbSet
+            .AsNoTracking()
             .Where(m => m.UserId == userId && m.LogDate >= start && m.LogDate <= end)
             .Include(m => m.Items)
                 .ThenInclude(i => i.FoodItem)

@@ -26,9 +26,9 @@ public class MealTemplateRepository : BaseRepository<MealTemplate>, IMealTemplat
 
     public async Task<MealTemplate?> FindByNameAsync(Guid userId, string name)
     {
-        var lowered = name.Trim().ToLowerInvariant();
+        var wanted = name.Trim();
         return await WithItems()
-            .FirstOrDefaultAsync(t => t.UserId == userId && t.Name.ToLower() == lowered);
+            .FirstOrDefaultAsync(t => t.UserId == userId && t.Name == wanted);
     }
 
     public async Task AddItemAsync(MealTemplateItem item)

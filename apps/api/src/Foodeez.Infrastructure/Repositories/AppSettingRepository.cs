@@ -5,6 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foodeez.Infrastructure.Repositories;
 
+/// <summary>
+/// The settings table. Writes here stage changes and leave committing to the unit of work,
+/// like every other repository - this one used to commit for itself, so a caller that changed
+/// a setting alongside something else could not undo the setting when the something else
+/// failed.
+/// </summary>
 public class AppSettingRepository : IAppSettingRepository
 {
     private readonly AppDbContext _context;
@@ -16,7 +22,11 @@ public class AppSettingRepository : IAppSettingRepository
 
     public async Task<IReadOnlyList<AppSetting>> GetAllAsync()
     {
-        return await _context.AppSettings.OrderBy(x => x.Category).ThenBy(x => x.Key).ToListAsync();
+        return await _context.AppSettings
+            .AsNoTracking()
+            .OrderBy(x => x.Category)
+            .ThenBy(x => x.Key)
+            .ToListAsync();
     }
 
     public async Task<AppSetting?> GetByKeyAsync(string key)
@@ -52,8 +62,6 @@ public class AppSettingRepository : IAppSettingRepository
                 UpdatedAt = DateTime.UtcNow
             });
         }
-
-        await _context.SaveChangesAsync();
     }
 
     public async Task UpsertManyAsync(IEnumerable<(string Key, string Value)> pairs)
@@ -80,7 +88,5 @@ public class AppSettingRepository : IAppSettingRepository
                 });
             }
         }
-
-        await _context.SaveChangesAsync();
     }
 }

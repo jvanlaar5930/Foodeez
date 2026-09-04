@@ -1,14 +1,17 @@
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
-using Foodeez.Application.DTOs.Users;
 using Foodeez.Application.Interfaces.Services;
-using Foodeez.Domain.Enums;
+using Foodeez.Domain.Entities;
+using Foodeez.Domain.ValueObjects;
 
 namespace Foodeez.Application.UseCases.AI;
 
 public class GetDietaryRecommendationsUseCase
 {
+    /// <summary>How far back "how they have been eating lately" reaches.</summary>
+    private const int RecentDays = 7;
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAIService _aiService;
 
@@ -27,56 +30,57 @@ public class GetDietaryRecommendationsUseCase
         if (user.Profile == null)
             throw new InvalidOperationException("User profile must be completed to get dietary recommendations.");
 
-        var profileDto = UserProfileMapper.ToDto(user.Profile);
-
-        // Aggregate last 7 days of nutrition
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var sevenDaysAgo = today.AddDays(-7);
-        var recentLogs = await _unitOfWork.MealLogs.GetByUserAndDateRangeAsync(userId, sevenDaysAgo, today);
+        var recentLogs = await _unitOfWork.MealLogs.GetByUserAndDateRangeAsync(
+            userId, today.AddDays(-RecentDays), today);
 
-        DailyNutritionDto? recentNutrition = null;
-        if (recentLogs.Any())
+        return await _aiService.GetDietaryRecommendationsAsync(
+            UserProfileMapper.ToDto(user.Profile),
+            RecentNutrition(recentLogs, user.Profile, today),
+            ct);
+    }
+
+    /// <summary>
+    /// An average day over the recent window, plus what each meal slot contributed.
+    ///
+    /// MealLog.TotalNutrition re-adds every item in the meal on each read, and this used to
+    /// read it twelve times per log - five running totals and seven per group. Adding each
+    /// log's total up once instead means one pass over the items rather than twelve.
+    /// </summary>
+    private static DailyNutritionDto? RecentNutrition(
+        IReadOnlyCollection<MealLog> logs, UserProfile profile, DateOnly today)
+    {
+        if (logs.Count == 0)
         {
-            var totalCalories = recentLogs.Sum(l => l.TotalNutrition.Calories);
-            var totalProtein = recentLogs.Sum(l => l.TotalNutrition.Protein);
-            var totalCarbs = recentLogs.Sum(l => l.TotalNutrition.Carbohydrates);
-            var totalFat = recentLogs.Sum(l => l.TotalNutrition.Fat);
-            var totalFiber = recentLogs.Sum(l => l.TotalNutrition.Fiber);
-
-            var dayCount = Math.Max(1, recentLogs.Select(l => l.LogDate).Distinct().Count());
-
-            var breakdown = recentLogs
-                .GroupBy(l => l.MealType)
-                .ToDictionary(
-                    g => g.Key,
-                    g => new NutritionalInfoDto
-                    {
-                        Calories = g.Sum(l => l.TotalNutrition.Calories),
-                        Protein = g.Sum(l => l.TotalNutrition.Protein),
-                        Carbohydrates = g.Sum(l => l.TotalNutrition.Carbohydrates),
-                        Fat = g.Sum(l => l.TotalNutrition.Fat),
-                        Fiber = g.Sum(l => l.TotalNutrition.Fiber),
-                        Sugar = g.Sum(l => l.TotalNutrition.Sugar),
-                        Sodium = g.Sum(l => l.TotalNutrition.Sodium)
-                    }
-                );
-
-            recentNutrition = new DailyNutritionDto
-            {
-                Date = today,
-                TotalCalories = MathF.Round(totalCalories / dayCount, 1),
-                TotalProtein = MathF.Round(totalProtein / dayCount, 1),
-                TotalCarbs = MathF.Round(totalCarbs / dayCount, 1),
-                TotalFat = MathF.Round(totalFat / dayCount, 1),
-                TotalFiber = MathF.Round(totalFiber / dayCount, 1),
-                TargetCalories = user.Profile.DailyCalorieTarget,
-                TargetProtein = user.Profile.DailyProteinTargetG,
-                TargetCarbs = user.Profile.DailyCarbTargetG,
-                TargetFat = user.Profile.DailyFatTargetG,
-                MealBreakdown = breakdown
-            };
+            return null;
         }
 
-        return await _aiService.GetDietaryRecommendationsAsync(profileDto, recentNutrition, ct);
+        var totals = logs.Select(log => (log.MealType, log.LogDate, Nutrition: log.TotalNutrition)).ToList();
+        var overall = totals.Aggregate(NutritionalInfo.Empty, (running, entry) => running + entry.Nutrition);
+
+        // Days with nothing logged are not averaged in: someone who logged two days of the
+        // seven ate what they ate on those two days, and dividing by seven would describe
+        // somebody starving.
+        var dayCount = Math.Max(1, totals.Select(entry => entry.LogDate).Distinct().Count());
+
+        return new DailyNutritionDto
+        {
+            Date = today,
+            TotalCalories = MathF.Round(overall.Calories / dayCount, 1),
+            TotalProtein = MathF.Round(overall.Protein / dayCount, 1),
+            TotalCarbs = MathF.Round(overall.Carbohydrates / dayCount, 1),
+            TotalFat = MathF.Round(overall.Fat / dayCount, 1),
+            TotalFiber = MathF.Round(overall.Fiber / dayCount, 1),
+            TargetCalories = profile.DailyCalorieTarget,
+            TargetProtein = profile.DailyProteinTargetG,
+            TargetCarbs = profile.DailyCarbTargetG,
+            TargetFat = profile.DailyFatTargetG,
+            MealBreakdown = totals
+                .GroupBy(entry => entry.MealType)
+                .ToDictionary(
+                    group => group.Key,
+                    group => NutritionMapper.ToDto(group.Aggregate(
+                        NutritionalInfo.Empty, (running, entry) => running + entry.Nutrition)))
+        };
     }
 }

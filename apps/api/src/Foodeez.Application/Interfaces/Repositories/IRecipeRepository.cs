@@ -12,6 +12,13 @@ public interface IRecipeRepository : IBaseRepository<Recipe>
     /// <summary>A slice of the whole library, for browsing with no query.</summary>
     Task<IReadOnlyList<Recipe>> GetPagedAsync(int skip, int take);
     Task<IReadOnlyList<Recipe>> GetByTagsAsync(IEnumerable<string> tags);
+
+    /// <summary>
+    /// This person's own recipes with any of these exact names. Used to reuse rows when a
+    /// generated plan names a dish they already have, in one query rather than one per meal.
+    /// </summary>
+    Task<IReadOnlyList<Recipe>> GetOwnedByNamesAsync(
+        Guid ownerId, IEnumerable<string> names, CancellationToken ct = default);
     Task<IReadOnlyList<Recipe>> GetBySpoonacularIdsAsync(IEnumerable<int> spoonacularIds);
 
     /// <summary>

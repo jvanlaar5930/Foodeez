@@ -28,6 +28,8 @@ public class AdminSettingsUseCase
     {
         await _unitOfWork.AppSettings.UpsertManyAsync(
             request.Settings.Select(setting => (setting.Key, setting.Value)));
+
+        await _unitOfWork.SaveChangesAsync();
     }
 
     private static AppSettingDto ToDto(AppSetting setting) => new()

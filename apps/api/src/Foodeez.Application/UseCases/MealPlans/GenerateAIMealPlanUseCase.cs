@@ -231,9 +231,10 @@ public class GenerateAIMealPlanUseCase
             IsAIGenerated = true
         };
 
-        // One recipe per distinct dish across the whole week: a plan that repeats the same
-        // breakfast five times should leave one recipe behind, not five identical ones.
-        var recipes = new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase);
+        // One recipe per distinct dish across the whole week, reusing the rows this person
+        // already has: a plan that repeats the same breakfast five times should leave one
+        // recipe behind, not five identical ones, and regenerating a week should leave none.
+        var recipes = await LoadReusableRecipesAsync(request.UserId, generated);
 
         // Persist generated day entries
         foreach (var day in generated.Days)
@@ -289,7 +290,7 @@ public class GenerateAIMealPlanUseCase
     private async Task<Recipe?> ResolveRecipeAsync(
         Guid userId,
         GeneratedMealEntryDto meal,
-        Dictionary<string, Recipe> seenThisPlan)
+        Dictionary<string, Recipe> known)
     {
         var name = meal.RecipeName?.Trim();
         if (string.IsNullOrWhiteSpace(name))
@@ -298,20 +299,9 @@ public class GenerateAIMealPlanUseCase
             return null;
         }
 
-        if (seenThisPlan.TryGetValue(name, out var already))
+        if (known.TryGetValue(name, out var already))
         {
             return already;
-        }
-
-        var matches = await _unitOfWork.Recipes.SearchAsync(name);
-        var existing = matches.FirstOrDefault(r =>
-            r.CreatedByUserId == userId
-            && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
-
-        if (existing != null)
-        {
-            seenThisPlan[name] = existing;
-            return existing;
         }
 
         var recipe = new Recipe
@@ -352,7 +342,41 @@ public class GenerateAIMealPlanUseCase
         }
 
         await _unitOfWork.Recipes.AddAsync(recipe);
-        seenThisPlan[name] = recipe;
+        known[name] = recipe;
         return recipe;
+    }
+
+    /// <summary>
+    /// The recipes this person already has under the names the model just used, fetched in
+    /// one query before the plan is walked.
+    ///
+    /// This used to be a SearchAsync per meal inside the loop - twenty-one queries for a
+    /// seven-day plan, each a leading-wildcard LIKE over name and description that no index
+    /// can serve, each pulling back every loose match with its ingredients and food items,
+    /// only to keep the one row whose name matched exactly.
+    /// </summary>
+    private async Task<Dictionary<string, Recipe>> LoadReusableRecipesAsync(
+        Guid userId, GeneratedMealPlanDto generated)
+    {
+        var names = generated.Days
+            .SelectMany(day => day.Meals)
+            .Select(meal => meal.RecipeName?.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var existing = await _unitOfWork.Recipes.GetOwnedByNamesAsync(userId, names);
+
+        // Names compare case-insensitively here, so a plan asking for "Greek Salad" reuses a
+        // stored "greek salad" rather than adding a second row. Two rows differing only in
+        // case would both match; the first is as good as the other.
+        var reusable = new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase);
+        foreach (var recipe in existing)
+        {
+            reusable.TryAdd(recipe.Name, recipe);
+        }
+
+        return reusable;
     }
 }

@@ -21,17 +21,11 @@ public class MealLog : BaseEntity
     public ICollection<MealLogItem> Items { get; set; } = new List<MealLogItem>();
 
     /// <summary>
-    /// Aggregates all items' nutritional info using the + operator.
-    /// Returns NutritionalInfo.Empty if there are no items.
+    /// Everything in this meal, added up. Empty when there is nothing in it.
+    ///
+    /// Computed on every read, so a caller adding this up across many logs should read it
+    /// once per log rather than once per nutrient.
     /// </summary>
-    public NutritionalInfo TotalNutrition
-    {
-        get
-        {
-            if (!Items.Any())
-                return NutritionalInfo.Empty;
-
-            return Items.Aggregate(NutritionalInfo.Empty, (acc, item) => acc + item.NutritionalInfo);
-        }
-    }
+    public NutritionalInfo TotalNutrition =>
+        Items.Aggregate(NutritionalInfo.Empty, (running, item) => running + item.NutritionalInfo);
 }
