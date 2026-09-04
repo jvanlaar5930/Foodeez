@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Foodeez.Application.DTOs.AI;
@@ -170,15 +171,45 @@ public static class JsonExtraction
             ? value.GetString() ?? string.Empty
             : string.Empty;
 
-    public static int ReadInt(JsonElement element, string property, int fallback = 0) =>
-        element.TryGetProperty(property, out var value) && value.TryGetInt32(out var parsed)
-            ? parsed
-            : fallback;
+    /// <summary>
+    /// A number, whether the model wrote it as one or quoted it.
+    ///
+    /// Two things make the obvious one-liner wrong. TryGetInt32 does not return false for a
+    /// non-number - it throws, so the value kind has to be checked before asking. And models
+    /// do quote numbers ("350"), which is why LocalAIService grew its own lenient reader;
+    /// treating that as absent silently zeroed a calorie count, and letting the throw escape
+    /// discarded the entire response, since nothing above here catches it.
+    /// </summary>
+    public static int ReadInt(JsonElement element, string property, int fallback = 0)
+    {
+        if (!element.TryGetProperty(property, out var value))
+            return fallback;
 
-    public static float ReadFloat(JsonElement element, string property, float fallback = 0f) =>
-        element.TryGetProperty(property, out var value) && value.TryGetSingle(out var parsed)
-            ? parsed
-            : fallback;
+        if (value.ValueKind == JsonValueKind.Number)
+            return value.TryGetInt32(out var parsed) ? parsed : fallback;
+
+        if (value.ValueKind == JsonValueKind.String &&
+            int.TryParse(value.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var fromText))
+            return fromText;
+
+        return fallback;
+    }
+
+    /// <inheritdoc cref="ReadInt"/>
+    public static float ReadFloat(JsonElement element, string property, float fallback = 0f)
+    {
+        if (!element.TryGetProperty(property, out var value))
+            return fallback;
+
+        if (value.ValueKind == JsonValueKind.Number)
+            return value.TryGetSingle(out var parsed) ? parsed : fallback;
+
+        if (value.ValueKind == JsonValueKind.String &&
+            float.TryParse(value.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var fromText))
+            return fromText;
+
+        return fallback;
+    }
 
     public static List<string> ReadStrings(JsonElement element, string property) =>
         element.TryGetProperty(property, out var array) && array.ValueKind == JsonValueKind.Array

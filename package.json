@@ -13,6 +13,10 @@
     "web": "npm run dev --workspace=@foodeez/web",
     "web:build": "npm run build --workspace=@foodeez/web",
     "shared:build": "npm run build --workspace=@foodeez/shared",
-    "shared:dev": "npm run dev --workspace=@foodeez/shared"
+    "shared:dev": "npm run dev --workspace=@foodeez/shared",
+    "test": "npm run test --workspaces --if-present",
+    "shared:test": "npm run test --workspace=@foodeez/shared",
+    "web:test": "npm run test --workspace=@foodeez/web",
+    "mobile:test": "npm run test --workspace=@foodeez/mobile"
   }
 }
