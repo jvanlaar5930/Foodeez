@@ -21,6 +21,8 @@ import { SavedRecipeDeck } from '@/components/recipe/SavedRecipeDeck';
 import { isAiRecipeImage, RecipeDto } from '@/types';
 import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<RecipesStackParamList, 'RecipesList'>;
@@ -250,21 +252,12 @@ export function RecipesScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color={C.textSecondary} style={styles.searchIcon} />
-        <TextInput
+        <SearchBar
           ref={searchRef}
-          style={styles.searchInput}
-          placeholder="Search recipes..."
-          placeholderTextColor={C.textHint}
           value={search}
           onChangeText={setSearch}
-          returnKeyType="search"
+          placeholder="Search recipes..."
         />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={18} color={C.textSecondary} />
-          </TouchableOpacity>
-        )}
       </View>
 
       <FlatList
@@ -287,7 +280,7 @@ export function RecipesScreen({ navigation, route }: Props) {
       />
 
       {isLoading ? (
-        <ActivityIndicator size="large" color={C.primary} style={{ marginTop: Spacing.xl }} />
+        <LoadingSpinner />
       ) : (
         <FlatList
           data={filteredRecipes}
@@ -339,8 +332,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingHorizontal: Spacing.md,
     ...Shadows.sm,
   },
-  searchIcon: { marginRight: Spacing.sm },
-  searchInput: { flex: 1, height: 44, fontSize: FontSize.md, color: C.text },
   tagFilter: { flexGrow: 0, marginBottom: Spacing.sm },
   tagFilterContent: {
     paddingHorizontal: Spacing.md,

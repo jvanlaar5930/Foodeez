@@ -35,6 +35,7 @@ import {
   ORDERED_MEAL_TYPES,
 } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealPlanStackParamList, 'MealPlanHome'>;
@@ -192,7 +193,7 @@ export function MealPlanScreen({ navigation }: Props) {
 
         {/* Meal slots for selected day */}
         {isLoading ? (
-          <ActivityIndicator size="large" color={C.primary} style={{ marginTop: Spacing.xl }} />
+          <LoadingSpinner />
         ) : (
           ORDERED_MEAL_TYPES.map(mealType => {
             const entry = getEntryForDayAndMeal(selectedDay, mealType);

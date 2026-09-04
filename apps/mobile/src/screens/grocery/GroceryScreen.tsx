@@ -18,6 +18,7 @@ import { useGroceryStore } from '@/store/groceryStore';
 import { formatApiDate, parseApiDate } from '@/utils/dateUtils';
 import { GROCERY_CATEGORIES, type GroceryItemDto } from '@/types';
 import { BorderRadius, FontSize, FontWeight, Shadows, Spacing } from '@/constants/theme';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type RangeMode = 'day' | 'week';
@@ -60,6 +61,7 @@ export function GroceryScreen() {
   const updateItem = useGroceryStore((state) => state.updateItem);
   const setChecked = useGroceryStore((state) => state.setChecked);
   const removeItem = useGroceryStore((state) => state.removeItem);
+  const clearError = useGroceryStore((state) => state.clearError);
 
   useEffect(() => {
     void load(range.startDate, range.endDate);
@@ -305,7 +307,7 @@ export function GroceryScreen() {
           </>
         )}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <ErrorBanner message={error} onDismiss={clearError} />
       </ScrollView>
 
       <ModalSheet
@@ -474,5 +476,4 @@ const makeStyles = (C: Palette) =>
     },
     addDisabled: { opacity: 0.4 },
     hint: { marginTop: Spacing.sm, fontSize: FontSize.sm, color: C.textHint },
-    error: { color: C.error, fontSize: FontSize.md },
   });

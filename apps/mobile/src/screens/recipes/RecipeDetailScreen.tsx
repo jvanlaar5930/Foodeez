@@ -18,6 +18,7 @@ import { useSavedRecipeStore } from '@/store/savedRecipeStore';
 import { isAiRecipeImage, RecipeDto } from '@/types';
 import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<RecipesStackParamList, 'RecipeDetail'>;
@@ -63,7 +64,7 @@ export function RecipeDetailScreen({ route, navigation }: Props) {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={C.primary} />
+        <LoadingSpinner />
       </SafeAreaView>
     );
   }

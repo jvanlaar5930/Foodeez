@@ -17,6 +17,7 @@ import { mealService } from '@/services/mealService';
 import { describeApiError } from '@/utils/apiError';
 import { QuickAddItemDto } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealLogStackParamList, 'FoodScan'>;
@@ -100,7 +101,7 @@ export function FoodScanScreen({ navigation }: Props) {
   if (scanState === 'analyzing') {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={C.primary} />
+        <LoadingSpinner />
         <Text style={styles.analyzingText}>Analyzing your food...</Text>
         <Text style={styles.analyzingSubText}>AI is identifying ingredients and nutrition</Text>
       </SafeAreaView>

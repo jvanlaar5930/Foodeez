@@ -24,6 +24,7 @@ import {
 } from '@/types';
 import { BorderRadius, FontSize, FontWeight, Shadows, Spacing } from '@/constants/theme';
 import { MessageBubble, StreamingBubble } from '@/components/chat/MessageBubble';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 /** The openers worth one tap, for a tab with nothing in it yet. */
@@ -57,6 +58,7 @@ export function AdviceScreen() {
   const remove = useChatStore((state) => state.remove);
   const addSuggestionsToPlan = useChatStore((state) => state.addSuggestionsToPlan);
   const saveRecipes = useChatStore((state) => state.saveRecipes);
+  const clearError = useChatStore((state) => state.clearError);
 
   // Straight back into the last thread: advice is a conversation, and starting every visit
   // from a blank page would throw away the context that makes it worth having.
@@ -182,7 +184,7 @@ export function AdviceScreen() {
         </ScrollView>
 
         {planNotice ? <Text style={styles.notice}>{planNotice}</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <ErrorBanner message={error} onDismiss={clearError} />
 
         <View style={styles.composer}>
           <TextInput
@@ -318,12 +320,6 @@ const makeStyles = (C: Palette) =>
       marginHorizontal: Spacing.md,
       marginBottom: Spacing.sm,
       color: C.primaryDark,
-      fontSize: FontSize.sm,
-    },
-    error: {
-      marginHorizontal: Spacing.md,
-      marginBottom: Spacing.sm,
-      color: C.error,
       fontSize: FontSize.sm,
     },
     composer: {
