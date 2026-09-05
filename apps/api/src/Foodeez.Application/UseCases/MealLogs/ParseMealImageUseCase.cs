@@ -1,3 +1,4 @@
+using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.Interfaces.Services;
 
@@ -20,7 +21,10 @@ public class ParseMealImageUseCase
 
     public async Task<QuickAddResultDto> ExecuteAsync(Guid userId, byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
     {
-        var parsed = await _aiService.ParseMealImageAsync(imageData, mimeType, ct);
+        // Read from the bytes rather than taken from the upload: a provider refuses the whole
+        // request over a media type it does not recognise, and the client is only ever
+        // guessing at one from a file extension.
+        var parsed = await _aiService.ParseMealImageAsync(imageData, ImageMediaType.Resolve(imageData, mimeType), ct);
         var result = await _resolver.ResolveAsync(userId, parsed, ct);
 
         if (result.Items.Count == 0)

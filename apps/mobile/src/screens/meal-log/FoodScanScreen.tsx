@@ -174,28 +174,30 @@ export function FoodScanScreen({ navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
-        <SafeAreaView style={styles.cameraOverlay}>
-          <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={28} color="#FFFFFF" />
+    <View style={styles.cameraScreen}>
+      <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
+      {/* A sibling laid over the preview, not a child of it: CameraView does not render
+          children, and nesting these warned about "inconsistent behaviour or crashes" - with
+          the capture button among the things that would silently fail to appear. */}
+      <SafeAreaView style={styles.cameraOverlay} pointerEvents="box-none">
+        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.scanFrame} pointerEvents="none" />
+        <Text style={styles.scanHint}>Center your food in the frame</Text>
+        <View style={styles.cameraControls}>
+          <TouchableOpacity
+            style={styles.flipButton}
+            onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
+          >
+            <Ionicons name="camera-reverse-outline" size={28} color="#FFFFFF" />
           </TouchableOpacity>
-          <View style={styles.scanFrame} />
-          <Text style={styles.scanHint}>Center your food in the frame</Text>
-          <View style={styles.cameraControls}>
-            <TouchableOpacity
-              style={styles.flipButton}
-              onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
-            >
-              <Ionicons name="camera-reverse-outline" size={28} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.captureButton} onPress={handleCapture}>
-              <View style={styles.captureButtonInner} />
-            </TouchableOpacity>
-            <View style={{ width: 52 }} />
-          </View>
-        </SafeAreaView>
-      </CameraView>
+          <TouchableOpacity style={styles.captureButton} onPress={handleCapture}>
+            <View style={styles.captureButtonInner} />
+          </TouchableOpacity>
+          <View style={{ width: 52 }} />
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -203,10 +205,12 @@ export function FoodScanScreen({ navigation }: Props) {
 const makeStyles = (C: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
   centered: { justifyContent: 'center', alignItems: 'center', gap: Spacing.md },
-  camera: { flex: 1 },
+  // Black rather than the theme's background: it is what shows in the moment before the
+  // preview starts, and a pale flash there reads as a broken camera.
+  cameraScreen: { flex: 1, backgroundColor: '#000000' },
+  camera: StyleSheet.absoluteFill,
   cameraOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
+    ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
     padding: Spacing.lg,
   },

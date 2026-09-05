@@ -44,8 +44,12 @@ public sealed class LocalAIService : AIProviderBase
 
     protected override string ProviderName => "Local LLM";
 
+    // Names the switch as it is labelled in the admin UI rather than as the settings key it is
+    // stored under: the person reading this has just taken a photograph, and "local.supportsVision"
+    // is not something they can go and find.
     protected override string VisionUnsupportedNote =>
-        "Photos are switched off for the local model. Turn on local.supportsVision, or describe the meal instead.";
+        "Photos are switched off for the local model. Turn on \"Local Model Supports Images\" in " +
+        "Admin > Settings once a vision model is loaded, or describe the meal instead.";
 
     // ────────────────────────── Configuration ──────────────────────────
 
