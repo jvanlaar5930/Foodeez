@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { adminService } from '@/services/adminService';
 import { recipeService } from '@/services/recipeService';
 import AppLayout from '@/components/layout/AppLayout.vue';
@@ -13,27 +13,70 @@ interface SettingField {
   type?: 'text' | 'toggle';
 }
 
-const KNOWN_SETTINGS: SettingField[] = [
-  { key: 'claude.apiKey', label: 'Claude API Key', description: 'Anthropic Claude API key (sk-ant-...)', isSecret: true, placeholder: 'sk-ant-api03-...' },
-  { key: 'claude.model', label: 'Claude Model', description: 'Model ID (e.g. claude-sonnet-4-6)', isSecret: false, placeholder: 'claude-sonnet-4-6' },
-  { key: 'gemini.apiKey', label: 'Gemini API Key', description: 'Google AI Studio key — free tier available at aistudio.google.com', isSecret: true, placeholder: 'AIzaSy...' },
-  { key: 'groq.apiKey', label: 'Groq API Key', description: 'Free-tier key from console.groq.com', isSecret: true, placeholder: 'gsk_...' },
-  { key: 'groq.model', label: 'Groq Model', description: 'Model ID', isSecret: false, placeholder: 'llama-3.1-8b-instant' },
-  { key: 'ollama.baseUrl', label: 'Ollama Base URL', description: 'Local Ollama server (must be running on this machine)', isSecret: false, placeholder: 'http://localhost:11434' },
-  { key: 'ollama.model', label: 'Ollama Model', description: 'Model name — must be pulled first with `ollama pull <name>`', isSecret: false, placeholder: 'llama3' },
-  { key: 'local.baseUrl', label: 'Local Server URL', description: 'OpenAI-compatible endpoint. LM Studio: http://localhost:1234/v1 · llama.cpp: http://localhost:8080/v1 · vLLM: http://localhost:8000/v1', isSecret: false, placeholder: 'http://localhost:1234/v1' },
-  { key: 'local.model', label: 'Local Model', description: 'Model name as the server reports it (GET /v1/models). llama.cpp serves one model and ignores this.', isSecret: false, placeholder: 'local-model' },
-  { key: 'local.apiKey', label: 'Local Server API Key', description: 'Optional — only if your server requires a bearer token', isSecret: true, placeholder: 'leave empty for LM Studio / llama.cpp' },
-  { key: 'local.supportsVision', label: 'Local Model Supports Images', description: 'Turn on only when a vision model is loaded (Qwen2-VL, LLaVA, …). Off means photo logging returns nothing.', isSecret: false, placeholder: '', type: 'toggle' },
-  { key: 'local.timeoutSeconds', label: 'Local Request Timeout (seconds)', description: 'Local models are slow on CPU — raise this if long requests get cut off', isSecret: false, placeholder: '300' },
-];
+/**
+ * A provider and the settings that belong to it, in one place rather than two.
+ *
+ * These were a flat list of every key next to a separate list of providers, which put four
+ * unrelated model configurations in a single column: to find the one field that mattered you
+ * had to know which prefix its key happened to start with. Grouping them means the picker and
+ * the sections below it are driven by the same array, and `value` is both what `ai.provider`
+ * is set to and which section is the live one.
+ */
+interface ProviderSection {
+  value: string;
+  label: string;
+  description: string;
+  fields: SettingField[];
+}
 
-const AI_PROVIDERS = [
-  { value: 'claude', label: 'Claude (Anthropic)', description: 'Best quality, requires paid API key' },
-  { value: 'gemini', label: 'Gemini Flash (Google)', description: 'Free tier available, fast' },
-  { value: 'groq', label: 'Groq / Llama', description: 'Free tier, OpenAI-compatible' },
-  { value: 'ollama', label: 'Ollama (Local)', description: 'Completely free, runs on your machine' },
-  { value: 'local', label: 'Local Server (OpenAI-compatible)', description: 'LM Studio, llama.cpp, vLLM, LocalAI, Jan — point it at any URL' },
+const AI_PROVIDERS: ProviderSection[] = [
+  {
+    value: 'claude',
+    label: 'Claude (Anthropic)',
+    description: 'Best quality, requires paid API key',
+    fields: [
+      { key: 'claude.apiKey', label: 'Claude API Key', description: 'Anthropic Claude API key (sk-ant-...)', isSecret: true, placeholder: 'sk-ant-api03-...' },
+      { key: 'claude.model', label: 'Claude Model', description: 'Model ID (e.g. claude-sonnet-4-6)', isSecret: false, placeholder: 'claude-sonnet-4-6' },
+    ],
+  },
+  {
+    value: 'gemini',
+    label: 'Gemini Flash (Google)',
+    description: 'Free tier available, fast',
+    fields: [
+      { key: 'gemini.apiKey', label: 'Gemini API Key', description: 'Google AI Studio key — free tier available at aistudio.google.com', isSecret: true, placeholder: 'AIzaSy...' },
+    ],
+  },
+  {
+    value: 'groq',
+    label: 'Groq / Llama',
+    description: 'Free tier, OpenAI-compatible',
+    fields: [
+      { key: 'groq.apiKey', label: 'Groq API Key', description: 'Free-tier key from console.groq.com', isSecret: true, placeholder: 'gsk_...' },
+      { key: 'groq.model', label: 'Groq Model', description: 'Model ID', isSecret: false, placeholder: 'llama-3.1-8b-instant' },
+    ],
+  },
+  {
+    value: 'ollama',
+    label: 'Ollama (Local)',
+    description: 'Completely free, runs on your machine',
+    fields: [
+      { key: 'ollama.baseUrl', label: 'Ollama Base URL', description: 'Local Ollama server (must be running on this machine)', isSecret: false, placeholder: 'http://localhost:11434' },
+      { key: 'ollama.model', label: 'Ollama Model', description: 'Model name — must be pulled first with `ollama pull <name>`', isSecret: false, placeholder: 'llama3' },
+    ],
+  },
+  {
+    value: 'local',
+    label: 'Local Server (OpenAI-compatible)',
+    description: 'LM Studio, llama.cpp, vLLM, LocalAI, Jan — point it at any URL',
+    fields: [
+      { key: 'local.baseUrl', label: 'Local Server URL', description: 'OpenAI-compatible endpoint. LM Studio: http://localhost:1234/v1 · llama.cpp: http://localhost:8080/v1 · vLLM: http://localhost:8000/v1', isSecret: false, placeholder: 'http://localhost:1234/v1' },
+      { key: 'local.model', label: 'Local Model', description: 'Model name as the server reports it (GET /v1/models). llama.cpp serves one model and ignores this.', isSecret: false, placeholder: 'local-model' },
+      { key: 'local.apiKey', label: 'Local Server API Key', description: 'Optional — only if your server requires a bearer token', isSecret: true, placeholder: 'leave empty for LM Studio / llama.cpp' },
+      { key: 'local.supportsVision', label: 'Local Model Supports Images', description: 'Turn on only when a vision model is loaded (Qwen2-VL, LLaVA, …). Off means photo logging returns nothing.', isSecret: false, placeholder: '', type: 'toggle' },
+      { key: 'local.timeoutSeconds', label: 'Local Request Timeout (seconds)', description: 'Local models are slow on CPU — raise this if long requests get cut off', isSecret: false, placeholder: '300' },
+    ],
+  },
 ];
 
 /**
@@ -51,6 +94,9 @@ const isSaving = ref(false);
 const isLoading = ref(false);
 const savedMessage = ref('');
 const showSecrets = ref<Record<string, boolean>>({});
+
+/** Claude is what the API falls back to when the row is unset, so the page has to agree. */
+const activeProvider = computed(() => values.value['ai.provider'] ?? 'claude');
 
 async function fetchSettings() {
   isLoading.value = true;
@@ -127,7 +173,7 @@ onMounted(fetchSettings);
         <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-3">
           <h2 class="font-semibold text-gray-900 dark:text-gray-100">AI Provider</h2>
           <p class="text-xs text-gray-500 dark:text-gray-400">
-            Select the active provider. Configure its API key below.
+            Select the active provider, then configure it in its own section below.
             To bootstrap your first admin account: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">UPDATE users SET is_admin=1 WHERE email='you@example.com';</code>
           </p>
           <div class="grid grid-cols-2 gap-2">
@@ -136,7 +182,7 @@ onMounted(fetchSettings);
               :key="p.value"
               :class="[
                 'text-left px-3 py-2.5 rounded-xl border-2 transition-colors',
-                (values['ai.provider'] ?? 'claude') === p.value
+                activeProvider === p.value
                   ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                   : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
               ]"
@@ -148,10 +194,41 @@ onMounted(fetchSettings);
           </div>
         </div>
 
-        <!-- API key fields -->
-        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
-          <h2 class="font-semibold text-gray-900 dark:text-gray-100">Keys & Configuration</h2>
-          <div v-for="field in KNOWN_SETTINGS" :key="field.key" class="space-y-1">
+        <!-- One section per provider, so a model's settings are read together rather than
+             picked out of a single column by key prefix. The active one is marked: every
+             other section is configuration for a provider that is not currently answering. -->
+        <div
+          v-for="p in AI_PROVIDERS"
+          :key="p.value"
+          :class="[
+            'bg-white dark:bg-gray-900 border rounded-xl p-5 space-y-4',
+            activeProvider === p.value
+              ? 'border-green-500 dark:border-green-600'
+              : 'border-gray-200 dark:border-gray-700',
+          ]"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-gray-900 dark:text-gray-100">{{ p.label }}</h2>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ p.description }}</p>
+            </div>
+            <span
+              v-if="activeProvider === p.value"
+              class="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            >
+              Active
+            </span>
+            <button
+              v-else
+              type="button"
+              class="shrink-0 rounded-full border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-green-400 hover:text-green-700 dark:border-gray-700 dark:text-gray-400 dark:hover:border-green-600 dark:hover:text-green-400"
+              @click="values['ai.provider'] = p.value"
+            >
+              Use this
+            </button>
+          </div>
+
+          <div v-for="field in p.fields" :key="field.key" class="space-y-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ field.label }}
               <span v-if="field.isSecret" class="ml-1 text-xs text-gray-400">(secret)</span>
