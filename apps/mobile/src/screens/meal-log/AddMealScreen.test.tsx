@@ -130,16 +130,37 @@ describe('AddMealScreen', () => {
     expect(screen.getByText('13g')).toBeTruthy();
   });
 
-  it('the amount buttons move by half a serving, and the totals follow', async () => {
+  it('the amount buttons move by one step, and the totals follow', async () => {
     searchMock.mockResolvedValue([food()]);
     renderScreen();
     await searchFor('oats');
     fireEvent.press(screen.getByText('Rolled oats'));
 
+    // A food measured in grams steps by 25, so 100g becomes 125g and 380 kcal becomes 475.
     fireEvent.press(screen.getByLabelText('More Rolled oats'));
 
-    expect(screen.getByText('150')).toBeTruthy();
-    expect(screen.getByText('570')).toBeTruthy();
+    expect(screen.getByDisplayValue('125')).toBeTruthy();
+    expect(screen.getByText('475')).toBeTruthy();
+  });
+
+  /**
+   * The stepper's floor is one step, so anything below it can only be reached by typing.
+   * A loaf scanned as 10 slices per container used to step by 5 and refuse to go under it,
+   * which left a two-slice sandwich impossible to log as anything but a third of a loaf.
+   */
+  it('takes an amount typed straight into the row', async () => {
+    searchMock.mockResolvedValue([food({ name: 'White loaf', servingSize: 10, servingUnit: 'slice' })]);
+    renderScreen();
+    await searchFor('loaf');
+    fireEvent.press(screen.getByText('White loaf'));
+
+    const amount = screen.getByLabelText('Amount of White loaf in slice');
+    fireEvent.changeText(amount, '2');
+    fireEvent(amount, 'blur');
+
+    expect(screen.getByDisplayValue('2')).toBeTruthy();
+    // Two slices of ten, so a fifth of the label's 380 kcal.
+    expect(screen.getByText('76')).toBeTruthy();
   });
 
   it('removing the last food empties the meal again', async () => {
@@ -214,7 +235,7 @@ describe('AddMealScreen', () => {
     });
 
     expect(screen.getByText('Selected (1)')).toBeTruthy();
-    expect(screen.getByText('250')).toBeTruthy();
+    expect(screen.getByDisplayValue('250')).toBeTruthy();
   });
 
   it('fills in from a photo scan rather than clearing what is there', async () => {

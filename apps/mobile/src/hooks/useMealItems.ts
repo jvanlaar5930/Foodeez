@@ -20,11 +20,25 @@ export interface MealTotals {
 /**
  * How much the +/- buttons move by, in the food's own unit.
  *
- * Half a serving where the serving is a countable thing, and never below half a unit, so a
- * food measured in grams still moves in usable steps rather than 0.005 of a serving.
+ * Grams and millilitres come in quantities where a half is meaningless, so they step by 25.
+ * Everything else is counted in servings, where a half is the useful increment. This is the
+ * web client's rule; mobile used to derive the step from the serving size instead, which made
+ * the step as big as whatever a label happened to say. A loaf scanned as 10 slices per
+ * container got a step of 5, and since the step is also the floor, the only amounts reachable
+ * were 5, 10, 15 - two slices could not be logged at all.
  */
 export function stepFor(item: FoodItemDto): number {
-  return item.servingSize > 0 ? Math.max(item.servingSize / 2, 0.5) : 0.5;
+  switch (item.servingUnit?.toLowerCase()) {
+    case 'g':
+    case 'gram':
+    case 'grams':
+    case 'ml':
+    case 'milliliter':
+    case 'milliliters':
+      return 25;
+    default:
+      return 0.5;
+  }
 }
 
 /**
@@ -65,7 +79,14 @@ export interface UseMealItems {
   toggle: (foodItem: FoodItemDto) => void;
   /** Adds or replaces a line by food id. What quick add and the photo scanner hand over. */
   put: (entries: MealItem[]) => void;
+  /** Moves one line by a step, never below one step. */
   adjust: (foodItemId: string, delta: number) => void;
+  /**
+   * Sets one line to an amount outright, which is the only way to reach one the steps do not
+   * land on - two slices of a loaf whose label counts in tens. Anything that is not a positive
+   * number is ignored, leaving the line as it was.
+   */
+  setQuantity: (foodItemId: string, quantity: number) => void;
   remove: (foodItemId: string) => void;
   has: (foodItemId: string) => boolean;
   /** Replaces the list without counting as an edit - opening the screen on a saved meal. */
@@ -126,6 +147,17 @@ export function useMealItems(initial: MealItem[] = []): UseMealItems {
     );
   }, []);
 
+  const setQuantity = useCallback((foodItemId: string, quantity: number) => {
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
+
+    setEdited(true);
+    setItems((prev) =>
+      prev.map((entry) =>
+        entry.foodItem.id === foodItemId ? { ...entry, quantity } : entry,
+      ),
+    );
+  }, []);
+
   const remove = useCallback((foodItemId: string) => {
     setEdited(true);
     setItems((prev) => prev.filter((entry) => entry.foodItem.id !== foodItemId));
@@ -159,5 +191,5 @@ export function useMealItems(initial: MealItem[] = []): UseMealItems {
     [items],
   );
 
-  return { items, totals, edited, toggle, put, adjust, remove, has, reset, markEdited };
+  return { items, totals, edited, toggle, put, adjust, setQuantity, remove, has, reset, markEdited };
 }

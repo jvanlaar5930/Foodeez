@@ -38,13 +38,24 @@ describe('servingsOf', () => {
 });
 
 describe('stepFor', () => {
-  it('is half a serving for a food that has one', () => {
-    expect(stepFor(food({ servingSize: 30 }))).toBe(15);
+  it('moves grams and millilitres by 25, where a half is meaningless', () => {
+    expect(stepFor(food({ servingUnit: 'g' }))).toBe(25);
+    expect(stepFor(food({ servingUnit: 'ml' }))).toBe(25);
+    expect(stepFor(food({ servingUnit: 'Grams' }))).toBe(25);
   });
 
-  it('never drops below half a unit, however small the serving', () => {
-    expect(stepFor(food({ servingSize: 0.4 }))).toBe(0.5);
-    expect(stepFor(food({ servingSize: 0 }))).toBe(0.5);
+  it('moves anything counted in servings by a half', () => {
+    expect(stepFor(food({ servingUnit: 'slice' }))).toBe(0.5);
+    expect(stepFor(food({ servingUnit: 'cup' }))).toBe(0.5);
+  });
+
+  /**
+   * The step used to be half the serving size, and the step is also the floor. A loaf scanned
+   * as 10 slices per container therefore stepped by 5 and could not go below 5, so a sandwich
+   * made from 2 slices had to be logged as a third of a loaf.
+   */
+  it('does not grow with the serving size a label happens to state', () => {
+    expect(stepFor(food({ servingSize: 10, servingUnit: 'slice' }))).toBe(0.5);
   });
 });
 
@@ -102,18 +113,52 @@ describe('useMealItems', () => {
 
     act(() => result.current.adjust('food-1', -1000));
 
-    expect(result.current.items[0].quantity).toBe(50);
+    expect(result.current.items[0].quantity).toBe(25);
   });
 
   it('fractional steps do not drift into floating-point noise', () => {
     const { result } = renderHook(() => useMealItems());
-    act(() => result.current.toggle(food({ servingSize: 1 })));
+    act(() => result.current.toggle(food({ servingSize: 1, servingUnit: 'slice' })));
 
     for (let i = 0; i < 6; i += 1) {
       act(() => result.current.adjust('food-1', 0.1));
     }
 
     expect(result.current.items[0].quantity).toBe(1.6);
+  });
+
+  /**
+   * The stepper's floor is one step, so an amount below it is only reachable by typing it -
+   * 2 slices of a loaf, 10 g of something the buttons move 25 at a time.
+   */
+  it('takes an amount outright, below what the steps can reach', () => {
+    const { result } = renderHook(() => useMealItems());
+    act(() => result.current.toggle(food({ servingSize: 10, servingUnit: 'slice' })));
+
+    act(() => result.current.setQuantity('food-1', 2));
+
+    expect(result.current.items[0].quantity).toBe(2);
+  });
+
+  it('ignores an amount that is not a positive number, leaving the line alone', () => {
+    const { result } = renderHook(() => useMealItems());
+    act(() => result.current.toggle(food()));
+
+    // What a half-typed or cleared field parses to.
+    act(() => result.current.setQuantity('food-1', Number.NaN));
+    act(() => result.current.setQuantity('food-1', 0));
+    act(() => result.current.setQuantity('food-1', -5));
+
+    expect(result.current.items[0].quantity).toBe(100);
+  });
+
+  it('counts a typed amount as an edit, so a stale score is retired', () => {
+    const { result } = renderHook(() => useMealItems());
+    act(() => result.current.reset([{ foodItem: food(), quantity: 100 }]));
+
+    act(() => result.current.setQuantity('food-1', 40));
+
+    expect(result.current.edited).toBe(true);
   });
 
   it('totals every macro in one pass', () => {

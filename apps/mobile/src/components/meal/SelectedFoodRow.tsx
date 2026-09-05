@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
@@ -9,6 +9,7 @@ import type { QuickAddSource } from '@/types';
 interface SelectedFoodRowProps {
   entry: MealItem;
   onAdjust: (foodItemId: string, delta: number) => void;
+  onSetQuantity: (foodItemId: string, quantity: number) => void;
   onRemove: (foodItemId: string) => void;
 }
 
@@ -33,6 +34,7 @@ const SOURCE_LABELS: Partial<Record<QuickAddSource, string>> = {
 export const SelectedFoodRow = React.memo(function SelectedFoodRow({
   entry,
   onAdjust,
+  onSetQuantity,
   onRemove,
 }: SelectedFoodRowProps) {
   const C = useTheme();
@@ -41,6 +43,19 @@ export const SelectedFoodRow = React.memo(function SelectedFoodRow({
   const step = stepFor(entry.foodItem);
   const calories = Math.round(nutritionOf(entry).calories);
   const sourceLabel = entry.source ? SOURCE_LABELS[entry.source] : undefined;
+
+  /**
+   * What is being typed, while it is being typed. The field cannot be driven straight from
+   * the quantity: half-finished input like "" or "2." is not a number, and parsing on every
+   * keystroke would snap the box back to the old value mid-edit. Null means nothing is being
+   * typed, so the quantity itself shows - which is what keeps +/- in sync with the box.
+   */
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commitDraft = () => {
+    if (draft !== null) onSetQuantity(entry.foodItem.id, parseFloat(draft));
+    setDraft(null);
+  };
 
   return (
     <View style={styles.row}>
@@ -67,7 +82,17 @@ export const SelectedFoodRow = React.memo(function SelectedFoodRow({
         >
           <Text style={styles.stepText}>-</Text>
         </TouchableOpacity>
-        <Text style={styles.value}>{entry.quantity}</Text>
+        <TextInput
+          value={draft ?? String(entry.quantity)}
+          onChangeText={setDraft}
+          onBlur={commitDraft}
+          onSubmitEditing={commitDraft}
+          keyboardType="decimal-pad"
+          returnKeyType="done"
+          selectTextOnFocus
+          style={styles.value}
+          accessibilityLabel={`Amount of ${entry.foodItem.name} in ${entry.foodItem.servingUnit}`}
+        />
         <TouchableOpacity
           onPress={() => onAdjust(entry.foodItem.id, step)}
           style={styles.stepButton}
@@ -76,6 +101,11 @@ export const SelectedFoodRow = React.memo(function SelectedFoodRow({
         >
           <Text style={styles.stepText}>+</Text>
         </TouchableOpacity>
+        {/* Two of what? The amount is in the food's own unit, and a scanned label picks that
+            unit itself - so it has to be on screen next to the number. */}
+        <Text style={styles.unit} numberOfLines={1}>
+          {entry.foodItem.servingUnit}
+        </Text>
       </View>
 
       <TouchableOpacity
@@ -127,6 +157,17 @@ const makeStyles = (C: Palette) =>
       justifyContent: 'center',
     },
     stepText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: C.text },
-    value: { minWidth: 44, textAlign: 'center', fontSize: FontSize.sm, color: C.text },
+    // Reads as a field rather than a label: it is one now, and nothing else would say so.
+    value: {
+      minWidth: 48,
+      textAlign: 'center',
+      fontSize: FontSize.sm,
+      color: C.text,
+      backgroundColor: C.surfaceAlt,
+      borderRadius: BorderRadius.sm,
+      paddingVertical: 3,
+      paddingHorizontal: 4,
+    },
+    unit: { maxWidth: 56, fontSize: FontSize.xs, color: C.textSecondary },
     remove: { paddingLeft: Spacing.xs },
   });

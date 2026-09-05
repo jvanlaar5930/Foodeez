@@ -133,6 +133,15 @@ export function AddMealScreen({ navigation, route }: Props) {
     [meal.adjust],
   );
 
+  const setQuantity = useCallback(
+    (foodItemId: string, quantity: number) => {
+      meal.setQuantity(foodItemId, quantity);
+      analysis.invalidate();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [meal.setQuantity],
+  );
+
   const removeItem = useCallback(
     (foodItemId: string) => {
       meal.remove(foodItemId);
@@ -289,6 +298,7 @@ export function AddMealScreen({ navigation, route }: Props) {
                   key={entry.foodItem.id}
                   entry={entry}
                   onAdjust={adjustQuantity}
+                  onSetQuantity={setQuantity}
                   onRemove={removeItem}
                 />
               ))}
