@@ -9,7 +9,6 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   addDays,
@@ -127,7 +126,10 @@ export function MealPlanScreen({ navigation }: Props) {
   const hasEntriesThisWeek = weekDays.some(d => getEntriesForDay(d).length > 0 || dayHasLoggedMeal(d));
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    // A plain View, not a SafeAreaView: this screen sits under the stack's "Meal Plan"
+    // header, which has already taken the status bar's height out. Insetting again put a
+    // band of background between the header and the week picker.
+    <View style={styles.container}>
       {/* Week navigation */}
       <View style={styles.weekHeader}>
         <TouchableOpacity onPress={() => setWeekStart(d => addDays(d, -7))}>
@@ -285,7 +287,7 @@ export function MealPlanScreen({ navigation }: Props) {
           Mention last week and the plan you already have is used as the reference.
         </Text>
       </ModalSheet>
-    </SafeAreaView>
+    </View>
   );
 }
 

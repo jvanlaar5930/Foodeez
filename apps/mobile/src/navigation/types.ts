@@ -14,13 +14,18 @@ export type AuthStackParamList = {
 };
 
 export type MainTabParamList = {
-  Dashboard: undefined;
+  Dashboard: NavigatorScreenParams<DashboardStackParamList> | undefined;
   MealLog: NavigatorScreenParams<MealLogStackParamList> | undefined;
   MealPlan: undefined;
   Grocery: undefined;
   Advice: undefined;
   Recipes: NavigatorScreenParams<RecipesStackParamList> | undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
+};
+
+export type DashboardStackParamList = {
+  DashboardHome: undefined;
+  Reports: undefined;
 };
 
 export type ProfileStackParamList = {

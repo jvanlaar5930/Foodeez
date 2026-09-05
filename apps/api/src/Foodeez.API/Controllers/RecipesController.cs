@@ -21,18 +21,27 @@ public class RecipesController : FoodeezController
     private readonly AutocompleteRecipesUseCase _autocompleteUseCase;
     private readonly GetRecipeDetailUseCase _detailUseCase;
     private readonly SavedRecipesUseCase _savedUseCase;
+    private readonly RecipeFilterTagsUseCase _filterTagsUseCase;
 
     public RecipesController(
         SearchRecipesUseCase searchUseCase,
         AutocompleteRecipesUseCase autocompleteUseCase,
         GetRecipeDetailUseCase detailUseCase,
-        SavedRecipesUseCase savedUseCase)
+        SavedRecipesUseCase savedUseCase,
+        RecipeFilterTagsUseCase filterTagsUseCase)
     {
         _searchUseCase = searchUseCase;
         _autocompleteUseCase = autocompleteUseCase;
         _detailUseCase = detailUseCase;
         _savedUseCase = savedUseCase;
+        _filterTagsUseCase = filterTagsUseCase;
     }
+
+    /// <summary>The filter pills the clients show above their results, in the admin's order.</summary>
+    [HttpGet("filter-tags")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFilterTags() => Ok(await _filterTagsUseCase.ExecuteAsync());
 
     /// <summary>Search-as-you-type recipe name suggestions.</summary>
     [HttpGet("autocomplete")]

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FontSize, Shadows } from '@/constants/theme';
 import { useTheme } from '@/theme';
 import { DashboardScreen } from '@/screens/dashboard/DashboardScreen';
+import { ReportsScreen } from '@/screens/reports/ReportsScreen';
 import { MealLogScreen } from '@/screens/meal-log/MealLogScreen';
 import { AddMealScreen } from '@/screens/meal-log/AddMealScreen';
 import { FoodScanScreen } from '@/screens/meal-log/FoodScanScreen';
@@ -16,6 +17,7 @@ import { RecipeDetailScreen } from '@/screens/recipes/RecipeDetailScreen';
 import { ProfileScreen } from '@/screens/profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/profile/EditProfileScreen';
 import type {
+  DashboardStackParamList,
   MainTabParamList,
   MealLogStackParamList,
   MealPlanStackParamList,
@@ -28,6 +30,31 @@ const MealLogStack = createNativeStackNavigator<MealLogStackParamList>();
 const MealPlanStack = createNativeStackNavigator<MealPlanStackParamList>();
 const RecipesStack = createNativeStackNavigator<RecipesStackParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+const DashboardStack = createNativeStackNavigator<DashboardStackParamList>();
+
+function DashboardNavigator() {
+  const C = useTheme();
+  return (
+    <DashboardStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: C.surface },
+        headerTintColor: C.text,
+        headerTitleStyle: { fontWeight: '600', fontSize: FontSize.lg },
+      }}
+    >
+      <DashboardStack.Screen
+        name="DashboardHome"
+        component={DashboardScreen}
+        options={{ headerShown: false }}
+      />
+      <DashboardStack.Screen
+        name="Reports"
+        component={ReportsScreen}
+        options={{ title: 'Reports' }}
+      />
+    </DashboardStack.Navigator>
+  );
+}
 
 function ProfileNavigator() {
   const C = useTheme();
@@ -175,7 +202,7 @@ export function MainTabNavigator() {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
+      <Tab.Screen name="Dashboard" component={DashboardNavigator} options={{ title: 'Dashboard' }} />
       <Tab.Screen name="MealLog" component={MealLogNavigator} options={{ title: 'Meal Log' }} />
       <Tab.Screen name="MealPlan" component={MealPlanNavigator} options={{ title: 'Meal Plan' }} />
       <Tab.Screen name="Grocery" component={GroceryScreen} options={{ title: 'Grocery' }} />

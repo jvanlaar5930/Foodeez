@@ -10,7 +10,7 @@
 
       <!-- Tag filters -->
       <div class="flex flex-wrap gap-2 mb-6">
-        <button v-for="tag in FILTER_TAGS" :key="tag" type="button"
+        <button v-for="tag in filterTags" :key="tag" type="button"
           class="px-3 py-1.5 rounded-full border text-sm font-medium transition-colors"
           :class="activeTags.has(tag)
             ? 'bg-green-600 border-green-600 text-white'
@@ -102,6 +102,7 @@ import RecipeDetailModal from '@/components/recipe/RecipeDetailModal.vue';
 import AddToMealPlanModal from '@/components/mealplan/AddToMealPlanModal.vue';
 import { usePagedRecipes } from '@/composables/usePagedRecipes';
 import { useRecipeDetail } from '@/composables/useRecipeDetail';
+import { useRecipeFilterTags } from '@/composables/useRecipeFilterTags';
 import type { RecipeSuggestion } from '@/services/recipeService';
 import type { Recipe } from '@foodeez/shared';
 
@@ -133,7 +134,8 @@ const {
   close: closeDetail,
 } = useRecipeDetail();
 
-const FILTER_TAGS = ['Vegetarian', 'Vegan', 'High-Protein', 'Low-Carb', 'Quick', 'Gluten-Free', 'Dairy-Free'];
+// Administrator-managed, so this is a ref rather than a constant.
+const { filterTags } = useRecipeFilterTags();
 
 // Tag filter applied client-side on top of server results
 const filteredRecipes = computed(() => {

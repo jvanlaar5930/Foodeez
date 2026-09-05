@@ -18,6 +18,7 @@ public class MealLogsController : FoodeezController
     private readonly GetDailyLogsUseCase _getDailyLogsUseCase;
     private readonly GetMealLogsRangeUseCase _getMealLogsRangeUseCase;
     private readonly GetNutritionSummaryUseCase _getNutritionSummaryUseCase;
+    private readonly GetNutritionReportUseCase _getNutritionReportUseCase;
     private readonly UpdateMealLogUseCase _updateMealLogUseCase;
     private readonly DeleteMealLogUseCase _deleteMealLogUseCase;
     private readonly AnalyzeMealLogUseCase _analyzeMealLogUseCase;
@@ -30,6 +31,7 @@ public class MealLogsController : FoodeezController
         GetDailyLogsUseCase getDailyLogsUseCase,
         GetMealLogsRangeUseCase getMealLogsRangeUseCase,
         GetNutritionSummaryUseCase getNutritionSummaryUseCase,
+        GetNutritionReportUseCase getNutritionReportUseCase,
         UpdateMealLogUseCase updateMealLogUseCase,
         DeleteMealLogUseCase deleteMealLogUseCase,
         AnalyzeMealLogUseCase analyzeMealLogUseCase,
@@ -41,6 +43,7 @@ public class MealLogsController : FoodeezController
         _getDailyLogsUseCase = getDailyLogsUseCase;
         _getMealLogsRangeUseCase = getMealLogsRangeUseCase;
         _getNutritionSummaryUseCase = getNutritionSummaryUseCase;
+        _getNutritionReportUseCase = getNutritionReportUseCase;
         _updateMealLogUseCase = updateMealLogUseCase;
         _deleteMealLogUseCase = deleteMealLogUseCase;
         _analyzeMealLogUseCase = analyzeMealLogUseCase;
@@ -219,6 +222,21 @@ public class MealLogsController : FoodeezController
     {
         await ServerSentEventStream.WriteAsync(
             Response, _analyzeDayUseCase.ExecuteStreamAsync(UserId, date, refresh, ct), ct);
+    }
+
+    /// <summary>
+    /// A date range added up for the reporting screens: per day, per meal type, per food, and
+    /// against the user's targets. One request rather than a page of meals to total client-side.
+    /// </summary>
+    [HttpGet("report")]
+    [ProducesResponseType(typeof(NutritionReportDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetNutritionReport(
+        [FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
+    {
+        // A backwards or over-long range throws InvalidOperationException, which
+        // ExceptionHandlingMiddleware maps to a 400 carrying the reason.
+        return Ok(await _getNutritionReportUseCase.ExecuteAsync(UserId, startDate, endDate));
     }
 
     /// <summary>Get the signed-in user's nutritional summary for a date, including progress toward targets.</summary>

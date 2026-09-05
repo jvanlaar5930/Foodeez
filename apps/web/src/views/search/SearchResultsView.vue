@@ -11,6 +11,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { useAuthStore } from '@/stores/auth';
 import { usePagedRecipes } from '@/composables/usePagedRecipes';
 import { useRecipeDetail } from '@/composables/useRecipeDetail';
+import { useRecipeFilterTags } from '@/composables/useRecipeFilterTags';
 import type { RecipeSuggestion } from '@/services/recipeService';
 import type { Recipe } from '@foodeez/shared';
 
@@ -18,15 +19,8 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-const FILTER_TAGS = [
-  'Vegetarian',
-  'Vegan',
-  'High-Protein',
-  'Low-Carb',
-  'Quick',
-  'Gluten-Free',
-  'Dairy-Free',
-];
+// Administrator-managed, so this is a ref rather than a constant.
+const { filterTags } = useRecipeFilterTags();
 
 const SORTS = [
   { value: 'relevance', label: 'Best match' },
@@ -98,7 +92,7 @@ const filteredRecipes = computed(() => {
 
 /** Tags that at least one result carries — no point offering a filter that empties the page. */
 const availableTags = computed(() =>
-  FILTER_TAGS.filter(
+  filterTags.value.filter(
     (tag) =>
       activeTags.value.has(tag) ||
       recipes.value.some((r) => r.tags?.toLowerCase().includes(tag.toLowerCase()))

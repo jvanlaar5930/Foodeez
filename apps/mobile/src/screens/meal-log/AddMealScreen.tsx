@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { CustomFoodModal } from '@/components/meal/CustomFoodModal';
@@ -247,7 +246,10 @@ export function AddMealScreen({ navigation, route }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    // A plain View, not a SafeAreaView: the tab bar below this screen already sits on the
+    // home indicator's inset, so insetting here as well left the save button floating a
+    // gesture bar's height above the navigation.
+    <View style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -354,7 +356,7 @@ export function AddMealScreen({ navigation, route }: Props) {
           search.clear();
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

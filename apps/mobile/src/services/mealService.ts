@@ -1,6 +1,12 @@
 import { api } from './api';
 import { AI_REQUEST_TIMEOUT } from '@/constants/api';
-import type { LogMealRequest, MealLogDto, NutritionSummaryDto, QuickAddResultDto } from '@/types';
+import type {
+  LogMealRequest,
+  MealLogDto,
+  NutritionReport,
+  NutritionSummaryDto,
+  QuickAddResultDto,
+} from '@/types';
 
 export const mealService = {
   async logMeal(data: LogMealRequest): Promise<MealLogDto> {
@@ -31,6 +37,17 @@ export const mealService = {
   async getNutritionSummary(userId: string, date: string): Promise<NutritionSummaryDto> {
     const response = await api.get<NutritionSummaryDto>('/meal-logs/nutrition-summary', {
       params: { userId, date },
+    });
+    return response.data;
+  },
+
+  /**
+   * A date range added up server-side for the reports screen. Both ends are inclusive and
+   * the API caps the span at a year.
+   */
+  async getReport(startDate: string, endDate: string): Promise<NutritionReport> {
+    const response = await api.get<NutritionReport>('/meal-logs/report', {
+      params: { startDate, endDate },
     });
     return response.data;
   },

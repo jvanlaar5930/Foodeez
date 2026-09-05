@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { adminService } from '@/services/adminService';
+import { recipeService } from '@/services/recipeService';
 import AppLayout from '@/components/layout/AppLayout.vue';
 
 interface SettingField {
@@ -35,6 +36,16 @@ const AI_PROVIDERS = [
   { value: 'local', label: 'Local Server (OpenAI-compatible)', description: 'LM Studio, llama.cpp, vLLM, LocalAI, Jan — point it at any URL' },
 ];
 
+/**
+ * The recipe filter pills, held as a list here and written to one settings row as a JSON
+ * array. Both apps read it from `GET /recipes/filter-tags`, which falls back to the built-in
+ * list while the row is unset - so an empty list has to be stored as `[]` rather than as an
+ * empty string, which would read as "never configured" and bring the defaults back.
+ */
+const RECIPE_FILTER_TAGS_KEY = 'recipes.filterTags';
+const filterTags = ref<string[]>([]);
+const newTag = ref('');
+
 const values = ref<Record<string, string>>({});
 const isSaving = ref(false);
 const isLoading = ref(false);
@@ -44,18 +55,42 @@ const showSecrets = ref<Record<string, boolean>>({});
 async function fetchSettings() {
   isLoading.value = true;
   try {
-    const settings = await adminService.getSettings();
+    const [settings, tags] = await Promise.all([
+      adminService.getSettings(),
+      // The effective list, defaults included, rather than the raw row - which is absent
+      // until somebody saves one.
+      recipeService.getFilterTags(),
+    ]);
     for (const s of settings) {
       values.value[s.key] = s.value;
     }
+    filterTags.value = tags;
   } finally {
     isLoading.value = false;
   }
 }
 
+function addTag() {
+  const tag = newTag.value.trim();
+  newTag.value = '';
+  if (!tag) return;
+
+  // Pills are matched against recipe tags case-insensitively, so "Vegan" and "vegan" would
+  // be two pills that filter identically.
+  if (filterTags.value.some((existing) => existing.toLowerCase() === tag.toLowerCase())) return;
+
+  filterTags.value = [...filterTags.value, tag];
+}
+
+function removeTag(tag: string) {
+  filterTags.value = filterTags.value.filter((existing) => existing !== tag);
+}
+
 async function save() {
   isSaving.value = true;
   try {
+    values.value[RECIPE_FILTER_TAGS_KEY] = JSON.stringify(filterTags.value);
+
     const pairs = Object.entries(values.value)
       .filter(([, v]) => v !== undefined && v !== '')
       .map(([key, value]) => ({ key, value }));
@@ -155,6 +190,54 @@ onMounted(fetchSettings);
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Recipe filter pills -->
+        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-3">
+          <h2 class="font-semibold text-gray-900 dark:text-gray-100">Recipe Filter Pills</h2>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            The quick filters above recipe results on the web and on the Recipes tab in the app.
+            Each one is matched against a recipe's own tags, so a pill only finds recipes already
+            tagged with that word. Saved with the button at the bottom of this page.
+          </p>
+
+          <div v-if="filterTags.length" class="flex flex-wrap gap-2">
+            <span
+              v-for="tag in filterTags"
+              :key="tag"
+              class="inline-flex items-center gap-1 rounded-full border border-gray-300 py-1 pl-3 pr-1 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300"
+            >
+              {{ tag }}
+              <button
+                type="button"
+                :aria-label="`Remove ${tag}`"
+                class="flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                @click="removeTag(tag)"
+              >
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </span>
+          </div>
+          <p v-else class="text-xs text-amber-600 dark:text-amber-400">
+            No pills. Both apps will show recipe results with no filter row at all.
+          </p>
+
+          <form class="flex gap-2" @submit.prevent="addTag">
+            <input
+              v-model="newTag"
+              placeholder="Add a filter — e.g. Keto"
+              class="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+            <button
+              type="submit"
+              :disabled="!newTag.trim()"
+              class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-green-400 hover:text-green-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:border-green-600 dark:hover:text-green-400"
+            >
+              Add
+            </button>
+          </form>
         </div>
 
         <button
