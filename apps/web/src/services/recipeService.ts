@@ -1,5 +1,5 @@
 import api from './api';
-import type { Recipe } from '@foodeez/shared';
+import { DEFAULT_RECIPE_FILTER_TAGS, type Recipe } from '@foodeez/shared';
 
 /** One page of results plus what the client needs to decide whether to ask for another. */
 export interface PagedRecipes {
@@ -78,6 +78,22 @@ export const recipeService = {
       params: { q: query, page, pageSize },
     });
     return toPage(response.data, page, pageSize);
+  },
+
+  /**
+   * The filter pills, as an administrator has arranged them. An empty array is a real
+   * answer - the pills switched off - so only a failure falls back to the built-in list;
+   * showing no filters because a request timed out would look like a broken page.
+   */
+  async getFilterTags(): Promise<string[]> {
+    try {
+      const response = await api.get<unknown>('/recipes/filter-tags');
+      if (!Array.isArray(response.data)) return [...DEFAULT_RECIPE_FILTER_TAGS];
+
+      return response.data.filter((tag): tag is string => typeof tag === 'string' && tag.trim() !== '');
+    } catch {
+      return [...DEFAULT_RECIPE_FILTER_TAGS];
+    }
   },
 
   async autocomplete(query: string, signal?: AbortSignal): Promise<RecipeSuggestion[]> {

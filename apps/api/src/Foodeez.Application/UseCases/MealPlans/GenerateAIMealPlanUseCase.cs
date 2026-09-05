@@ -15,20 +15,17 @@ namespace Foodeez.Application.UseCases.MealPlans;
 public class GenerateAIMealPlanUseCase
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IAIService _aiService;
     private readonly IStreamingAIService _streaming;
     private readonly PlannedMealReader _plannedMeals;
     private readonly ILogger<GenerateAIMealPlanUseCase> _logger;
 
     public GenerateAIMealPlanUseCase(
         IUnitOfWork unitOfWork,
-        IAIService aiService,
         IStreamingAIService streaming,
         PlannedMealReader plannedMeals,
         ILogger<GenerateAIMealPlanUseCase> logger)
     {
         _unitOfWork = unitOfWork;
-        _aiService = aiService;
         _streaming = streaming;
         _plannedMeals = plannedMeals;
         _logger = logger;
@@ -39,16 +36,32 @@ public class GenerateAIMealPlanUseCase
         var profileDto = await LoadProfileAsync(request.UserId);
         await AttachPreviousPeriodAsync(request);
 
-        var generated = await _aiService.GenerateMealPlanAsync(
-            WithProfileExclusions(request, profileDto), profileDto, ct);
+        // Built from MealPlanPrompt, exactly as the streaming path below does, rather than
+        // delegated to each provider's own prompt builder. Only Claude's mentioned
+        // ExcludeIngredients, so on every other provider this path planned meals around foods
+        // the user had told us they cannot eat; the per-provider parsers also dropped
+        // ingredients and instructions. One prompt and one parser means one behaviour.
+        var transcript = new StringBuilder();
+        await foreach (var chunk in _streaming.StreamAsync(BuildPrompt(request, profileDto), ct))
+        {
+            transcript.Append(chunk);
+        }
+
+        var generated = MealPlanPrompt.Parse(transcript.ToString());
 
         // Providers swallow their own transport errors and hand back an empty result, so an
         // outage arrives here looking exactly like a plan with no days in it. Saving that
         // would hand the user a persisted, permanently blank week and report success -
         // refusing is the only honest answer, and it leaves nothing to clean up.
         if (generated.Days.Count == 0)
+        {
+            _logger.LogWarning(
+                "AI meal plan produced no usable days. Raw response ({Length} chars): {Response}",
+                transcript.Length, Truncate(transcript.ToString(), 4000));
+
             throw new AIGenerationFailedException(
                 "The AI service could not produce a meal plan right now. Please try again in a moment.");
+        }
 
         return await PersistAsync(request, generated);
     }
@@ -66,7 +79,7 @@ public class GenerateAIMealPlanUseCase
 
         var transcript = new StringBuilder();
         await foreach (var delta in AINarration.NarrateAsync(
-            _streaming, MealPlanPrompt.Build(WithProfileExclusions(request, profileDto), profileDto), transcript, ct))
+            _streaming, BuildPrompt(request, profileDto), transcript, ct))
         {
             yield return AIStreamEvent.Delta(delta);
         }
@@ -90,6 +103,14 @@ public class GenerateAIMealPlanUseCase
 
         yield return AIStreamEvent.Result(await PersistAsync(request, generated));
     }
+
+    /// <summary>
+    /// The one prompt both paths use. Exclusions are folded in here so that no route to the
+    /// model can lose them - a food someone is allergic to must not depend on which endpoint
+    /// the client happened to call.
+    /// </summary>
+    private static string BuildPrompt(GenerateMealPlanRequest request, UserProfileDto profile) =>
+        MealPlanPrompt.Build(WithProfileExclusions(request, profile), profile);
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..max] + "…";
@@ -122,24 +143,7 @@ public class GenerateAIMealPlanUseCase
         if (user.Profile == null)
             throw new InvalidOperationException("User profile must be completed before generating a meal plan.");
 
-        return new UserProfileDto
-        {
-            UserId = user.Profile.UserId,
-            HeightCm = user.Profile.HeightCm,
-            WeightKg = user.Profile.WeightKg,
-            TargetWeightKg = user.Profile.TargetWeightKg,
-            Age = user.Profile.Age,
-            Gender = user.Profile.Gender,
-            ActivityLevel = user.Profile.ActivityLevel,
-            DietaryGoal = user.Profile.DietaryGoal,
-            DailyCalorieTarget = user.Profile.DailyCalorieTarget,
-            DailyProteinTargetG = user.Profile.DailyProteinTargetG,
-            DailyCarbTargetG = user.Profile.DailyCarbTargetG,
-            DailyFatTargetG = user.Profile.DailyFatTargetG,
-            Notes = user.Profile.Notes,
-            ExcludedFoods = user.Profile.ExcludedFoods.ToList(),
-            ProfileCompleted = user.Profile.ProfileCompleted
-        };
+        return UserProfileMapper.ToDto(user.Profile);
     }
 
     /// <summary>
@@ -227,9 +231,10 @@ public class GenerateAIMealPlanUseCase
             IsAIGenerated = true
         };
 
-        // One recipe per distinct dish across the whole week: a plan that repeats the same
-        // breakfast five times should leave one recipe behind, not five identical ones.
-        var recipes = new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase);
+        // One recipe per distinct dish across the whole week, reusing the rows this person
+        // already has: a plan that repeats the same breakfast five times should leave one
+        // recipe behind, not five identical ones, and regenerating a week should leave none.
+        var recipes = await LoadReusableRecipesAsync(request.UserId, generated);
 
         // Persist generated day entries
         foreach (var day in generated.Days)
@@ -285,7 +290,7 @@ public class GenerateAIMealPlanUseCase
     private async Task<Recipe?> ResolveRecipeAsync(
         Guid userId,
         GeneratedMealEntryDto meal,
-        Dictionary<string, Recipe> seenThisPlan)
+        Dictionary<string, Recipe> known)
     {
         var name = meal.RecipeName?.Trim();
         if (string.IsNullOrWhiteSpace(name))
@@ -294,20 +299,9 @@ public class GenerateAIMealPlanUseCase
             return null;
         }
 
-        if (seenThisPlan.TryGetValue(name, out var already))
+        if (known.TryGetValue(name, out var already))
         {
             return already;
-        }
-
-        var matches = await _unitOfWork.Recipes.SearchAsync(name);
-        var existing = matches.FirstOrDefault(r =>
-            r.CreatedByUserId == userId
-            && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
-
-        if (existing != null)
-        {
-            seenThisPlan[name] = existing;
-            return existing;
         }
 
         var recipe = new Recipe
@@ -348,7 +342,41 @@ public class GenerateAIMealPlanUseCase
         }
 
         await _unitOfWork.Recipes.AddAsync(recipe);
-        seenThisPlan[name] = recipe;
+        known[name] = recipe;
         return recipe;
+    }
+
+    /// <summary>
+    /// The recipes this person already has under the names the model just used, fetched in
+    /// one query before the plan is walked.
+    ///
+    /// This used to be a SearchAsync per meal inside the loop - twenty-one queries for a
+    /// seven-day plan, each a leading-wildcard LIKE over name and description that no index
+    /// can serve, each pulling back every loose match with its ingredients and food items,
+    /// only to keep the one row whose name matched exactly.
+    /// </summary>
+    private async Task<Dictionary<string, Recipe>> LoadReusableRecipesAsync(
+        Guid userId, GeneratedMealPlanDto generated)
+    {
+        var names = generated.Days
+            .SelectMany(day => day.Meals)
+            .Select(meal => meal.RecipeName?.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var existing = await _unitOfWork.Recipes.GetOwnedByNamesAsync(userId, names);
+
+        // Names compare case-insensitively here, so a plan asking for "Greek Salad" reuses a
+        // stored "greek salad" rather than adding a second row. Two rows differing only in
+        // case would both match; the first is as good as the other.
+        var reusable = new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase);
+        foreach (var recipe in existing)
+        {
+            reusable.TryAdd(recipe.Name, recipe);
+        }
+
+        return reusable;
     }
 }

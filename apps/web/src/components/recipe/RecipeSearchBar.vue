@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue';
+import { ref, watch } from 'vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { recipeService, type RecipeSuggestion } from '@/services/recipeService';
 
 interface Props {
@@ -24,14 +25,26 @@ const emit = defineEmits<{
 }>();
 
 const query = ref(props.modelValue);
-const suggestions = ref<RecipeSuggestion[]>([]);
 const isOpen = ref(false);
-const isLoading = ref(false);
 const highlighted = ref(-1);
 const inputEl = ref<HTMLInputElement | null>(null);
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-let inFlight: AbortController | null = null;
+// A dropdown should feel quicker than a page of results, hence the shorter delay. The
+// signal is passed on, so typing past a suggestion request actually cancels it.
+const {
+  results: suggestions,
+  isSearching: isLoading,
+  onInput: suggest,
+  reset: clearSuggestions,
+} = useDebouncedSearch<RecipeSuggestion>(
+  (text, signal) => recipeService.autocomplete(text, signal),
+  { delayMs: 220 },
+);
+
+// The list opens itself as results arrive and closes when there are none left to show.
+watch(suggestions, (found) => {
+  isOpen.value = found.length > 0;
+});
 
 watch(
   () => props.modelValue,
@@ -43,41 +56,8 @@ watch(
 watch(query, (value) => {
   emit('update:modelValue', value);
   highlighted.value = -1;
-
-  if (debounceTimer) clearTimeout(debounceTimer);
-  const trimmed = value.trim();
-
-  if (trimmed.length < 2) {
-    inFlight?.abort();
-    suggestions.value = [];
-    isOpen.value = false;
-    isLoading.value = false;
-    return;
-  }
-
-  isLoading.value = true;
-  debounceTimer = setTimeout(() => fetchSuggestions(trimmed), 220);
+  suggest(value);
 });
-
-async function fetchSuggestions(trimmed: string) {
-  inFlight?.abort();
-  const controller = new AbortController();
-  inFlight = controller;
-
-  try {
-    const results = await recipeService.autocomplete(trimmed, controller.signal);
-    if (controller.signal.aborted) return;
-    suggestions.value = results;
-    isOpen.value = results.length > 0;
-  } catch {
-    if (!controller.signal.aborted) {
-      suggestions.value = [];
-      isOpen.value = false;
-    }
-  } finally {
-    if (!controller.signal.aborted) isLoading.value = false;
-  }
-}
 
 function submit() {
   const q = query.value.trim();
@@ -86,6 +66,7 @@ function submit() {
     return;
   }
   isOpen.value = false;
+  clearSuggestions();
   emit('search', q);
 }
 
@@ -131,10 +112,6 @@ function highlightMatch(name: string): string {
   return html.replace(new RegExp(`(${escaped})`, 'i'), '<strong class="font-bold">$1</strong>');
 }
 
-onBeforeUnmount(() => {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  inFlight?.abort();
-});
 
 defineExpose({ focus: () => inputEl.value?.focus() });
 </script>

@@ -86,10 +86,9 @@
 /*
  * Printing a recipe.
  *
- * The recipe lives inside a modal over a full app shell, so the page cannot simply be
- * sent to the printer. `visibility` rather than `display` does the hiding: it collapses
- * the chrome without taking the modal's own ancestors out of the layout, which `display:
- * none` on a parent would do - and the modal is nested several levels deep.
+ * The recipe lives in a dialog over the whole app shell, so the page cannot simply be sent to
+ * the printer. The dialog teleports itself to <body>, which is what lets the shell beside it
+ * be hidden outright: `display` rather than `visibility`, so the app takes up no paper.
  */
 @media print {
   html,
@@ -99,27 +98,30 @@
     overflow: visible !important;
   }
 
-  body * {
-    visibility: hidden;
+  body > *:not(.print-root) {
+    display: none !important;
   }
 
-  .print-area,
-  .print-area * {
-    visibility: visible;
-  }
-
-  /* Lift the panel out of the fixed, scrolling overlay so every page of it prints. */
+  /*
+   * Out of the overlay and into normal flow. A fixed element is painted onto every sheet, so
+   * left as it was the recipe repeated on each page and printed over whatever followed it;
+   * flowing normally is also what lets it paginate.
+   */
+  .print-root,
   .print-area {
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
-    width: 100% !important;
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: auto !important;
     max-width: none !important;
     max-height: none !important;
+    padding: 0 !important;
     overflow: visible !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     background: #fff !important;
     color: #000 !important;
+    backdrop-filter: none !important;
   }
 
   /* Controls and decoration have no meaning on paper. */

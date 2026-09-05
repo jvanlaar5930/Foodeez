@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { extractErrorMessage } from '@/utils/apiError';
+
+const ANALYSIS_FAILED = 'The analysis could not be completed. Please try again.';
 import { computed, ref, watch } from 'vue';
 import type { DayAnalysis } from '@foodeez/shared';
 import { aiService } from '@/services/aiService';
 import { AIStreamError } from '@/services/aiStream';
 import StreamingText from '@/components/ai/StreamingText.vue';
+import AnalysisGapList from '@/components/ai/AnalysisGapList.vue';
+import AnalysisSuggestionList from '@/components/ai/AnalysisSuggestionList.vue';
+import ScoreDonut from '@/components/ui/ScoreDonut.vue';
 import { useMealStore } from '@/stores/meal';
-import { scoreStroke, scoreTextClass } from '@/utils/analysisScore';
 
 const props = defineProps<{
   userId: string;
@@ -35,9 +40,6 @@ const daySignature = computed(() =>
 );
 
 const dayLabel = computed(() => (props.isToday ? 'today' : 'this day'));
-
-const scoreColor = computed(() => scoreStroke(analysis.value?.score ?? 0));
-const scoreTextColor = computed(() => scoreTextClass(analysis.value?.score ?? 0));
 
 const analyzedAt = computed(() =>
   analysis.value?.generatedAt
@@ -78,25 +80,12 @@ async function runAnalysis(refresh: boolean) {
       streamedText.value += text;
     });
   } catch (err: unknown) {
-    error.value = err instanceof AIStreamError ? err.message : extractErrorMessage(err);
+    error.value = extractErrorMessage(err, ANALYSIS_FAILED);
   } finally {
     isAnalyzing.value = false;
   }
 }
 
-function extractErrorMessage(err: unknown): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const e = err as { response?: { data?: { message?: string; detail?: string; title?: string } } };
-    return (
-      e.response?.data?.message ??
-      e.response?.data?.detail ??
-      e.response?.data?.title ??
-      'The analysis could not be completed. Please try again.'
-    );
-  }
-
-  return 'The analysis could not be completed. Please try again.';
-}
 
 watch([() => props.date, () => props.userId, daySignature], loadStored, { immediate: true });
 </script>
@@ -124,62 +113,20 @@ watch([() => props.date, () => props.userId, daySignature], loadStored, { immedi
 
     <template v-else-if="analysis">
       <div class="mt-3 flex items-start gap-3">
-        <div class="relative h-16 w-16 shrink-0">
-          <svg class="h-16 w-16 -rotate-90" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r="28" fill="none" stroke="#e9d5ff" stroke-width="5" />
-            <circle
-              cx="32"
-              cy="32"
-              r="28"
-              fill="none"
-              :stroke="scoreColor"
-              stroke-width="5"
-              stroke-linecap="round"
-              :stroke-dasharray="`${(analysis.score / 100) * 175.9} 175.9`"
-            />
-          </svg>
-          <span
-            class="absolute inset-0 flex items-center justify-center text-base font-bold"
-            :class="scoreTextColor"
-          >
-            {{ analysis.score }}
-          </span>
-        </div>
+        <ScoreDonut :score="analysis.score" size="md" />
         <div class="min-w-0">
           <p class="text-sm leading-snug text-gray-700 dark:text-gray-200">{{ analysis.status }}</p>
           <p v-if="analyzedAt" class="mt-1 text-xs text-gray-400">Analyzed at {{ analyzedAt }}</p>
         </div>
       </div>
 
-      <div v-if="analysis.gaps.length > 0" class="mt-3">
-        <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Still short on
-        </p>
-        <div class="flex flex-wrap gap-1.5">
-          <span
-            v-for="gap in analysis.gaps"
-            :key="gap"
-            class="rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300"
-          >
-            {{ gap }}
-          </span>
-        </div>
-      </div>
+      <AnalysisGapList label="Still short on" :items="analysis.gaps" class="mt-3" />
 
-      <div v-if="analysis.recommendations.length > 0" class="mt-3">
-        <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          {{ isToday ? 'What to have next' : 'What would have rounded it out' }}
-        </p>
-        <ul class="space-y-1">
-          <li
-            v-for="recommendation in analysis.recommendations"
-            :key="recommendation"
-            class="flex items-start gap-1.5 text-sm text-gray-700 dark:text-gray-200"
-          >
-            <span class="mt-0.5 shrink-0 text-green-500">&gt;</span>{{ recommendation }}
-          </li>
-        </ul>
-      </div>
+      <AnalysisSuggestionList
+        :label="isToday ? 'What to have next' : 'What would have rounded it out'"
+        :items="analysis.recommendations"
+        class="mt-3"
+      />
     </template>
 
     <template v-else>

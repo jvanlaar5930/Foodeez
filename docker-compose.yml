@@ -22,6 +22,11 @@ services:
     restart: unless-stopped
     environment:
       ConnectionStrings__Default: "Server=mysql;Database=${MYSQL_DATABASE:-foodeez};User=${MYSQL_USER:-foodeez};Password=${MYSQL_PASSWORD};Port=3306"
+      # True keeps what this compose file has always done - the container applies pending
+      # migrations as it starts, which is what a single-instance deployment wants. It is a
+      # setting now rather than a hidden default, so DB_AUTO_MIGRATE=false turns it off for a
+      # deployment that would rather run them deliberately.
+      Database__AutoMigrate: ${DB_AUTO_MIGRATE:-true}
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: Foodeez
       Jwt__Audience: FoodeezApp
@@ -30,6 +35,17 @@ services:
       Spoonacular__ApiKey: ${SPOONACULAR_API_KEY:-}
       FoodData__ApiKey: ${FOODDATA_API_KEY:-}
       Gemini__ApiKey: ${GEMINI_API_KEY:-}
+      Groq__ApiKey: ${GROQ_API_KEY:-}
+      # Self-hosted providers. Without these a container could not use Ollama or an
+      # OpenAI-compatible local server at all, whatever Admin > Settings said.
+      Ollama__BaseUrl: ${OLLAMA_BASE_URL:-http://localhost:11434}
+      Ollama__Model: ${OLLAMA_MODEL:-llama3}
+      LocalAI__BaseUrl: ${LOCALAI_BASE_URL:-http://localhost:1234/v1}
+      LocalAI__Model: ${LOCALAI_MODEL:-local-model}
+      LocalAI__ApiKey: ${LOCALAI_API_KEY:-}
+      # Only needed if a browser app is served from somewhere other than this nginx, which
+      # proxies /api/ and is therefore same-origin. Empty means no cross-origin calls.
+      Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN:-}
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
     depends_on:
       mysql:

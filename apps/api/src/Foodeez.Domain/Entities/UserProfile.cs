@@ -26,6 +26,31 @@ public class UserProfile : BaseEntity
     /// </summary>
     public List<string> ExcludedFoods { get; set; } = new();
 
+    /// <summary>
+    /// A prompt has to carry every one of these, so the list is bounded at both ends: enough
+    /// entries for a real set of allergies and dislikes, none of them long enough to be a
+    /// paragraph of injected instructions.
+    /// </summary>
+    private const int MaxExclusions = 50;
+    private const int MaxExclusionLength = 60;
+
+    /// <summary>
+    /// Replaces the exclusion list, trimming, dropping blanks and removing case-insensitive
+    /// duplicates. These are typed by hand and end up in a prompt, so "Peanuts", "peanuts "
+    /// and "" must not all get there.
+    ///
+    /// An invariant of the profile rather than of the endpoint that happens to set it, so
+    /// anything else that ever writes this list gets the same treatment.
+    /// </summary>
+    public void SetExcludedFoods(IEnumerable<string> foods) =>
+        ExcludedFoods = foods
+            .Select(food => food.Trim())
+            .Where(food => food.Length > 0)
+            .Select(food => food.Length > MaxExclusionLength ? food[..MaxExclusionLength] : food)
+            .DistinctBy(food => food.ToLowerInvariant())
+            .Take(MaxExclusions)
+            .ToList();
+
     public bool ProfileCompleted { get; set; }
     public bool DarkMode { get; set; }
     public UnitSystem UnitSystem { get; set; } = UnitSystem.US;

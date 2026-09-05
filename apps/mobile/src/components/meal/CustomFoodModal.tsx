@@ -355,7 +355,7 @@ const makeStyles = (C: Palette) =>
     },
     unitChipActive: { backgroundColor: C.primary, borderColor: C.primary },
     unitChipText: { fontSize: FontSize.sm, color: C.textSecondary },
-    unitChipTextActive: { color: '#FFFFFF', fontWeight: FontWeight.semibold },
+    unitChipTextActive: { color: C.onPrimary, fontWeight: FontWeight.semibold },
     sectionLabel: {
       fontSize: FontSize.md,
       fontWeight: FontWeight.semibold,

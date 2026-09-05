@@ -1,5 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Foodeez.API.Streaming;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealPlans;
@@ -9,10 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/meal-plans")]
 [Authorize]
-public class MealPlansController : ControllerBase
+public class MealPlansController : FoodeezController
 {
     private readonly GetMealPlanUseCase _getMealPlanUseCase;
     private readonly CreateMealPlanUseCase _createMealPlanUseCase;
@@ -31,12 +28,12 @@ public class MealPlansController : ControllerBase
         _saveEntryUseCase = saveEntryUseCase;
     }
 
-    /// <summary>Get all meal plans for a user.</summary>
+    /// <summary>Get all meal plans for the signed-in user.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<MealPlanDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMealPlans([FromQuery] Guid userId)
+    public async Task<IActionResult> GetMealPlans()
     {
-        var plans = await _getMealPlanUseCase.ExecuteAsync(userId);
+        var plans = await _getMealPlanUseCase.ExecuteAsync(UserId);
         return Ok(plans);
     }
 
@@ -46,8 +43,14 @@ public class MealPlansController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateMealPlan([FromBody] CreateMealPlanRequest request)
     {
+        var userId = UserId;
+
+        // The body carries a userId for symmetry with the rest of this controller, but the
+        // plan is filed against the token's user, never the body's.
+        request.UserId = userId;
+
         var plan = await _createMealPlanUseCase.ExecuteAsync(request);
-        return CreatedAtAction(nameof(GetMealPlans), new { userId = request.UserId }, plan);
+        return CreatedAtAction(nameof(GetMealPlans), null, plan);
     }
 
     /// <summary>Generate a meal plan using AI based on user profile and preferences.</summary>
@@ -58,17 +61,11 @@ public class MealPlansController : ControllerBase
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> GenerateMealPlan([FromBody] GenerateMealPlanRequest request, CancellationToken ct)
     {
-        try
-        {
-            var plan = await _generateAIMealPlanUseCase.ExecuteAsync(request, ct);
-            return CreatedAtAction(nameof(GetMealPlans), new { userId = request.UserId }, plan);
-        }
-        catch (AIGenerationFailedException ex)
-        {
-            // 503, not 500: the request was fine and retrying is the right response. Nothing
-            // was saved, so there is no half-made plan for the client to reconcile.
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
-        }
+        request.UserId = UserId;
+
+        // AIGenerationFailedException is mapped to 503 by ExceptionHandlingMiddleware.
+        var plan = await _generateAIMealPlanUseCase.ExecuteAsync(request, ct);
+        return CreatedAtAction(nameof(GetMealPlans), null, plan);
     }
 
     /// <summary>
@@ -79,6 +76,8 @@ public class MealPlansController : ControllerBase
     [Produces("text/event-stream")]
     public async Task GenerateMealPlanStream([FromBody] GenerateMealPlanRequest request, CancellationToken ct)
     {
+        request.UserId = UserId;
+
         await ServerSentEventStream.WriteAsync(
             Response, _generateAIMealPlanUseCase.ExecuteStreamAsync(request, ct), ct);
     }
@@ -91,14 +90,14 @@ public class MealPlansController : ControllerBase
     public async Task<IActionResult> AddEntry(
         [FromRoute] Guid planId, [FromBody] MealPlanEntryRequest request, CancellationToken ct)
     {
-        if (CurrentUserId() is not { } userId) return Unauthorized();
+        var userId = UserId;
 
         var result = await _saveEntryUseCase.AddAsync(planId, userId, request, ct);
         return result.Outcome switch
         {
             SaveEntryOutcome.Saved => CreatedAtAction(
                 nameof(GetMealPlans), new { userId }, result.Entry),
-            SaveEntryOutcome.Rejected => BadRequest(new { message = result.Reason }),
+            SaveEntryOutcome.Rejected => BadRequest(Failure(result.Reason ?? "That change was rejected.")),
             _ => NotFound()
         };
     }
@@ -114,13 +113,11 @@ public class MealPlansController : ControllerBase
         [FromBody] MealPlanEntryRequest request,
         CancellationToken ct)
     {
-        if (CurrentUserId() is not { } userId) return Unauthorized();
-
-        var result = await _saveEntryUseCase.UpdateAsync(planId, entryId, userId, request, ct);
+        var result = await _saveEntryUseCase.UpdateAsync(planId, entryId, UserId, request, ct);
         return result.Outcome switch
         {
             SaveEntryOutcome.Saved => Ok(result.Entry),
-            SaveEntryOutcome.Rejected => BadRequest(new { message = result.Reason }),
+            SaveEntryOutcome.Rejected => BadRequest(Failure(result.Reason ?? "That change was rejected.")),
             _ => NotFound()
         };
     }
@@ -132,17 +129,8 @@ public class MealPlansController : ControllerBase
     public async Task<IActionResult> DeleteEntry(
         [FromRoute] Guid planId, [FromRoute] Guid entryId, CancellationToken ct)
     {
-        if (CurrentUserId() is not { } userId) return Unauthorized();
-
-        var result = await _saveEntryUseCase.DeleteAsync(planId, entryId, userId, ct);
+        var result = await _saveEntryUseCase.DeleteAsync(planId, entryId, UserId, ct);
         return result.Outcome == SaveEntryOutcome.Saved ? NoContent() : NotFound();
     }
 
-    /// <summary>The authenticated user's id, from the token's subject claim.</summary>
-    private Guid? CurrentUserId()
-    {
-        var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                  ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        return Guid.TryParse(raw, out var id) ? id : null;
-    }
 }

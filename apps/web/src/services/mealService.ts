@@ -1,5 +1,11 @@
 import api from './api';
-import type { LogMealRequest, MealLog, NutritionSummary, QuickAddResult } from '@foodeez/shared';
+import type {
+  LogMealRequest,
+  MealLog,
+  NutritionReport,
+  NutritionSummary,
+  QuickAddResult,
+} from '@foodeez/shared';
 
 export const mealService = {
   async logMeal(data: LogMealRequest): Promise<MealLog> {
@@ -30,6 +36,17 @@ export const mealService = {
   async getNutritionSummary(userId: string, date: string): Promise<NutritionSummary> {
     const response = await api.get<NutritionSummary>('/meal-logs/nutrition-summary', {
       params: { userId, date },
+    });
+    return response.data;
+  },
+
+  /**
+   * A date range added up server-side for the reporting screens. Both ends are inclusive and
+   * the API caps the span at a year.
+   */
+  async getReport(startDate: string, endDate: string): Promise<NutritionReport> {
+    const response = await api.get<NutritionReport>('/meal-logs/report', {
+      params: { startDate, endDate },
     });
     return response.data;
   },

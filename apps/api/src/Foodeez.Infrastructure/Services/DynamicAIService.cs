@@ -1,35 +1,51 @@
 using System.Runtime.CompilerServices;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
-using Foodeez.Application.DTOs.MealPlans;
 using Foodeez.Application.DTOs.Users;
 using Foodeez.Application.Interfaces.Repositories;
 using Foodeez.Application.Interfaces.Services;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Infrastructure.Services;
 
-// Reads ai.provider from AppSettings at runtime and delegates to the correct IAIService impl.
-// Registered as IAIService; concrete services (Claude, Gemini, Groq, Ollama, Local) registered directly.
-public class DynamicAIService : IAIService, IStreamingAIService
+/// <summary>
+/// Reads ai.provider from AppSettings at runtime and delegates to the matching provider.
+/// Registered as the active <see cref="IAIService"/> and <see cref="IStreamingAIService"/>;
+/// the concrete providers are registered directly so this can resolve one by name.
+/// </summary>
+public sealed class DynamicAIService : IAIService, IStreamingAIService
 {
+    private const string DefaultProvider = "claude";
+
     private readonly IServiceProvider _services;
     private readonly IAppSettingRepository _settings;
-    private readonly ILogger<DynamicAIService> _logger;
 
-    public DynamicAIService(IServiceProvider services, IAppSettingRepository settings, ILogger<DynamicAIService> logger)
+    /// <summary>
+    /// Resolved once per scope - that is, once per request.
+    ///
+    /// Every delegating member below used to call ResolveAsync, and each call was a database
+    /// read of the same settings row. Generating a meal plan touches several of them, so a
+    /// single request was paying for several identical SELECTs to answer a question whose
+    /// answer cannot change midway through it.
+    /// </summary>
+    private AIProviderBase? _resolved;
+
+    public DynamicAIService(IServiceProvider services, IAppSettingRepository settings)
     {
         _services = services;
         _settings = settings;
-        _logger = logger;
     }
 
-    private async Task<IAIService> ResolveAsync()
+    private async Task<AIProviderBase> ResolveAsync()
     {
-        var provider = await _settings.GetValueAsync("ai.provider") ?? "claude";
+        if (_resolved != null)
+        {
+            return _resolved;
+        }
 
-        return provider.ToLowerInvariant() switch
+        var provider = await _settings.GetValueAsync("ai.provider") ?? DefaultProvider;
+
+        return _resolved = provider.ToLowerInvariant() switch
         {
             "gemini" => _services.GetRequiredService<GeminiAIService>(),
             "groq" => _services.GetRequiredService<GroqAIService>(),
@@ -45,9 +61,6 @@ public class DynamicAIService : IAIService, IStreamingAIService
 
     public async Task<DietaryRecommendationsDto> GetDietaryRecommendationsAsync(UserProfileDto profile, DailyNutritionDto? recentNutrition = null, CancellationToken ct = default)
         => await (await ResolveAsync()).GetDietaryRecommendationsAsync(profile, recentNutrition, ct);
-
-    public async Task<GeneratedMealPlanDto> GenerateMealPlanAsync(GenerateMealPlanRequest request, UserProfileDto profile, CancellationToken ct = default)
-        => await (await ResolveAsync()).GenerateMealPlanAsync(request, profile, ct);
 
     public async Task<ParsedMealDto> ParseMealImageAsync(byte[] imageData, string? mimeType = "image/jpeg", CancellationToken ct = default)
         => await (await ResolveAsync()).ParseMealImageAsync(imageData, mimeType, ct);
@@ -65,23 +78,19 @@ public class DynamicAIService : IAIService, IStreamingAIService
         => await (await ResolveAsync()).EstimateNutritionAsync(request, ct);
 
     /// <summary>
-    /// Every provider here streams, so this only has to pick one. A provider that did not
-    /// would have to say so rather than quietly return nothing, since the caller reads the
-    /// finished answer out of the streamed text.
+    /// Every provider streams, because <see cref="AIProviderBase"/> requires it - so this only
+    /// has to pick one. It used to resolve an IAIService and check at runtime whether it also
+    /// streamed, throwing if not, while the DI registration simultaneously assumed the cast
+    /// always succeeded. Resolving the base type states the requirement once, in the type.
     /// </summary>
-    public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<string> StreamAsync(
+        string prompt, [EnumeratorCancellation] CancellationToken ct = default)
     {
         var provider = await ResolveAsync();
-        if (provider is not IStreamingAIService streaming)
-        {
-            throw new NotSupportedException(
-                $"The configured AI provider ({provider.GetType().Name}) cannot stream a response.");
-        }
 
-        await foreach (var chunk in streaming.StreamAsync(prompt, ct))
+        await foreach (var chunk in provider.StreamAsync(prompt, ct))
         {
             yield return chunk;
         }
     }
-
 }

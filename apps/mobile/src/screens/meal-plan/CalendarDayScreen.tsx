@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   Alert,
-  Modal,
   TextInput,
   Image,
   ActivityIndicator,
@@ -17,63 +16,48 @@ import { format, parseISO } from 'date-fns';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
+import { entryLabel, loggedLabel } from '@/utils/mealPlanLabels';
+import { DaySlotCard } from '@/components/mealplan/DaySlotCard';
+import { LinkedRecipeCard } from '@/components/mealplan/LinkedRecipeCard';
+import { ModalActions } from '@/components/ui/ModalActions';
+import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
 import { recipeService } from '@/services/recipeService';
 import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
-import { isAiRecipeImage, MealLogDto, MealPlanEntryDto, MealType, RecipeDto } from '@/types';
+import {
+  isAiRecipeImage,
+  MEAL_TYPE_LABELS,
+  MealLogDto,
+  MealPlanEntryDto,
+  MealType,
+  ORDERED_MEAL_TYPES,
+  RecipeDto,
+} from '@/types';
+import { MEAL_TYPE_ICONS } from '@/constants/mealTypes';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealPlanStackParamList, 'CalendarDay'>;
-
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
-
-const MEAL_TYPE_ICONS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'sunny-outline',
-  [MealType.MorningSnack]: 'cafe-outline',
-  [MealType.Lunch]: 'restaurant-outline',
-  [MealType.AfternoonSnack]: 'nutrition-outline',
-  [MealType.Dinner]: 'moon-outline',
-  [MealType.EveningSnack]: 'ice-cream-outline',
-};
-
-const ALL_MEAL_TYPES = [
-  MealType.Breakfast,
-  MealType.MorningSnack,
-  MealType.Lunch,
-  MealType.AfternoonSnack,
-  MealType.Dinner,
-  MealType.EveningSnack,
-];
 
 /**
  * What to call a planned meal. AI-generated entries have no Recipe or FoodItem row behind
  * them, so both names are null and the meal's own name is in `notes` - without this every
  * generated slot read "Custom meal".
  */
-function entryLabel(entry: MealPlanEntryDto): string {
-  return entry.recipeName ?? entry.foodItemName ?? entry.notes ?? 'Custom meal';
-}
 
-function loggedLabel(log: MealLogDto): string {
-  return log.items.map((item) => item.foodItem.name).filter(Boolean).join(', ');
-}
 
 export function CalendarDayScreen({ route, navigation }: Props) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { date } = route.params;
   const parsedDate = parseISO(date);
-  const { user } = useAuthStore();
-  const { activePlan, ensurePlanFor, saveEntry, removeEntry, clearError } = useMealPlanStore();
+  const user = useAuthStore((state) => state.user);
+  const activePlan = useMealPlanStore((state) => state.activePlan);
+  const ensurePlanFor = useMealPlanStore((state) => state.ensurePlanFor);
+  const saveEntry = useMealPlanStore((state) => state.saveEntry);
+  const removeEntry = useMealPlanStore((state) => state.removeEntry);
+  const clearError = useMealPlanStore((state) => state.clearError);
 
   const [loggedLogs, setLoggedLogs] = useState<MealLogDto[]>([]);
   const [saving, setSaving] = useState(false);
@@ -102,8 +86,11 @@ export function CalendarDayScreen({ route, navigation }: Props) {
   // the optional chain resolved to undefined and .filter threw.
   const dayEntries = activePlan?.entriesByDate?.[date] ?? [];
 
-  const getEntryForMeal = (mealType: MealType): MealPlanEntryDto | undefined =>
-    dayEntries.find(e => e.mealType === mealType);
+  const getEntryForMeal = useCallback(
+    (mealType: MealType): MealPlanEntryDto | undefined =>
+      dayEntries.find((entry) => entry.mealType === mealType),
+    [dayEntries],
+  );
 
   const getLoggedForMeal = useCallback(
     (mealType: MealType): MealLogDto | undefined =>
@@ -121,7 +108,7 @@ export function CalendarDayScreen({ route, navigation }: Props) {
     return () => { cancelled = true; };
   }, [user?.id, date]);
 
-  const openEntryModal = (mealType: MealType) => {
+  const openEntryModal = useCallback((mealType: MealType) => {
     const entry = getEntryForMeal(mealType);
     setEntryMealType(mealType);
     setEntryName(entry ? entryLabel(entry) : '');
@@ -142,9 +129,9 @@ export function CalendarDayScreen({ route, navigation }: Props) {
         .catch(() => setLinkedRecipe(null))
         .finally(() => setLoadingRecipe(false));
     }
-  };
+  }, [getEntryForMeal, clearError]);
 
-  const closeEntryModal = () => setEntryModalOpen(false);
+  const closeEntryModal = useCallback(() => setEntryModalOpen(false), []);
 
   /** Renaming the meal means it is no longer the recipe that was linked to it. */
   const onEntryNameChange = (text: string) => {
@@ -205,7 +192,7 @@ export function CalendarDayScreen({ route, navigation }: Props) {
     }
   };
 
-  const handleDeleteEntry = (entry: MealPlanEntryDto) => {
+  const handleDeleteEntry = useCallback((entry: MealPlanEntryDto) => {
     if (!user?.id || !activePlan) return;
     Alert.alert('Remove Meal', `Remove ${entryLabel(entry)} from this slot?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -221,23 +208,43 @@ export function CalendarDayScreen({ route, navigation }: Props) {
         },
       },
     ]);
-  };
+  }, [user?.id, activePlan, removeEntry]);
 
-  const openLoggedMeal = (log: MealLogDto) => {
+  const openLoggedMeal = useCallback((log: MealLogDto) => {
     // Crosses from the Meal Plan tab's own stack into the Meal Log tab's - CalendarDay's own
     // navigation prop only knows MealPlanStackParamList, so this reaches up to the shared tab
     // navigator instead. The Meal Log tab is typed to accept these nested params (see
     // navigation/types.ts), so this is a real, if roundabout, navigation rather than a cast
     // papering over a mistake.
     navigation.getParent<any>()?.navigate('MealLog', { screen: 'AddMeal', params: { mealLog: log } });
-  };
+  }, [navigation]);
 
-  const handleAISuggest = (mealType: MealType) => {
+  const handleAISuggest = useCallback((mealType: MealType) => {
     Alert.alert('AI Suggestion', `AI will suggest a ${MEAL_TYPE_LABELS[mealType]} based on your goals.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Get Suggestion', onPress: () => { /* TODO: call AI suggest */ } },
     ]);
-  };
+  }, []);
+
+  const renderSlot = useCallback(
+    ({ item: mealType }: { item: MealType }) => {
+      const entry = getEntryForMeal(mealType);
+
+      return (
+        <DaySlotCard
+          mealType={mealType}
+          entry={entry}
+          // Only when nothing is planned: a planned slot shows what was planned.
+          log={entry ? undefined : getLoggedForMeal(mealType)}
+          onEditEntry={openEntryModal}
+          onDeleteEntry={handleDeleteEntry}
+          onEditLog={openLoggedMeal}
+          onAskAI={handleAISuggest}
+        />
+      );
+    },
+    [getEntryForMeal, getLoggedForMeal, openEntryModal, handleDeleteEntry, openLoggedMeal, handleAISuggest],
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -250,154 +257,54 @@ export function CalendarDayScreen({ route, navigation }: Props) {
       </View>
 
       <FlatList
-        data={ALL_MEAL_TYPES}
+        data={ORDERED_MEAL_TYPES}
         keyExtractor={item => item.toString()}
         contentContainerStyle={styles.list}
-        renderItem={({ item: mealType }) => {
-          const entry = getEntryForMeal(mealType);
-          const log = entry ? undefined : getLoggedForMeal(mealType);
-          return (
-            <View style={styles.slotCard}>
-              <View style={styles.slotHeader}>
-                <View style={styles.slotTypeRow}>
-                  <Ionicons name={MEAL_TYPE_ICONS[mealType] as any} size={18} color={C.primary} />
-                  <Text style={styles.slotTypeName}>{MEAL_TYPE_LABELS[mealType]}</Text>
-                </View>
-              </View>
-
-              {entry ? (
-                <TouchableOpacity
-                  style={styles.entryContent}
-                  onPress={() => openEntryModal(mealType)}
-                  accessibilityLabel={`Edit ${entryLabel(entry)}`}
-                >
-                  <View style={styles.entryInfo}>
-                    <Text style={styles.entryName}>{entryLabel(entry)}</Text>
-                    {entry.servings > 1 && (
-                      <Text style={styles.entryServings}>{entry.servings} servings</Text>
-                    )}
-                    {entry.notes && entry.notes !== entryLabel(entry) && (
-                      <Text style={styles.entryNotes}>{entry.notes}</Text>
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={C.error} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ) : log ? (
-                <TouchableOpacity
-                  style={styles.entryContent}
-                  onPress={() => openLoggedMeal(log)}
-                  accessibilityLabel={`Edit logged ${loggedLabel(log)}`}
-                >
-                  <View style={styles.entryInfo}>
-                    <Text style={styles.entryName}>{loggedLabel(log)}</Text>
-                    <Text style={styles.entryLoggedTag}>Logged as eaten - tap to edit</Text>
-                  </View>
-                  <Ionicons name="restaurant" size={18} color={C.textSecondary} />
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.emptySlot}>
-                  <TouchableOpacity style={styles.addButton} onPress={() => openEntryModal(mealType)}>
-                    <Ionicons name="add" size={16} color={C.primary} />
-                    <Text style={styles.addButtonText}>Add Meal</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.aiButton} onPress={() => handleAISuggest(mealType)}>
-                    <Ionicons name="sparkles" size={16} color={C.secondary} />
-                    <Text style={styles.aiButtonText}>Ask AI</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          );
-        }}
+        renderItem={renderSlot}
       />
 
-      <Modal visible={entryModalOpen} transparent animationType="fade" onRequestClose={closeEntryModal}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {getEntryForMeal(entryMealType) ? 'Edit' : 'Add'} {MEAL_TYPE_LABELS[entryMealType]}
-            </Text>
+      <ModalSheet
+        visible={entryModalOpen}
+        onClose={closeEntryModal}
+        title={`${getEntryForMeal(entryMealType) ? 'Edit' : 'Add'} ${MEAL_TYPE_LABELS[entryMealType]}`}
+        // A save is in flight; a stray tap on the backdrop should not throw it away.
+        dismissOnBackdrop={!saving}
+        footer={
+          <ModalActions
+            confirmLabel="Save"
+            onConfirm={handleSaveEntry}
+            onCancel={closeEntryModal}
+            busy={saving}
+          />
+        }
+      >
+        <Text style={styles.modalLabel}>Meal</Text>
+        <TextInput
+          style={styles.modalInput}
+          value={entryName}
+          onChangeText={onEntryNameChange}
+          placeholder="e.g. Grilled chicken salad"
+          placeholderTextColor={C.textSecondary}
+          accessibilityLabel="Meal"
+        />
 
-            <Text style={styles.modalLabel}>Meal</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={entryName}
-              onChangeText={onEntryNameChange}
-              placeholder="e.g. Grilled chicken salad"
-              placeholderTextColor={C.textSecondary}
-            />
+        {loadingRecipe ? <ActivityIndicator color={C.primary} style={styles.recipeLoading} /> : null}
 
-            {loadingRecipe && (
-              <ActivityIndicator color={C.primary} style={{ marginTop: Spacing.md }} />
-            )}
+        {!loadingRecipe && linkedRecipe ? (
+          <LinkedRecipeCard recipe={linkedRecipe} onOpen={openLinkedRecipe} />
+        ) : null}
 
-            {/* The recipe behind this slot: what the assistant actually planned, and where
-                someone goes looking for how to cook it. */}
-            {!loadingRecipe && linkedRecipe && (
-              <View style={styles.recipeCard}>
-                <View style={styles.recipeRow}>
-                  <View style={styles.recipeThumb}>
-                    {isAiRecipeImage(linkedRecipe.imageUrl) ? (
-                      <AiRecipeThumb size={20} />
-                    ) : linkedRecipe.imageUrl ? (
-                      <Image
-                        source={{ uri: linkedRecipe.imageUrl }}
-                        style={styles.recipeThumbImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Ionicons name="restaurant" size={20} color={C.primary} />
-                    )}
-                  </View>
+        <Text style={styles.modalLabel}>Servings</Text>
+        <TextInput
+          style={styles.modalInputSmall}
+          value={entryServings}
+          onChangeText={setEntryServings}
+          keyboardType="decimal-pad"
+          accessibilityLabel="Servings"
+        />
 
-                  <View style={styles.recipeInfo}>
-                    <Text style={styles.recipeName} numberOfLines={1}>{linkedRecipe.name}</Text>
-                    {linkedRecipe.description ? (
-                      <Text style={styles.recipeDesc} numberOfLines={2}>{linkedRecipe.description}</Text>
-                    ) : null}
-                    <Text style={styles.recipeMeta}>
-                      {linkedRecipe.prepTimeMinutes + linkedRecipe.cookTimeMinutes > 0
-                        ? `${linkedRecipe.prepTimeMinutes + linkedRecipe.cookTimeMinutes} min · `
-                        : ''}
-                      {Math.round(linkedRecipe.nutritionalInfoPerServing.calories)} kcal · serves{' '}
-                      {linkedRecipe.servings}
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity style={styles.recipeLink} onPress={openLinkedRecipe}>
-                  <Ionicons name="book-outline" size={16} color={C.primary} />
-                  <Text style={styles.recipeLinkText}>View full recipe</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <Text style={styles.modalLabel}>Servings</Text>
-            <TextInput
-              style={styles.modalInputSmall}
-              value={entryServings}
-              onChangeText={setEntryServings}
-              keyboardType="decimal-pad"
-            />
-
-            {entryError && <Text style={styles.modalError}>{entryError}</Text>}
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={closeEntryModal} disabled={saving}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={handleSaveEntry} disabled={saving}>
-                <Text style={styles.modalConfirmText}>{saving ? 'Saving...' : 'Save'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        {entryError ? <Text style={styles.modalError}>{entryError}</Text> : null}
+      </ModalSheet>
     </SafeAreaView>
   );
 }
@@ -416,59 +323,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text },
   list: { padding: Spacing.md, gap: Spacing.md },
-  slotCard: {
-    backgroundColor: C.surface,
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-    ...Shadows.sm,
-  },
-  slotHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: C.divider,
-  },
-  slotTypeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  slotTypeName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: C.text },
-  entryContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-  },
-  entryInfo: { flex: 1 },
-  entryName: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: C.text },
-  entryServings: { fontSize: FontSize.sm, color: C.textSecondary, marginTop: 2 },
-  entryNotes: { fontSize: FontSize.sm, color: C.textSecondary, marginTop: 2, fontStyle: 'italic' },
-  entryLoggedTag: { fontSize: FontSize.sm, color: C.textSecondary, marginTop: 2, fontStyle: 'italic' },
-  deleteButton: { padding: Spacing.sm },
-  emptySlot: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    borderWidth: 1,
-    borderColor: C.primary,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  addButtonText: { color: C.primary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
-  aiButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    borderWidth: 1,
-    borderColor: C.secondary,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  aiButtonText: { color: C.secondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
-  modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
-  modalContent: { backgroundColor: C.surface, borderRadius: BorderRadius.xl, padding: Spacing.xl, gap: Spacing.xs, width: '100%' },
-  modalTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text, marginBottom: Spacing.sm },
   modalLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: C.text, marginTop: Spacing.sm },
   modalInput: {
     borderWidth: 1,
@@ -492,6 +346,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     backgroundColor: C.background,
   },
   modalError: { fontSize: FontSize.sm, color: C.error, marginTop: Spacing.sm },
+  recipeLoading: { marginTop: Spacing.md },
   recipeCard: {
     marginTop: Spacing.md,
     borderWidth: 1,
@@ -524,9 +379,4 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     borderTopColor: C.divider,
   },
   recipeLinkText: { color: C.primary, fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-  modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.lg },
-  modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
-  modalConfirm: { flex: 1, backgroundColor: C.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalConfirmText: { color: C.surface, fontWeight: FontWeight.semibold },
 });

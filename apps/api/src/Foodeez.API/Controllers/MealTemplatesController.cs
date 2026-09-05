@@ -10,10 +10,9 @@ namespace Foodeez.API.Controllers;
 /// made from. Every route reads the owner from the token: these are personal lists, and a
 /// userId in the query string is only the caller's word for who they are.
 /// </summary>
-[ApiController]
 [Route("api/meal-templates")]
 [Authorize]
-public class MealTemplatesController : ControllerBase
+public class MealTemplatesController : FoodeezController
 {
     private readonly MealTemplatesUseCase _useCase;
 
@@ -27,10 +26,7 @@ public class MealTemplatesController : ControllerBase
     [ProducesResponseType(typeof(List<MealTemplateDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> List()
     {
-        var userId = CurrentUser.IdOf(User);
-        if (userId is null) return Unauthorized();
-
-        return Ok(await _useCase.ListAsync(userId.Value));
+        return Ok(await _useCase.ListAsync(UserId));
     }
 
     /// <summary>The user's last few distinct meals, for logging one of them again as it stands.</summary>
@@ -38,10 +34,7 @@ public class MealTemplatesController : ControllerBase
     [ProducesResponseType(typeof(List<RecentMealDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Recent()
     {
-        var userId = CurrentUser.IdOf(User);
-        if (userId is null) return Unauthorized();
-
-        return Ok(await _useCase.RecentAsync(userId.Value));
+        return Ok(await _useCase.RecentAsync(UserId));
     }
 
     /// <summary>Save the meal on screen under a name, replacing anything already saved under it.</summary>
@@ -50,14 +43,11 @@ public class MealTemplatesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Save([FromBody] SaveMealTemplateRequest request)
     {
-        var userId = CurrentUser.IdOf(User);
-        if (userId is null) return Unauthorized();
-
-        request.UserId = userId.Value;
+        request.UserId = UserId;
 
         var saved = await _useCase.SaveAsync(request);
         if (saved is null)
-            return BadRequest(new { message = "Give the meal a name and at least one item." });
+            return BadRequest(Failure("Give the meal a name and at least one item."));
 
         return CreatedAtAction(nameof(List), new { }, saved);
     }
@@ -68,10 +58,7 @@ public class MealTemplatesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Apply(Guid templateId)
     {
-        var userId = CurrentUser.IdOf(User);
-        if (userId is null) return Unauthorized();
-
-        var result = await _useCase.ApplyAsync(templateId, userId.Value);
+        var result = await _useCase.ApplyAsync(templateId, UserId);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -80,9 +67,6 @@ public class MealTemplatesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid templateId)
     {
-        var userId = CurrentUser.IdOf(User);
-        if (userId is null) return Unauthorized();
-
-        return await _useCase.DeleteAsync(templateId, userId.Value) ? NoContent() : NotFound();
+        return await _useCase.DeleteAsync(templateId, UserId) ? NoContent() : NotFound();
     }
 }

@@ -95,30 +95,37 @@ EXIT;
 
 All commands below are run from the `apps/api/` directory.
 
-### Step 1 — Configure settings
+### Step 1 — Configure secrets (first time only)
 
-Open `apps/api/src/Foodeez.API/appsettings.json` and fill in the three required values:
+`appsettings.json` is committed, so **no secret goes in it**. Locally they live in .NET's
+user-secrets store, which sits outside the repo and cannot be committed by accident.
 
-```json
-{
-  "ConnectionStrings": {
-    "Default": "Server=localhost;Database=foodeez;User=root;Password=foodeez123;Port=3306"
-  },
-  "Jwt": {
-    "Key": "any-random-string-that-is-at-least-32-characters-long",
-    "Issuer": "Foodeez",
-    "Audience": "FoodeezApp",
-    "ExpiryHours": 24
-  },
-  "Claude": {
-    "ApiKey": "sk-ant-...",
-    "Model": "claude-sonnet-4-6"
-  }
-}
+```
+cd apps/api/src/Foodeez.API
+
+dotnet user-secrets set "ConnectionStrings:Default" "Server=localhost;Database=foodeez;User=root;Password=foodeez123;Port=3306"
+dotnet user-secrets set "Jwt:Key" "any-random-string-that-is-at-least-32-characters-long"
+dotnet user-secrets set "Claude:ApiKey" "sk-ant-..."
 ```
 
-- **JWT Key** — any random string, minimum 32 characters. Example: `foodeez-super-secret-jwt-key-2024`
+Optional, only if you use them — `Spoonacular:ApiKey`, `FoodData:ApiKey`, `Gemini:ApiKey`,
+`Groq:ApiKey`. `dotnet user-secrets list` shows what is set.
+
+- **JWT Key** — any random string, minimum 32 characters. Changing it signs everyone out.
 - **Claude API Key** — get one at https://console.anthropic.com
+
+Everything that is *not* a secret — model names, Ollama/LocalAI URLs, token ceilings, log
+levels — stays in `appsettings.json`, where it is reviewable in diffs.
+
+> **Environments.** User-secrets are loaded only in Development. `launchSettings.json` and
+> `start-all.bat` both set `ASPNETCORE_ENVIRONMENT=Development`, which is also what enables
+> Swagger. Deployed environments get their configuration from environment variables instead
+> (`Jwt__Key`, `Claude__ApiKey`, ... — `:` becomes `__`); `docker-compose.yml` reads those
+> from a `.env` file, and `.env.example` is the template.
+>
+> The API refuses to start if `ConnectionStrings:Default`, `Jwt:Key`, `Jwt:Issuer` or
+> `Jwt:Audience` is missing, and names the offender — rather than failing later on someone's
+> first login.
 
 ### Step 2 — Restore packages
 
@@ -196,16 +203,21 @@ From the repo root (if not already done):
 npm install
 ```
 
-### Step 2 — Configure the API URL
+### Step 2 — Configure the API URL (usually not needed)
 
-Create `apps/mobile/.env` with:
+The app works this out for itself: on an emulator it uses the emulator's alias for your host,
+and on a physical device it takes the host out of the address the bundle arrived from. Set it
+by hand only to point somewhere else — a staging API, or a tunnelled dev server — by creating
+`apps/mobile/.env` with:
 
 ```
-EXPO_PUBLIC_API_URL=http://10.0.2.2:5000
+EXPO_PUBLIC_API_URL=http://192.168.1.50:5000/api
 ```
 
-> `10.0.2.2` is the Android emulator's address for `localhost` on your host machine.
-> For a physical device on the same Wi-Fi, replace with your machine's local IP (e.g. `http://192.168.1.50:5000`).
+> The `/api` suffix is part of the value: it is the base every request is appended to, so
+> without it every call 404s and login fails.
+> `10.0.2.2` is the Android emulator's address for `localhost` on your host machine; a
+> physical device needs your machine's local IP on the same Wi-Fi.
 
 ### Step 3 — Start the app
 
@@ -272,21 +284,30 @@ dotnet test --verbosity normal
 
 ## Environment Variables Reference
 
-### Backend — `apps/api/src/Foodeez.API/appsettings.json`
+### Backend
 
-| Key | Description | Example |
-|-----|-------------|---------|
-| `ConnectionStrings:Default` | MySQL connection string | `Server=localhost;Database=foodeez;User=root;Password=foodeez123;Port=3306` |
-| `Jwt:Key` | JWT signing secret (min 32 chars) | `foodeez-super-secret-jwt-key-2024` |
-| `Jwt:ExpiryHours` | How long tokens stay valid | `24` |
-| `Claude:ApiKey` | Anthropic API key | `sk-ant-api03-...` |
-| `Claude:Model` | Claude model to use | `claude-sonnet-4-6` |
+Secrets come from user-secrets in Development and environment variables when deployed
+(`:` becomes `__`, so `Jwt:Key` is `Jwt__Key`). Non-secrets live in `appsettings.json`.
+
+| Key | Secret? | Description | Example |
+|-----|---------|-------------|---------|
+| `ConnectionStrings:Default` | yes | MySQL connection string | `Server=localhost;Database=foodeez;User=root;Password=...;Port=3306` |
+| `Jwt:Key` | yes | JWT signing secret (min 32 chars) | a long random string |
+| `Jwt:Issuer` / `Jwt:Audience` | no | Token issuer and audience | `Foodeez` / `FoodeezApp` |
+| `Jwt:ExpiryHours` | no | How long tokens stay valid | `24` |
+| `Claude:ApiKey` | yes | Anthropic API key | `sk-ant-api03-...` |
+| `Claude:Model` | no | Claude model to use | `claude-sonnet-4-6` |
+| `Spoonacular:ApiKey` | yes | Recipe search | |
+| `FoodData:ApiKey` | yes | USDA food search | `DEMO_KEY` works for light use |
+| `Gemini:ApiKey` / `Groq:ApiKey` | yes | Alternative AI providers | |
+| `Ollama:*` / `LocalAI:*` | no | Self-hosted provider URL and model | see `appsettings.json` |
+| `Cors:AllowedOrigins` | no | Browser origins allowed outside Development. Empty is correct when the bundled nginx serves the web app, since that is same-origin. | `[]` |
 
 ### Mobile — `apps/mobile/.env`
 
 | Key | Description | Example |
 |-----|-------------|---------|
-| `EXPO_PUBLIC_API_URL` | Backend API base URL | `http://10.0.2.2:5000` (emulator) or `http://192.168.x.x:5000` (physical device) |
+| `EXPO_PUBLIC_API_URL` | Backend API base URL, including `/api`. Optional — the app derives it from the dev server address otherwise. | `http://10.0.2.2:5000/api` (emulator) or `http://192.168.x.x:5000/api` (physical device) |
 
 ---
 
@@ -303,15 +324,44 @@ dotnet tool install --global dotnet-ef
 
 ### MySQL connection refused
 - Confirm MySQL is running: `docker ps` (Docker) or check Services in Task Manager (native install)
-- Confirm the password in `appsettings.json` matches what you set during install
+- Confirm the password in your `ConnectionStrings:Default` user-secret matches what you set during install (`dotnet user-secrets list`)
 - Confirm port 3306 is not blocked by a firewall
+
+### Expo Go: `java.io.IOException: failed to download remote update`
+Expo Go could not fetch the JS bundle from Metro on your machine — this happens before any
+screen renders, so it is not a login failure even when it looks like one. In order of
+likelihood:
+
+1. **An older Metro is still holding port 8081.** A dev server left over from a previous
+   session answers the QR code but may no longer be serving a usable bundle. Find and stop it,
+   then start a fresh one:
+   ```
+   Get-NetTCPConnection -LocalPort 8081 -State Listen | Select-Object OwningProcess
+   Stop-Process -Id <that pid>
+   npm run mobile
+   ```
+2. **Windows Firewall is blocking node on the private network.** Run once, in an elevated
+   PowerShell:
+   ```
+   New-NetFirewallRule -DisplayName "Expo Metro 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Private
+   ```
+3. **The phone is not on the same network**, or the Wi-Fi has client isolation on (common on
+   guest networks). Check that the IP in the Metro banner matches your `ipconfig` IPv4 address,
+   and that the phone can open `http://<that IP>:8081` in its browser.
+4. **Neither is fixable right now** — go over Expo's relay, which needs no LAN path:
+   ```
+   npm run mobile:tunnel
+   ```
+   A tunnelled dev server is not an address the API is reachable on, so set
+   `EXPO_PUBLIC_API_URL=http://192.168.x.x:5000/api` in `apps/mobile/.env` for that session.
+5. **A stale bundler cache**, after a dependency change: `npm run mobile -- --clear`.
 
 ### Expo / Metro bundler can't connect to API on physical device
 Use your machine's local IP address instead of `10.0.2.2`:
 ```
 ipconfig   # find your IPv4 address under Wi-Fi adapter
 ```
-Then set `EXPO_PUBLIC_API_URL=http://192.168.x.x:5000` in `apps/mobile/.env`.
+Then set `EXPO_PUBLIC_API_URL=http://192.168.x.x:5000/api` in `apps/mobile/.env`.
 
 ### `npm install` fails with workspace errors
 Make sure you are running `npm install` from the **repo root** (`c:\dev\Foodeez`), not inside a sub-folder.
@@ -322,4 +372,4 @@ Enable hardware acceleration in Android Studio:
 - Or enable HAXM / Hyper-V in your BIOS settings
 
 ### Port 5000 already in use
-Change the API port in `apps/api/src/Foodeez.API/Properties/launchSettings.json`, then update `EXPO_PUBLIC_API_URL` and the Vite proxy in `apps/web/vite.config.ts` accordingly.
+Change the API port in `apps/api/src/Foodeez.API/Properties/launchSettings.json`, then update `API_PORT` in `apps/mobile/src/constants/api.ts` (and `EXPO_PUBLIC_API_URL`, if you set one) and the Vite proxy in `apps/web/vite.config.ts` accordingly.

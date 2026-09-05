@@ -3,7 +3,10 @@ import { computed, ref } from 'vue';
 import type { MealAnalysis, MealType } from '@foodeez/shared';
 import { MEAL_TYPE_LABELS } from '@foodeez/shared';
 import AppModal from '@/components/ui/AppModal.vue';
-import { scorePillClass, scoreStroke, scoreTextClass } from '@/utils/analysisScore';
+import ScoreDonut from '@/components/ui/ScoreDonut.vue';
+import AnalysisGapList from '@/components/ai/AnalysisGapList.vue';
+import AnalysisSuggestionList from '@/components/ai/AnalysisSuggestionList.vue';
+import { scorePillClass } from '@/utils/analysisScore';
 
 const props = defineProps<{
   analysis: MealAnalysis;
@@ -18,8 +21,6 @@ const props = defineProps<{
 const open = ref(false);
 
 const pillClass = computed(() => scorePillClass(props.analysis.score));
-const ringStroke = computed(() => scoreStroke(props.analysis.score));
-const ringTextClass = computed(() => scoreTextClass(props.analysis.score));
 
 const title = computed(() => `${MEAL_TYPE_LABELS[props.mealType] ?? 'Meal'} analysis`);
 
@@ -34,9 +35,6 @@ const analyzedOn = computed(() =>
     : null,
 );
 
-// The circumference of the r=24 ring the score arc is drawn on.
-const RING_LENGTH = 150.8;
-const arc = computed(() => `${(props.analysis.score / 100) * RING_LENGTH} ${RING_LENGTH}`);
 </script>
 
 <template>
@@ -56,27 +54,7 @@ const arc = computed(() => `${(props.analysis.score / 100) * RING_LENGTH} ${RING
   <AppModal v-model="open" :title="title" size="md">
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <div class="relative h-14 w-14 shrink-0">
-          <svg class="h-14 w-14 -rotate-90" viewBox="0 0 56 56">
-            <circle cx="28" cy="28" r="24" fill="none" stroke="#e9d5ff" stroke-width="5" />
-            <circle
-              cx="28"
-              cy="28"
-              r="24"
-              fill="none"
-              :stroke="ringStroke"
-              stroke-width="5"
-              stroke-linecap="round"
-              :stroke-dasharray="arc"
-            />
-          </svg>
-          <span
-            class="absolute inset-0 flex items-center justify-center text-sm font-bold"
-            :class="ringTextClass"
-          >
-            {{ analysis.score }}
-          </span>
-        </div>
+        <ScoreDonut :score="analysis.score" size="sm" />
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
             Meal Score
@@ -88,35 +66,8 @@ const arc = computed(() => `${(props.analysis.score / 100) * RING_LENGTH} ${RING
         </div>
       </div>
 
-      <div v-if="analysis.missing.length > 0">
-        <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Missing
-        </p>
-        <div class="flex flex-wrap gap-1.5">
-          <span
-            v-for="missingItem in analysis.missing"
-            :key="missingItem"
-            class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300"
-          >
-            {{ missingItem }}
-          </span>
-        </div>
-      </div>
-
-      <div v-if="analysis.suggestions.length > 0">
-        <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Suggestions
-        </p>
-        <ul class="space-y-1">
-          <li
-            v-for="suggestion in analysis.suggestions"
-            :key="suggestion"
-            class="flex items-start gap-1.5 text-sm text-gray-700 dark:text-gray-200"
-          >
-            <span class="mt-0.5 shrink-0 text-green-500">&gt;</span>{{ suggestion }}
-          </li>
-        </ul>
-      </div>
+      <AnalysisGapList label="Missing" :items="analysis.missing" />
+      <AnalysisSuggestionList label="Suggestions" :items="analysis.suggestions" />
 
       <!-- Read-only on purpose: re-running costs an AI call, and the button that spends it
            already lives in the meal dialog next to the meal it would re-read. -->

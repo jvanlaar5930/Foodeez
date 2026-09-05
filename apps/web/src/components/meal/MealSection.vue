@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { MealType, MEAL_TYPE_LABELS } from '@foodeez/shared';
+import { MEAL_TYPE_LABELS, MEAL_TYPE_SHORT_LABELS, MealType } from '@foodeez/shared';
 import type { MealLog, MealLogItem, NutritionalInfo } from '@foodeez/shared';
 import FoodItemRow from './FoodItemRow.vue';
 import MealAnalysisBadge from './MealAnalysisBadge.vue';
@@ -16,22 +16,13 @@ defineProps<Props>();
 const emit = defineEmits<{ editMeal: [mealLog: MealLog]; deleteMeal: [mealLog: MealLog] }>();
 
 const isCollapsed = ref(false);
-
-const mealIcons: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening',
-};
 </script>
 
 <template>
   <div class="overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
     <div class="flex items-center justify-between px-4 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
       <div class="flex items-center gap-2">
-        <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ mealIcons[mealType] ?? 'Meal' }}</span>
+        <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ MEAL_TYPE_SHORT_LABELS[mealType] ?? 'Meal' }}</span>
         <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">
           {{ MEAL_TYPE_LABELS[mealType] ?? `Meal ${mealType}` }}
         </span>

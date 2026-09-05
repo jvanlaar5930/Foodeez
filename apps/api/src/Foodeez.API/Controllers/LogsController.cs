@@ -1,91 +1,47 @@
-using Foodeez.Infrastructure.Data;
+using Foodeez.Application.DTOs.Admin;
+using Foodeez.Application.UseCases.Admin;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
+/// <summary>
+/// The raw log, with stack traces and request context - what you want when something has
+/// already gone wrong. The admin UI uses /api/admin/logs for its summary view; nothing in
+/// either client calls these routes, so they exist to be read by hand.
+/// </summary>
 [Route("api/logs")]
-public class LogsController : ControllerBase
+[Authorize(Roles = "Admin")]
+public class LogsController : FoodeezController
 {
-    private readonly AppDbContext _db;
+    private readonly AppLogsUseCase _logs;
 
-    public LogsController(AppDbContext db) => _db = db;
+    public LogsController(AppLogsUseCase logs) => _logs = logs;
 
-    /// <summary>Query recent application logs. Intended for local development / debugging.</summary>
+    /// <summary>Query recent application logs.</summary>
     [HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(AppLogDetailPageDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLogs(
-        [FromQuery] string? level       = null,
-        [FromQuery] string? source      = null,
-        [FromQuery] DateTime? from      = null,
-        [FromQuery] DateTime? to        = null,
-        [FromQuery] int limit           = 100,
-        [FromQuery] int offset          = 0)
-    {
-        limit = Math.Clamp(limit, 1, 500);
-
-        var query = _db.AppLogs.AsNoTracking();
-
-        if (!string.IsNullOrWhiteSpace(level))
-            query = query.Where(l => l.Level == level);
-
-        if (!string.IsNullOrWhiteSpace(source))
-            query = query.Where(l => l.Source != null && l.Source.Contains(source));
-
-        if (from.HasValue)
-            query = query.Where(l => l.Timestamp >= from.Value.ToUniversalTime());
-
-        if (to.HasValue)
-            query = query.Where(l => l.Timestamp <= to.Value.ToUniversalTime());
-
-        var total = await query.CountAsync();
-
-        var entries = await query
-            .OrderByDescending(l => l.Timestamp)
-            .Skip(offset)
-            .Take(limit)
-            .Select(l => new
-            {
-                l.Id,
-                l.Timestamp,
-                l.Level,
-                l.Message,
-                l.Source,
-                l.ExceptionType,
-                l.ExceptionMessage,
-                l.StackTrace,
-                l.RequestMethod,
-                l.RequestPath,
-                l.StatusCode,
-                l.UserId,
-                l.AdditionalData,
-            })
-            .ToListAsync();
-
-        return Ok(new { total, offset, limit, entries });
-    }
+        [FromQuery] string? level = null,
+        [FromQuery] string? source = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int limit = 100,
+        [FromQuery] int offset = 0,
+        CancellationToken ct = default) =>
+        Ok(await _logs.QueryAsync(
+            new AppLogQuery(level, source, From: from, To: to, Limit: limit, Offset: offset), ct));
 
     /// <summary>Get a single log entry by ID.</summary>
     [HttpGet("{id:long}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(AppLogDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetLog(long id)
-    {
-        var entry = await _db.AppLogs.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id);
-        return entry is null ? NotFound() : Ok(entry);
-    }
+    public async Task<IActionResult> GetLog(long id, CancellationToken ct) =>
+        await _logs.GetAsync(id, ct) is { } entry ? Ok(entry) : NotFound();
 
     /// <summary>Delete all logs older than the given number of days (default 30).</summary>
     [HttpDelete("prune")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Prune([FromQuery] int olderThanDays = 30)
-    {
-        var cutoff = DateTime.UtcNow.AddDays(-olderThanDays);
-        var deleted = await _db.AppLogs
-            .Where(l => l.Timestamp < cutoff)
-            .ExecuteDeleteAsync();
-
-        return Ok(new { deleted });
-    }
+    public async Task<IActionResult> Prune([FromQuery] int olderThanDays = 30, CancellationToken ct = default) =>
+        Ok(new { deleted = await _logs.PruneAsync(olderThanDays, ct) });
 }

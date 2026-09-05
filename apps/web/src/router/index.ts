@@ -12,6 +12,7 @@ const MealPlanView = () => import('@/views/meal-plan/MealPlanView.vue');
 const AdviceView = () => import('@/views/advice/AdviceView.vue');
 const GroceryListView = () => import('@/views/grocery/GroceryListView.vue');
 const RecipesView = () => import('@/views/recipes/RecipesView.vue');
+const ReportsView = () => import('@/views/reports/ReportsView.vue');
 const ProfileView = () => import('@/views/profile/ProfileView.vue');
 const AdminLogsView = () => import('@/views/admin/AdminLogsView.vue');
 const AdminUsersView = () => import('@/views/admin/AdminUsersView.vue');
@@ -69,6 +70,11 @@ const routes = [
   {
     path: '/recipes',
     component: RecipesView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/reports',
+    component: ReportsView,
     meta: { requiresAuth: true },
   },
   {

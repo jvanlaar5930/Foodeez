@@ -23,6 +23,8 @@ import {
   type SuggestedRecipeDto,
 } from '@/types';
 import { BorderRadius, FontSize, FontWeight, Shadows, Spacing } from '@/constants/theme';
+import { MessageBubble, StreamingBubble } from '@/components/chat/MessageBubble';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 /** The openers worth one tap, for a tab with nothing in it yet. */
@@ -42,22 +44,21 @@ export function AdviceScreen() {
   const [showHistory, setShowHistory] = useState(false);
   const [planNotice, setPlanNotice] = useState<string | null>(null);
 
-  const {
-    conversations,
-    activeConversation,
-    isLoading,
-    isSending,
-    streamingText,
-    error,
-    fetchConversations,
-    openConversation,
-    startNew,
-    send,
-    cancelSend,
-    remove,
-    addSuggestionsToPlan,
-    saveRecipes,
-  } = useChatStore();
+  const conversations = useChatStore((state) => state.conversations);
+  const activeConversation = useChatStore((state) => state.activeConversation);
+  const isLoading = useChatStore((state) => state.isLoading);
+  const isSending = useChatStore((state) => state.isSending);
+  const streamingText = useChatStore((state) => state.streamingText);
+  const error = useChatStore((state) => state.error);
+  const fetchConversations = useChatStore((state) => state.fetchConversations);
+  const openConversation = useChatStore((state) => state.openConversation);
+  const startNew = useChatStore((state) => state.startNew);
+  const send = useChatStore((state) => state.send);
+  const cancelSend = useChatStore((state) => state.cancelSend);
+  const remove = useChatStore((state) => state.remove);
+  const addSuggestionsToPlan = useChatStore((state) => state.addSuggestionsToPlan);
+  const saveRecipes = useChatStore((state) => state.saveRecipes);
+  const clearError = useChatStore((state) => state.clearError);
 
   // Straight back into the last thread: advice is a conversation, and starting every visit
   // from a blank page would throw away the context that makes it worth having.
@@ -140,7 +141,10 @@ export function AdviceScreen() {
           ref={scroller}
           style={styles.flex}
           contentContainerStyle={styles.thread}
-          onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}
+          // Not animated while a reply is streaming: this fires on every token, and each
+          // animated scroll queues behind the last, so the thread ends up chasing itself
+          // instead of following the text. A finished message still slides into view.
+          onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: !isSending })}
         >
           {isLoading && messages.length === 0 ? (
             <ActivityIndicator color={C.primary} style={styles.loader} />
@@ -171,23 +175,16 @@ export function AdviceScreen() {
             <MessageBubble
               key={message.id}
               message={message}
-              styles={styles}
               onAddToPlan={() => void onAddToPlan(message.id)}
               onSaveRecipes={() => void onSaveRecipes(message.id)}
             />
           ))}
 
-          {isSending ? (
-            <View style={[styles.bubble, styles.assistantBubble]}>
-              <Text style={styles.assistantText}>
-                {streamingText.length > 0 ? streamingText : 'Thinking...'}
-              </Text>
-            </View>
-          ) : null}
+          {isSending ? <StreamingBubble text={streamingText} /> : null}
         </ScrollView>
 
         {planNotice ? <Text style={styles.notice}>{planNotice}</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <ErrorBanner message={error} onDismiss={clearError} />
 
         <View style={styles.composer}>
           <TextInput
@@ -210,7 +207,7 @@ export function AdviceScreen() {
               disabled={draft.trim().length === 0}
               onPress={() => void onSend(draft)}
             >
-              <Ionicons name="arrow-up" size={20} color={C.surface} />
+              <Ionicons name="arrow-up" size={20} color={C.onPrimary} />
             </TouchableOpacity>
           )}
         </View>
@@ -278,187 +275,6 @@ export function AdviceScreen() {
   );
 }
 
-function MessageBubble({
-  message,
-  styles,
-  onAddToPlan,
-  onSaveRecipes,
-}: {
-  message: ChatMessageDto;
-  styles: ReturnType<typeof makeStyles>;
-  onAddToPlan: () => void;
-  onSaveRecipes: () => void;
-}) {
-  const isUser = message.role === ChatRole.User;
-  // A message that only exists on screen has nothing on the server to act on yet.
-  const isSaved = !message.id.startsWith('pending-');
-
-  return (
-    <View style={isUser ? styles.userRow : styles.assistantRow}>
-      <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-        <Text style={isUser ? styles.userText : styles.assistantText}>{message.content}</Text>
-      </View>
-
-      {!isUser && message.suggestions.length > 0 ? (
-        <SuggestionsCard
-          suggestions={message.suggestions}
-          accepted={Boolean(message.suggestionsAcceptedAt)}
-          canAdd={isSaved}
-          styles={styles}
-          onAdd={onAddToPlan}
-        />
-      ) : null}
-
-      {!isUser && message.recipes.length > 0 ? (
-        <RecipesCard
-          recipes={message.recipes}
-          saved={Boolean(message.recipesSavedAt)}
-          canSave={isSaved}
-          styles={styles}
-          onSave={onSaveRecipes}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function SuggestionsCard({
-  suggestions,
-  accepted,
-  canAdd,
-  styles,
-  onAdd,
-}: {
-  suggestions: PlannedMealDto[];
-  accepted: boolean;
-  canAdd: boolean;
-  styles: ReturnType<typeof makeStyles>;
-  onAdd: () => void;
-}) {
-  return (
-    <View style={styles.suggestions}>
-      <Text style={styles.suggestionsLabel}>SUGGESTED MEALS</Text>
-
-      {suggestions.map((meal, index) => (
-        <Text key={`${meal.date}-${meal.mealType}-${index}`} style={styles.suggestionLine}>
-          <Text style={styles.suggestionDay}>
-            {format(parseISO(meal.date), 'EEE d MMM')} {meal.mealType}:{' '}
-          </Text>
-          {meal.name}
-        </Text>
-      ))}
-
-      {accepted ? (
-        <Text style={styles.suggestionsDone}>Added to your meal plan.</Text>
-      ) : canAdd ? (
-        <TouchableOpacity style={styles.suggestionsButton} onPress={onAdd}>
-          <Text style={styles.suggestionsButtonText}>
-            Add {suggestions.length} {suggestions.length === 1 ? 'meal' : 'meals'} to my plan
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-    </View>
-  );
-}
-
-/** "300 g flour", or just the name when the model gave no measurement. */
-function ingredientLine(ingredient: SuggestedRecipeDto['ingredients'][number]): string {
-  const amount = [ingredient.quantity > 0 ? String(ingredient.quantity) : '', ingredient.unit]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
-  const line = amount.length > 0 ? `${amount} ${ingredient.name}` : ingredient.name;
-  return ingredient.notes ? `${line} (${ingredient.notes})` : line;
-}
-
-function RecipesCard({
-  recipes,
-  saved,
-  canSave,
-  styles,
-  onSave,
-}: {
-  recipes: SuggestedRecipeDto[];
-  saved: boolean;
-  canSave: boolean;
-  styles: ReturnType<typeof makeStyles>;
-  onSave: () => void;
-}) {
-  // Collapsed by default: a full method inline would bury the conversation around it.
-  const [expanded, setExpanded] = useState<number | null>(null);
-
-  return (
-    <View style={styles.recipes}>
-      <Text style={styles.recipesLabel}>{recipes.length === 1 ? 'RECIPE' : 'RECIPES'}</Text>
-
-      {recipes.map((recipe, index) => {
-        const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes;
-        const isOpen = expanded === index;
-        const steps = recipe.instructions
-          .split('\n')
-          .map((step) => step.trim().replace(/^\d+[.)]\s*/, ''))
-          .filter(Boolean);
-
-        return (
-          <View key={`${recipe.name}-${index}`} style={styles.recipeItem}>
-            <TouchableOpacity
-              style={styles.recipeHead}
-              onPress={() => setExpanded(isOpen ? null : index)}
-              accessibilityLabel={`${isOpen ? 'Hide' : 'View'} ${recipe.name}`}
-            >
-              <View style={styles.flex}>
-                <Text style={styles.recipeName}>{recipe.name}</Text>
-                <Text style={styles.recipeMeta}>
-                  {totalTime > 0 ? `${totalTime} min · ` : ''}
-                  {recipe.servings} {recipe.servings === 1 ? 'serving' : 'servings'}
-                  {recipe.calories > 0 ? ` · ${Math.round(recipe.calories)} kcal each` : ''}
-                </Text>
-              </View>
-              <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#B45309" />
-            </TouchableOpacity>
-
-            {isOpen ? (
-              <View style={styles.recipeBody}>
-                {recipe.description ? (
-                  <Text style={styles.recipeDesc}>{recipe.description}</Text>
-                ) : null}
-
-                <Text style={styles.recipeSection}>Ingredients</Text>
-                {recipe.ingredients.map((ingredient, i) => (
-                  <Text key={`${ingredient.name}-${i}`} style={styles.recipeDetail}>
-                    {ingredientLine(ingredient)}
-                  </Text>
-                ))}
-
-                {steps.length > 0 ? (
-                  <>
-                    <Text style={styles.recipeSection}>Method</Text>
-                    {steps.map((step, i) => (
-                      <Text key={i} style={styles.recipeDetail}>
-                        {i + 1}. {step}
-                      </Text>
-                    ))}
-                  </>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        );
-      })}
-
-      {saved ? (
-        <Text style={styles.recipesDone}>Saved to your recipes.</Text>
-      ) : canSave ? (
-        <TouchableOpacity style={styles.recipesButton} onPress={onSave}>
-          <Text style={styles.recipesButtonText}>
-            Save {recipes.length === 1 ? 'this recipe' : `these ${recipes.length} recipes`}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-    </View>
-  );
-}
-
 const makeStyles = (C: Palette) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: C.background },
@@ -498,117 +314,12 @@ const makeStyles = (C: Palette) =>
       paddingVertical: Spacing.md,
     },
     starterText: { fontSize: FontSize.md, color: C.textSecondary },
-    userRow: { alignItems: 'flex-end' },
-    assistantRow: { alignItems: 'flex-start' },
-    bubble: {
-      maxWidth: '88%',
-      borderRadius: BorderRadius.lg,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-    },
-    userBubble: { backgroundColor: C.primary },
-    assistantBubble: { backgroundColor: C.surface, ...Shadows.sm },
-    userText: { color: '#FFFFFF', fontSize: FontSize.md, lineHeight: 21 },
-    assistantText: { color: C.text, fontSize: FontSize.md, lineHeight: 21 },
-    suggestions: {
-      marginTop: Spacing.sm,
-      maxWidth: '88%',
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: C.primary,
-      backgroundColor: C.primaryLight,
-      padding: Spacing.md,
-      gap: 2,
-    },
-    suggestionsLabel: {
-      fontSize: FontSize.xs,
-      fontWeight: FontWeight.bold,
-      color: C.primaryDark,
-      letterSpacing: 0.5,
-      marginBottom: Spacing.xs,
-    },
-    suggestionLine: { fontSize: FontSize.md, color: C.text, lineHeight: 20 },
-    suggestionDay: { fontWeight: FontWeight.semibold, color: C.textSecondary },
-    suggestionsDone: {
-      marginTop: Spacing.sm,
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.semibold,
-      color: C.primaryDark,
-    },
-    suggestionsButton: {
-      marginTop: Spacing.sm,
-      backgroundColor: C.primary,
-      borderRadius: BorderRadius.lg,
-      paddingVertical: Spacing.sm,
-      alignItems: 'center',
-    },
-    suggestionsButtonText: { color: '#FFFFFF', fontWeight: FontWeight.semibold, fontSize: FontSize.md },
     // Amber rather than the palette green, so a recipe offer reads as a different action
     // from a plan offer when a reply carries both.
-    recipes: {
-      marginTop: Spacing.sm,
-      maxWidth: '88%',
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: '#FCD34D',
-      backgroundColor: '#FFFBEB',
-      padding: Spacing.md,
-    },
-    recipesLabel: {
-      fontSize: FontSize.xs,
-      fontWeight: FontWeight.bold,
-      color: '#B45309',
-      letterSpacing: 0.5,
-      marginBottom: Spacing.xs,
-    },
-    recipeItem: {
-      borderRadius: BorderRadius.md,
-      backgroundColor: '#FFFFFF',
-      padding: Spacing.sm,
-      marginBottom: Spacing.xs,
-    },
-    recipeHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    recipeName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: '#1F2937' },
-    recipeMeta: { fontSize: FontSize.xs, color: '#6B7280', marginTop: 2 },
-    recipeBody: {
-      marginTop: Spacing.sm,
-      borderTopWidth: 1,
-      borderTopColor: '#FDE68A',
-      paddingTop: Spacing.sm,
-    },
-    recipeDesc: { fontSize: FontSize.xs, color: '#4B5563', marginBottom: Spacing.xs },
-    recipeSection: {
-      fontSize: FontSize.xs,
-      fontWeight: FontWeight.semibold,
-      color: '#374151',
-      marginTop: Spacing.xs,
-      marginBottom: 2,
-    },
-    recipeDetail: { fontSize: FontSize.xs, color: '#4B5563', lineHeight: 18 },
-    recipesDone: {
-      marginTop: Spacing.xs,
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.semibold,
-      color: '#B45309',
-    },
-    recipesButton: {
-      marginTop: Spacing.xs,
-      backgroundColor: '#D97706',
-      borderRadius: BorderRadius.lg,
-      paddingVertical: Spacing.sm,
-      alignItems: 'center',
-    },
-    recipesButtonText: { color: '#FFFFFF', fontWeight: FontWeight.semibold, fontSize: FontSize.md },
     notice: {
       marginHorizontal: Spacing.md,
       marginBottom: Spacing.sm,
       color: C.primaryDark,
-      fontSize: FontSize.sm,
-    },
-    error: {
-      marginHorizontal: Spacing.md,
-      marginBottom: Spacing.sm,
-      color: C.error,
       fontSize: FontSize.sm,
     },
     composer: {

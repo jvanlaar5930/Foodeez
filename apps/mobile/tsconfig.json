@@ -5,8 +5,18 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@foodeez/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "@foodeez/shared/*": [
+        "../../packages/shared/src/*"
       ]
-    }
+    },
+    "types": [
+      "jest",
+      "node"
+    ]
   },
   "include": [
     "**/*.ts",

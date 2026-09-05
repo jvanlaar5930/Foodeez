@@ -86,3 +86,39 @@ export function formatServing(amount: number, unit: string, system: UnitSystem):
       return `${round(amount)} ${unit}`;
   }
 }
+
+/** The denominators a cook measures with: thirds and eighths of a cup exist, sevenths do not. */
+const FRACTION_DENOMINATORS = [2, 3, 4, 8];
+
+/** How far an amount may sit from a fraction and still be written as one. */
+const FRACTION_TOLERANCE = 0.02;
+
+/**
+ * An ingredient amount the way a recipe card writes it: the fraction a measuring cup has where
+ * the number is one of those - "1/3", "1 1/2" - and otherwise the number to two decimals.
+ *
+ * Amounts reach us as floats, so a third of a cup arrives as 0.333333334. Printed raw that is
+ * both unreadable and unmeasurable; the fraction is the number the cook actually reaches for.
+ */
+export function formatQuantity(value: number): string {
+  if (!Number.isFinite(value)) return '';
+
+  const sign = value < 0 ? '-' : '';
+  const absolute = Math.abs(value);
+  const whole = Math.floor(absolute);
+  const remainder = absolute - whole;
+
+  for (const denominator of FRACTION_DENOMINATORS) {
+    const numerator = Math.round(remainder * denominator);
+
+    // 0 and the denominator itself are whole numbers, not fractions - leave those to the
+    // rounding below, which is what keeps 1.99 from reading as 2.
+    if (numerator === 0 || numerator === denominator) continue;
+    if (Math.abs(remainder - numerator / denominator) > FRACTION_TOLERANCE) continue;
+
+    const fraction = `${numerator}/${denominator}`;
+    return whole > 0 ? `${sign}${whole} ${fraction}` : `${sign}${fraction}`;
+  }
+
+  return `${sign}${round(absolute, 2)}`;
+}

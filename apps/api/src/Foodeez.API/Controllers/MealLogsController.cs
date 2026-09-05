@@ -8,10 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Foodeez.API.Controllers;
 
-[ApiController]
 [Route("api/meal-logs")]
 [Authorize]
-public class MealLogsController : ControllerBase
+public class MealLogsController : FoodeezController
 {
     private readonly LogMealUseCase _logMealUseCase;
     private readonly ParseMealImageUseCase _parseMealImageUseCase;
@@ -19,6 +18,7 @@ public class MealLogsController : ControllerBase
     private readonly GetDailyLogsUseCase _getDailyLogsUseCase;
     private readonly GetMealLogsRangeUseCase _getMealLogsRangeUseCase;
     private readonly GetNutritionSummaryUseCase _getNutritionSummaryUseCase;
+    private readonly GetNutritionReportUseCase _getNutritionReportUseCase;
     private readonly UpdateMealLogUseCase _updateMealLogUseCase;
     private readonly DeleteMealLogUseCase _deleteMealLogUseCase;
     private readonly AnalyzeMealLogUseCase _analyzeMealLogUseCase;
@@ -31,6 +31,7 @@ public class MealLogsController : ControllerBase
         GetDailyLogsUseCase getDailyLogsUseCase,
         GetMealLogsRangeUseCase getMealLogsRangeUseCase,
         GetNutritionSummaryUseCase getNutritionSummaryUseCase,
+        GetNutritionReportUseCase getNutritionReportUseCase,
         UpdateMealLogUseCase updateMealLogUseCase,
         DeleteMealLogUseCase deleteMealLogUseCase,
         AnalyzeMealLogUseCase analyzeMealLogUseCase,
@@ -42,6 +43,7 @@ public class MealLogsController : ControllerBase
         _getDailyLogsUseCase = getDailyLogsUseCase;
         _getMealLogsRangeUseCase = getMealLogsRangeUseCase;
         _getNutritionSummaryUseCase = getNutritionSummaryUseCase;
+        _getNutritionReportUseCase = getNutritionReportUseCase;
         _updateMealLogUseCase = updateMealLogUseCase;
         _deleteMealLogUseCase = deleteMealLogUseCase;
         _analyzeMealLogUseCase = analyzeMealLogUseCase;
@@ -121,15 +123,13 @@ public class MealLogsController : ControllerBase
     public async Task<IActionResult> QuickAdd([FromBody] QuickAddRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Description))
-            return BadRequest(new { message = "Describe the meal first." });
+            return BadRequest(Failure("Describe the meal first."));
 
-        var userId = CurrentUser.IdOf(User);
-        if (userId is null)
-            return Unauthorized();
+        var userId = UserId;
 
         // The body carries a userId for symmetry with the rest of this controller, but the
         // foods created along the way are filed against the token's user, never the body's.
-        request.UserId = userId.Value;
+        request.UserId = userId;
 
         return Ok(await _quickAddMealUseCase.ExecuteAsync(request, ct));
     }
@@ -144,46 +144,36 @@ public class MealLogsController : ControllerBase
     public async Task<IActionResult> ParseFoodImage(IFormFile image, CancellationToken ct)
     {
         if (image == null || image.Length == 0)
-            return BadRequest("No image file provided.");
-
-        var userId = CurrentUser.IdOf(User);
-        if (userId is null)
-            return Unauthorized();
+            return BadRequest(Failure("No image file provided."));
 
         using var ms = new MemoryStream();
         await image.CopyToAsync(ms, ct);
         var imageData = ms.ToArray();
         var mimeType = image.ContentType;
 
-        var result = await _parseMealImageUseCase.ExecuteAsync(userId.Value, imageData, mimeType, ct);
+        var result = await _parseMealImageUseCase.ExecuteAsync(UserId, imageData, mimeType, ct);
         return Ok(result);
     }
 
-    /// <summary>Get all meal logs for a user on a specific date.</summary>
+    /// <summary>Get all meal logs for the signed-in user on a specific date.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<MealLogDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDailyLogs([FromQuery] Guid userId, [FromQuery] string date)
+    public async Task<IActionResult> GetDailyLogs([FromQuery] DateOnly date)
     {
-        if (!DateOnly.TryParse(date, out var parsedDate))
-            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
-
-        var logs = await _getDailyLogsUseCase.ExecuteAsync(userId, parsedDate);
+        var logs = await _getDailyLogsUseCase.ExecuteAsync(UserId, date);
         return Ok(logs);
     }
 
     /// <summary>
-    /// Get all meal logs for a user across a date range - used to show what was actually
+    /// Get all meal logs for the signed-in user across a date range - used to show what was actually
     /// eaten alongside a calendar of what was planned.
     /// </summary>
     [HttpGet("range")]
     [ProducesResponseType(typeof(List<MealLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMealLogsRange(
-        [FromQuery] Guid userId, [FromQuery] string startDate, [FromQuery] string endDate)
+        [FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
     {
-        if (!DateOnly.TryParse(startDate, out var parsedStart) || !DateOnly.TryParse(endDate, out var parsedEnd))
-            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
-
-        var logs = await _getMealLogsRangeUseCase.ExecuteAsync(userId, parsedStart, parsedEnd);
+        var logs = await _getMealLogsRangeUseCase.ExecuteAsync(UserId, startDate, endDate);
         return Ok(logs);
     }
 
@@ -194,12 +184,9 @@ public class MealLogsController : ControllerBase
     [HttpGet("day-analysis")]
     [ProducesResponseType(typeof(DayAnalysisDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> GetDayAnalysis([FromQuery] Guid userId, [FromQuery] string date)
+    public async Task<IActionResult> GetDayAnalysis([FromQuery] DateOnly date)
     {
-        if (!DateOnly.TryParse(date, out var parsedDate))
-            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
-
-        var analysis = await _analyzeDayUseCase.PeekAsync(userId, parsedDate);
+        var analysis = await _analyzeDayUseCase.PeekAsync(UserId, date);
         return analysis == null ? NoContent() : Ok(analysis);
     }
 
@@ -213,28 +200,13 @@ public class MealLogsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> AnalyzeDay(
-        [FromQuery] Guid userId,
-        [FromQuery] string date,
+        [FromQuery] DateOnly date,
         [FromQuery] bool refresh,
         CancellationToken ct)
     {
-        if (!DateOnly.TryParse(date, out var parsedDate))
-            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
-
-        try
-        {
-            return Ok(await _analyzeDayUseCase.ExecuteAsync(userId, parsedDate, refresh, ct));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-        catch (AIGenerationFailedException ex)
-        {
-            // 503, not 500: the request was fine and retrying is the right response. Nothing
-            // was stored, so there is no half-made analysis for the client to reconcile.
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
-        }
+        // InvalidOperationException -> 400 and AIGenerationFailedException -> 503 are both
+        // mapped by ExceptionHandlingMiddleware.
+        return Ok(await _analyzeDayUseCase.ExecuteAsync(UserId, date, refresh, ct));
     }
 
     /// <summary>
@@ -244,30 +216,35 @@ public class MealLogsController : ControllerBase
     [HttpPost("day-analysis/stream")]
     [Produces("text/event-stream")]
     public async Task AnalyzeDayStream(
-        [FromQuery] Guid userId,
-        [FromQuery] string date,
+        [FromQuery] DateOnly date,
         [FromQuery] bool refresh,
         CancellationToken ct)
     {
-        if (!DateOnly.TryParse(date, out var parsedDate))
-        {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
-            return;
-        }
-
         await ServerSentEventStream.WriteAsync(
-            Response, _analyzeDayUseCase.ExecuteStreamAsync(userId, parsedDate, refresh, ct), ct);
+            Response, _analyzeDayUseCase.ExecuteStreamAsync(UserId, date, refresh, ct), ct);
     }
 
-    /// <summary>Get nutritional summary for a user on a specific date, including progress toward targets.</summary>
+    /// <summary>
+    /// A date range added up for the reporting screens: per day, per meal type, per food, and
+    /// against the user's targets. One request rather than a page of meals to total client-side.
+    /// </summary>
+    [HttpGet("report")]
+    [ProducesResponseType(typeof(NutritionReportDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetNutritionReport(
+        [FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
+    {
+        // A backwards or over-long range throws InvalidOperationException, which
+        // ExceptionHandlingMiddleware maps to a 400 carrying the reason.
+        return Ok(await _getNutritionReportUseCase.ExecuteAsync(UserId, startDate, endDate));
+    }
+
+    /// <summary>Get the signed-in user's nutritional summary for a date, including progress toward targets.</summary>
     [HttpGet("nutrition-summary")]
     [ProducesResponseType(typeof(NutritionSummaryDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetNutritionSummary([FromQuery] Guid userId, [FromQuery] string date)
+    public async Task<IActionResult> GetNutritionSummary([FromQuery] DateOnly date)
     {
-        if (!DateOnly.TryParse(date, out var parsedDate))
-            return BadRequest("Invalid date format. Use yyyy-MM-dd.");
-
-        var summary = await _getNutritionSummaryUseCase.ExecuteAsync(userId, parsedDate);
+        var summary = await _getNutritionSummaryUseCase.ExecuteAsync(UserId, date);
         return Ok(summary);
     }
 }

@@ -17,6 +17,7 @@ import { mealService } from '@/services/mealService';
 import { describeApiError } from '@/utils/apiError';
 import { QuickAddItemDto } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealLogStackParamList, 'FoodScan'>;
@@ -100,7 +101,7 @@ export function FoodScanScreen({ navigation }: Props) {
   if (scanState === 'analyzing') {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={C.primary} />
+        <LoadingSpinner />
         <Text style={styles.analyzingText}>Analyzing your food...</Text>
         <Text style={styles.analyzingSubText}>AI is identifying ingredients and nutrition</Text>
       </SafeAreaView>
@@ -125,7 +126,7 @@ export function FoodScanScreen({ navigation }: Props) {
             >
               <View style={styles.resultCheckbox}>
                 {selectedItems.has(index) && (
-                  <Ionicons name="checkmark" size={16} color={C.surface} />
+                  <Ionicons name="checkmark" size={16} color={C.onPrimary} />
                 )}
               </View>
               <View style={styles.resultContent}>
@@ -165,7 +166,7 @@ export function FoodScanScreen({ navigation }: Props) {
             <Text style={styles.confirmButtonText}>
               Add {selectedItems.size} Item{selectedItems.size !== 1 ? 's' : ''}
             </Text>
-            <Ionicons name="arrow-forward" size={20} color={C.surface} />
+            <Ionicons name="arrow-forward" size={20} color={C.onPrimary} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -173,28 +174,30 @@ export function FoodScanScreen({ navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
-        <SafeAreaView style={styles.cameraOverlay}>
-          <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={28} color={C.surface} />
+    <View style={styles.cameraScreen}>
+      <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
+      {/* A sibling laid over the preview, not a child of it: CameraView does not render
+          children, and nesting these warned about "inconsistent behaviour or crashes" - with
+          the capture button among the things that would silently fail to appear. */}
+      <SafeAreaView style={styles.cameraOverlay} pointerEvents="box-none">
+        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.scanFrame} pointerEvents="none" />
+        <Text style={styles.scanHint}>Center your food in the frame</Text>
+        <View style={styles.cameraControls}>
+          <TouchableOpacity
+            style={styles.flipButton}
+            onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
+          >
+            <Ionicons name="camera-reverse-outline" size={28} color="#FFFFFF" />
           </TouchableOpacity>
-          <View style={styles.scanFrame} />
-          <Text style={styles.scanHint}>Center your food in the frame</Text>
-          <View style={styles.cameraControls}>
-            <TouchableOpacity
-              style={styles.flipButton}
-              onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
-            >
-              <Ionicons name="camera-reverse-outline" size={28} color={C.surface} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.captureButton} onPress={handleCapture}>
-              <View style={styles.captureButtonInner} />
-            </TouchableOpacity>
-            <View style={{ width: 52 }} />
-          </View>
-        </SafeAreaView>
-      </CameraView>
+          <TouchableOpacity style={styles.captureButton} onPress={handleCapture}>
+            <View style={styles.captureButtonInner} />
+          </TouchableOpacity>
+          <View style={{ width: 52 }} />
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -202,10 +205,12 @@ export function FoodScanScreen({ navigation }: Props) {
 const makeStyles = (C: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
   centered: { justifyContent: 'center', alignItems: 'center', gap: Spacing.md },
-  camera: { flex: 1 },
+  // Black rather than the theme's background: it is what shows in the moment before the
+  // preview starts, and a pale flash there reads as a broken camera.
+  cameraScreen: { flex: 1, backgroundColor: '#000000' },
+  camera: StyleSheet.absoluteFill,
   cameraOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
+    ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
     padding: Spacing.lg,
   },
@@ -220,13 +225,16 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     height: 280,
     alignSelf: 'center',
     borderWidth: 2,
-    borderColor: C.surface,
+    // Drawn over the camera preview, so white regardless of theme.
+    borderColor: '#FFFFFF',
     borderRadius: BorderRadius.lg,
     backgroundColor: 'transparent',
   },
   scanHint: {
     textAlign: 'center',
-    color: C.surface,
+    // On a black scrim over the live camera, so it is white in both themes - the theme's
+    // on-accent ink would be unreadable there.
+    color: '#FFFFFF',
     fontSize: FontSize.md,
     backgroundColor: 'rgba(0,0,0,0.4)',
     paddingHorizontal: Spacing.md,
@@ -275,7 +283,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
   },
-  permissionButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  permissionButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
   analyzingText: { fontSize: FontSize.xl, fontWeight: FontWeight.semibold, color: C.text },
   analyzingSubText: { fontSize: FontSize.md, color: C.textSecondary },
   resultsHeader: { padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: C.divider },
@@ -340,5 +348,5 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   confirmButtonDisabled: { backgroundColor: C.textHint },
-  confirmButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  confirmButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
 });

@@ -1,10 +1,14 @@
 import { create } from 'zustand';
+import { describeApiError } from '@/utils/apiError';
+import { runAsync } from '@/store/asyncState';
 import * as mealPlanService from '@/services/mealPlanService';
 import type { GenerateMealPlanRequest, MealPlanDto, MealPlanEntryRequest } from '@/types';
 
 interface MealPlanState {
   plans: MealPlanDto[];
   activePlan: MealPlanDto | null;
+  /** Whether the plan list has been fetched this session - see `ensurePlanFor`. */
+  hasLoaded: boolean;
   isLoading: boolean;
   isGenerating: boolean;
   error: string | null;
@@ -27,20 +31,16 @@ interface MealPlanState {
 export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   plans: [],
   activePlan: null,
+  hasLoaded: false,
   isLoading: false,
   isGenerating: false,
   error: null,
 
   fetchPlans: async (userId: string) => {
-    set({ isLoading: true, error: null });
-    try {
+    await runAsync(set, { fallback: 'Your meal plans could not be loaded.' }, async () => {
       const plans = await mealPlanService.getMealPlans(userId);
-      const activePlan = plans.length > 0 ? plans[0] : null;
-      set({ plans, activePlan, isLoading: false });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch meal plans.';
-      set({ isLoading: false, error: message });
-    }
+      set({ plans, activePlan: plans.length > 0 ? plans[0] : null, hasLoaded: true });
+    });
   },
 
   generatePlan: async (data: GenerateMealPlanRequest) => {
@@ -50,8 +50,7 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
       const currentPlans = get().plans;
       set({ plans: [newPlan, ...currentPlans], activePlan: newPlan, isGenerating: false });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to generate meal plan.';
-      set({ isGenerating: false, error: message });
+      set({ isGenerating: false, error: describeApiError(err, 'That plan could not be generated.') });
       throw err;
     }
   },
@@ -65,6 +64,11 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   },
 
   ensurePlanFor: async (userId: string, startDate: string, endDate: string, name: string) => {
+    // The recipe screen can reach this without the meal-plan tab ever having been opened, and
+    // a never-fetched list looks exactly like a user with no plans - which would quietly make
+    // a second plan for a week that already has one.
+    if (!get().hasLoaded) await get().fetchPlans(userId);
+
     const existing = get().plans.find((p) => p.startDate <= startDate && p.endDate >= endDate);
     if (existing) return existing;
 
@@ -87,8 +91,7 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
       const active = plans.find((p) => p.id === planId) ?? plans[0] ?? null;
       set({ plans, activePlan: active });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save the meal.';
-      set({ error: message });
+      set({ error: describeApiError(err, 'That meal could not be saved.') });
       throw err;
     }
   },
@@ -101,8 +104,7 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
       const active = plans.find((p) => p.id === planId) ?? plans[0] ?? null;
       set({ plans, activePlan: active });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove the meal.';
-      set({ error: message });
+      set({ error: describeApiError(err, 'That meal could not be removed.') });
       throw err;
     }
   },

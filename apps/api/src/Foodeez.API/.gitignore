@@ -1,0 +1,7 @@
+
+# Claude local project memory/cache
+.claude-local/
+.claude/**/*.db
+.claude/**/*.sqlite
+.claude/**/*.sqlite3
+.claude/**/*.log

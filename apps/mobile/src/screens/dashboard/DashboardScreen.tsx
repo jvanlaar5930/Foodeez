@@ -1,35 +1,60 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, type CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { addDays, subDays } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { CalorieRing } from './components/CalorieRing';
 import { MacroProgress } from './components/MacroProgress';
 import { Card } from '@/components/ui/Card';
+import { DateRangeNav } from '@/components/ui/DateRangeNav';
 import { MealSection } from '@/components/meal/MealSection';
 import { useAuthStore } from '@/store/authStore';
 import { useMealStore } from '@/store/mealStore';
 import { useNutrition } from '@/hooks/useNutrition';
 import { FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
-import { formatApiDate, formatDisplayDate, getGreeting } from '@/utils/dateUtils';
-import type { MainTabParamList } from '@/navigation/types';
+import {
+  formatApiDate,
+  formatDisplayDate,
+  formatShortDate,
+  getGreeting,
+  isToday,
+  parseApiDate,
+} from '@/utils/dateUtils';
+import type { DashboardStackParamList, MainTabParamList } from '@/navigation/types';
 
-type DashboardNav = BottomTabNavigationProp<MainTabParamList, 'Dashboard'>;
+/**
+ * The dashboard sits in its own stack now (for the reports screen) inside the tab navigator,
+ * so it navigates in both: "Reports" is a push, "Recipes" a jump to another tab.
+ */
+type DashboardNav = CompositeNavigationProp<
+  NativeStackNavigationProp<DashboardStackParamList, 'DashboardHome'>,
+  BottomTabNavigationProp<MainTabParamList>
+>;
 
 export function DashboardScreen() {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<DashboardNav>();
   const user = useAuthStore((state) => state.user);
-  const { dailyLogs, nutritionSummary, isLoading, refreshDay } = useMealStore();
+  const dailyLogs = useMealStore((state) => state.dailyLogs);
+  const nutritionSummary = useMealStore((state) => state.nutritionSummary);
+  const isLoading = useMealStore((state) => state.isLoading);
+  const refreshDay = useMealStore((state) => state.refreshDay);
+  // The day being looked at, shared with the meal log: both read the same single day out of
+  // the store, so keeping two ideas of "the current day" would have them overwrite each other.
+  const selectedDate = useMealStore((state) => state.selectedDate);
+  const setSelectedDate = useMealStore((state) => state.setSelectedDate);
   const { macrosSummary } = useNutrition();
   const [refreshing, setRefreshing] = useState(false);
   const [recipeSearch, setRecipeSearch] = useState('');
   const searchRef = useRef<TextInput>(null);
 
-  const today = formatApiDate(new Date());
+  const viewedDate = parseApiDate(selectedDate);
+  const isViewingToday = isToday(viewedDate);
   const displayDate = formatDisplayDate(new Date());
   const greeting = getGreeting();
 
@@ -38,8 +63,18 @@ export function DashboardScreen() {
       return;
     }
 
-    await refreshDay(user.id, today);
-  }, [refreshDay, today, user]);
+    await refreshDay(user.id, selectedDate);
+  }, [refreshDay, selectedDate, user]);
+
+  const goToPreviousDay = () => setSelectedDate(formatApiDate(subDays(viewedDate, 1)));
+
+  const goToNextDay = () => {
+    const next = addDays(viewedDate, 1);
+    // Tomorrow has nothing logged in it by definition.
+    if (next <= new Date()) setSelectedDate(formatApiDate(next));
+  };
+
+  const goToToday = () => setSelectedDate(formatApiDate(new Date()));
 
   useFocusEffect(
     useCallback(() => {
@@ -120,6 +155,13 @@ export function DashboardScreen() {
 
         <Card style={styles.ringCard}>
           <Text style={styles.sectionTitle}>Daily Calories</Text>
+          <DateRangeNav
+            label={isViewingToday ? 'Today' : formatDisplayDate(viewedDate)}
+            onPrevious={goToPreviousDay}
+            onNext={goToNextDay}
+            canGoNext={!isViewingToday}
+            onReset={isViewingToday ? undefined : goToToday}
+          />
           <View style={styles.ringContainer}>
             <CalorieRing consumed={consumed} target={target} />
           </View>
@@ -151,11 +193,18 @@ export function DashboardScreen() {
             </View>
             <Text style={styles.quickActionLabel}>View Plan</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('Reports')}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#F3E5F5' }]}>
+              <Ionicons name="stats-chart-outline" size={24} color="#7C3AED" />
+            </View>
+            <Text style={styles.quickActionLabel}>Reports</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.tipCard}>
           <View style={styles.tipHeader}>
-            <Ionicons name="bulb-outline" size={20} color={C.surface} />
+            <Ionicons name="bulb-outline" size={20} color={C.onPrimary} />
             <Text style={styles.tipTitle}>AI Tip</Text>
           </View>
           <Text style={styles.tipText}>
@@ -164,13 +213,19 @@ export function DashboardScreen() {
           </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Today's Meals</Text>
+        <Text style={styles.sectionTitle}>
+          {isViewingToday ? "Today's Meals" : `Meals on ${formatShortDate(viewedDate)}`}
+        </Text>
         {dailyLogs.length === 0 && !isLoading ? (
           <Card style={styles.emptyMeals}>
             <View style={styles.emptyMealsContent}>
               <Ionicons name="restaurant-outline" size={40} color={C.textHint} />
-              <Text style={styles.emptyMealsText}>No meals logged today</Text>
-              <Text style={styles.emptyMealsHint}>Tap "Log Meal" to get started</Text>
+              <Text style={styles.emptyMealsText}>
+                {isViewingToday ? 'No meals logged today' : 'Nothing logged that day'}
+              </Text>
+              <Text style={styles.emptyMealsHint}>
+                {isViewingToday ? 'Tap "Log Meal" to get started' : 'Page back to Today to log a meal'}
+              </Text>
             </View>
           </Card>
         ) : (
@@ -223,7 +278,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    color: C.surface,
+    color: C.onPrimary,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.md,
   },
@@ -304,12 +359,12 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   tipTitle: {
-    color: C.surface,
+    color: C.onPrimary,
     fontWeight: FontWeight.semibold,
     fontSize: FontSize.md,
   },
   tipText: {
-    color: C.surface,
+    color: C.onPrimary,
     fontSize: FontSize.sm,
     lineHeight: 20,
     opacity: 0.9,

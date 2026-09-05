@@ -147,7 +147,7 @@ export function QuickAddBar({ onApplied, reloadToken = 0, onScanPress }: Props) 
           disabled={!description.trim() || isBusy}
         >
           {isBusy ? (
-            <ActivityIndicator size="small" color={C.surface} />
+            <ActivityIndicator size="small" color={C.onPrimary} />
           ) : (
             <Text style={styles.addButtonText}>Add to meal</Text>
           )}

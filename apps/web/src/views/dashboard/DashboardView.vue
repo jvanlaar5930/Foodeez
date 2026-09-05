@@ -29,7 +29,7 @@
       <!-- Main grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <!-- Calorie & Macros card -->
-        <div class="lg:col-span-1 bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+        <AppCard class="lg:col-span-1">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Today's Nutrition</h2>
 
           <div class="flex justify-center mb-6">
@@ -40,14 +40,14 @@
           </div>
 
           <div class="space-y-3">
-            <MacroBar label="Protein" :current="summary?.totalProtein ?? 0" :target="summary?.targetProtein ?? 150" color="#3B82F6" unit="g" />
-            <MacroBar label="Carbs" :current="summary?.totalCarbs ?? 0" :target="summary?.targetCarbs ?? 250" color="#F97316" unit="g" />
-            <MacroBar label="Fat" :current="summary?.totalFat ?? 0" :target="summary?.targetFat ?? 65" color="#EAB308" unit="g" />
+            <MacroBar label="Protein" :current="summary?.totalProtein ?? 0" :target="summary?.targetProtein ?? 150" :color="MACRO_COLORS.protein.swatch" unit="g" />
+            <MacroBar label="Carbs" :current="summary?.totalCarbs ?? 0" :target="summary?.targetCarbs ?? 250" :color="MACRO_COLORS.carbs.swatch" unit="g" />
+            <MacroBar label="Fat" :current="summary?.totalFat ?? 0" :target="summary?.targetFat ?? 65" :color="MACRO_COLORS.fat.swatch" unit="g" />
           </div>
-        </div>
+        </AppCard>
 
         <!-- Today's meals -->
-        <div class="lg:col-span-2 bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+        <AppCard class="lg:col-span-2">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Today's Meals</h2>
             <RouterLink to="/meal-log" class="text-sm text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-400">View All →</RouterLink>
@@ -77,7 +77,7 @@
               </span>
             </div>
           </div>
-        </div>
+        </AppCard>
       </div>
 
       <!-- AI Tip -->
@@ -93,35 +93,18 @@
 
       <!-- Quick actions -->
       <div class="grid grid-cols-3 gap-4">
-        <RouterLink to="/meal-log"
-          class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-5 flex flex-col items-center gap-2 hover:shadow-md transition-shadow group">
-          <div class="w-12 h-12 bg-green-100 dark:bg-green-900/40 rounded-xl flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-900/60 transition-colors">
-            <span class="text-2xl">➕</span>
-          </div>
-          <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">Log Meal</span>
-        </RouterLink>
-
-        <RouterLink to="/meal-plan"
-          class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-5 flex flex-col items-center gap-2 hover:shadow-md transition-shadow group">
-          <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/40 rounded-xl flex items-center justify-center group-hover:bg-orange-200 dark:group-hover:bg-orange-900/60 transition-colors">
-            <span class="text-2xl">📅</span>
-          </div>
-          <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">Meal Plan</span>
-        </RouterLink>
-
-        <RouterLink to="/recipes"
-          class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-5 flex flex-col items-center gap-2 hover:shadow-md transition-shadow group">
-          <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-900/60 transition-colors">
-            <span class="text-2xl">📖</span>
-          </div>
-          <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">Recipes</span>
-        </RouterLink>
+        <QuickActionTile to="/meal-log" emoji="➕" label="Log Meal" accent="green" />
+        <QuickActionTile to="/meal-plan" emoji="📅" label="Meal Plan" accent="orange" />
+        <QuickActionTile to="/recipes" emoji="📖" label="Recipes" accent="blue" />
       </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
+import AppCard from '@/components/ui/AppCard.vue';
+import QuickActionTile from '@/components/dashboard/QuickActionTile.vue';
+import { MACRO_COLORS } from '@/utils/macroColors';
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { format } from 'date-fns';
@@ -132,7 +115,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import AppAlert from '@/components/ui/AppAlert.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useMealStore } from '@/stores/meal';
-import { MealType } from '@foodeez/shared';
+import { MEAL_TYPE_LABELS, MealType } from '@foodeez/shared';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -158,15 +141,6 @@ const greeting = computed(() =>
 );
 
 const summary = computed(() => mealStore.nutritionSummary);
-
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
 
 onMounted(async () => {
   if (!authStore.user?.id) return;

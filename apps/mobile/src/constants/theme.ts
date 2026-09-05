@@ -22,6 +22,17 @@ export const LightColors = {
   info: '#2196F3',
   divider: '#E0E0E0',
   overlay: 'rgba(0,0,0,0.5)',
+
+  /**
+   * Text and icons sitting *on* a filled accent - a primary button's label, a selected chip.
+   *
+   * Its own token because there was no agreement about what to use: twelve places passed
+   * `C.surface` and nine hardcoded '#FFFFFF'. In light mode those are the same colour, so
+   * nothing looked wrong; in dark mode `C.surface` is #1E1E1E, so the same button rendered
+   * near-black on green in one screen and white on green in the next.
+   */
+  onPrimary: '#FFFFFF',
+  onSecondary: '#FFFFFF',
 };
 
 export type Palette = typeof LightColors;
@@ -47,6 +58,11 @@ export const DarkColors: Palette = {
   info: '#64B5F6',
   divider: '#2C2F33',
   overlay: 'rgba(0,0,0,0.7)',
+
+  // The dark palette's accents are the lighter steps, so dark ink is what reads on them -
+  // which is what `C.surface` was already producing here, by accident rather than intent.
+  onPrimary: '#0B1F10',
+  onSecondary: '#2A1A00',
 };
 
 /**

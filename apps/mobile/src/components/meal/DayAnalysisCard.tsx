@@ -1,16 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { FontSize, FontWeight, Spacing, BorderRadius } from '@/constants/theme';
 import { AIPanelDark, AIPanelLight, type AIPanelColors } from '@/constants/aiPanel';
+import { AnalysisSuggestionList, AnalysisTagList } from '@/components/ai/AnalysisLists';
+import { ScoreRing } from '@/components/ai/ScoreRing';
 import { useTheme, useThemeMode, type Palette } from '@/theme';
-import { scoreColor } from '@/utils/analysisScore';
 import { getDayAnalysis, analyzeDayStream } from '@/services/aiService';
 import { AIStreamError } from '@/services/aiStream';
 import type { DayAnalysisDto, MealLogDto } from '@/types';
-
-const RADIUS = 28;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
  * How a day's meals stand against that day's targets, and what would round it out. Only
@@ -126,56 +123,19 @@ export function DayAnalysisCard({
       {!isAnalyzing && !error && analysis && (
         <>
           <View style={styles.headRow}>
-            <View style={styles.ringWrap}>
-              <Svg width={64} height={64} viewBox="0 0 64 64">
-                <Circle cx={32} cy={32} r={RADIUS} stroke={AI.ringTrack} strokeWidth={5} fill="none" />
-                <Circle
-                  cx={32}
-                  cy={32}
-                  r={RADIUS}
-                  stroke={scoreColor(analysis.score)}
-                  strokeWidth={5}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={`${(analysis.score / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-                  rotation={-90}
-                  origin="32, 32"
-                />
-              </Svg>
-              <Text style={[styles.ringScore, { color: scoreColor(analysis.score) }]}>{analysis.score}</Text>
-            </View>
+            <ScoreRing score={analysis.score} trackColor={AI.ringTrack} size="md" />
             <View style={styles.flex}>
               <Text style={styles.status}>{analysis.status}</Text>
               {analyzedAt && <Text style={styles.analyzedAt}>Analyzed at {analyzedAt}</Text>}
             </View>
           </View>
 
-          {analysis.gaps.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Still short on</Text>
-              <View style={styles.tagRow}>
-                {analysis.gaps.map((gap) => (
-                  <View key={gap} style={styles.gapTag}>
-                    <Text style={styles.gapTagText}>{gap}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {analysis.recommendations.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>
-                {isToday ? 'What to have next' : 'What would have rounded it out'}
-              </Text>
-              {analysis.recommendations.map((recommendation) => (
-                <Text key={recommendation} style={styles.recommendation}>
-                  {'> '}
-                  {recommendation}
-                </Text>
-              ))}
-            </View>
-          )}
+          <AnalysisTagList label="Still short on" items={analysis.gaps} panel={AI} />
+          <AnalysisSuggestionList
+            label={isToday ? 'What to have next' : 'What would have rounded it out'}
+            items={analysis.recommendations}
+            panel={AI}
+          />
         </>
       )}
 
@@ -216,27 +176,8 @@ const makeStyles = (C: Palette, AI: AIPanelColors) =>
     streamText: { fontSize: FontSize.sm, color: C.textSecondary, lineHeight: 20 },
     errorText: { fontSize: FontSize.sm, color: C.error },
     headRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    ringWrap: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
-    ringScore: { position: 'absolute', fontSize: FontSize.md, fontWeight: FontWeight.bold },
     status: { fontSize: FontSize.sm, color: C.text, lineHeight: 19 },
     analyzedAt: { fontSize: FontSize.xs, color: C.textSecondary, marginTop: 4 },
-    section: { gap: 4 },
-    sectionLabel: {
-      fontSize: FontSize.xs,
-      fontWeight: FontWeight.semibold,
-      color: C.textSecondary,
-      letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
-    tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    gapTag: {
-      borderRadius: BorderRadius.full,
-      backgroundColor: AI.tagBg,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 3,
-    },
-    gapTagText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, color: AI.tagText },
-    recommendation: { fontSize: FontSize.sm, color: C.text, lineHeight: 19 },
     button: {
       flexDirection: 'row',
       alignItems: 'center',

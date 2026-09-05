@@ -1,28 +1,26 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import PublicLayout from '@/components/layout/PublicLayout.vue';
 import RecipeSearchBar from '@/components/recipe/RecipeSearchBar.vue';
 import RecipeCard from '@/components/recipe/RecipeCard.vue';
 import RecipeDetailModal from '@/components/recipe/RecipeDetailModal.vue';
+import AddToMealPlanModal from '@/components/mealplan/AddToMealPlanModal.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { useAuthStore } from '@/stores/auth';
-import { recipeService, type RecipeSuggestion } from '@/services/recipeService';
+import { usePagedRecipes } from '@/composables/usePagedRecipes';
+import { useRecipeDetail } from '@/composables/useRecipeDetail';
+import { useRecipeFilterTags } from '@/composables/useRecipeFilterTags';
+import type { RecipeSuggestion } from '@/services/recipeService';
 import type { Recipe } from '@foodeez/shared';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-const FILTER_TAGS = [
-  'Vegetarian',
-  'Vegan',
-  'High-Protein',
-  'Low-Carb',
-  'Quick',
-  'Gluten-Free',
-  'Dairy-Free',
-];
+// Administrator-managed, so this is a ref rather than a constant.
+const { filterTags } = useRecipeFilterTags();
 
 const SORTS = [
   { value: 'relevance', label: 'Best match' },
@@ -34,21 +32,34 @@ const SORTS = [
 type Sort = (typeof SORTS)[number]['value'];
 
 const searchInput = ref('');
-const recipes = ref<Recipe[]>([]);
-const selectedRecipe = ref<Recipe | null>(null);
-const isDetailLoading = ref(false);
+/** The recipe being placed in the calendar, which is what opens the day picker. */
+const planningRecipe = ref<Recipe | null>(null);
 const activeTags = ref(new Set<string>());
 const sort = ref<Sort>('relevance');
-const isLoading = ref(false);
-const isLoadingMore = ref(false);
-const hasMore = ref(false);
-const totalAvailable = ref<number | null>(null);
-const error = ref<string | null>(null);
 
-// Sentinel below the grid; when it scrolls into view the next page is requested.
-const sentinel = ref<HTMLElement | null>(null);
-let observer: IntersectionObserver | null = null;
-let currentPage = 1;
+// The grid and its paging. `sentinel` is bound below the results; scrolling it into view
+// requests the next page.
+const {
+  recipes,
+  isLoading,
+  isLoadingMore,
+  hasMore,
+  totalAvailable,
+  error,
+  sentinel,
+  load: loadPage,
+  loadMore,
+} = usePagedRecipes();
+
+// The detail panel over it.
+const {
+  selected: selectedRecipe,
+  isLoading: isDetailLoading,
+  open: openRecipe,
+  openById,
+  retry: retryDetail,
+  close: closeSelected,
+} = useRecipeDetail();
 
 const activeQuery = computed(() => ((route.query.q as string) ?? '').trim());
 
@@ -81,32 +92,12 @@ const filteredRecipes = computed(() => {
 
 /** Tags that at least one result carries — no point offering a filter that empties the page. */
 const availableTags = computed(() =>
-  FILTER_TAGS.filter(
+  filterTags.value.filter(
     (tag) =>
       activeTags.value.has(tag) ||
       recipes.value.some((r) => r.tags?.toLowerCase().includes(tag.toLowerCase()))
   )
 );
-
-/**
- * Re-requests the recipe after the method failed to load. Worth a button of its own: the
- * server retries upstream on every read, so a second attempt genuinely can succeed where
- * the first did not.
- */
-async function retryDetail() {
-  const current = selectedRecipe.value;
-  if (!current) return;
-
-  isDetailLoading.value = true;
-  try {
-    const full = await recipeService.getRecipeById(current.id);
-    if (selectedRecipe.value?.id === current.id) selectedRecipe.value = full;
-  } catch {
-    // Keep what is on screen; the panel still offers another try.
-  } finally {
-    isDetailLoading.value = false;
-  }
-}
 
 function toggleTag(tag: string) {
   const next = new Set(activeTags.value);
@@ -124,94 +115,11 @@ function runSearch(q: string, suggestion?: RecipeSuggestion) {
 }
 
 async function load() {
-  const q = activeQuery.value;
-  searchInput.value = q;
+  searchInput.value = activeQuery.value;
   activeTags.value = new Set();
-  currentPage = 1;
-  isLoading.value = true;
-  error.value = null;
 
-  try {
-    const result = q
-      ? await recipeService.searchRecipes(q, 1)
-      : await recipeService.getRecipes(1);
-    recipes.value = result.items;
-    hasMore.value = result.hasMore;
-    totalAvailable.value = result.totalAvailable;
-    await openRequestedRecipe();
-  } catch {
-    recipes.value = [];
-    hasMore.value = false;
-    error.value = 'We could not reach the recipe service. Please try again in a moment.';
-  } finally {
-    isLoading.value = false;
-    // Re-arm after the grid re-renders, since the old sentinel node is gone.
-    await nextTick();
-    observeSentinel();
-  }
-}
-
-/** Appends the next page. Guarded so overlapping scroll events cannot double-fetch. */
-async function loadMore() {
-  if (isLoadingMore.value || isLoading.value || !hasMore.value) return;
-
-  isLoadingMore.value = true;
-  const next = currentPage + 1;
-
-  try {
-    const q = activeQuery.value;
-    const result = q
-      ? await recipeService.searchRecipes(q, next)
-      : await recipeService.getRecipes(next);
-
-    // Dedupe defensively: a recipe cached between pages could otherwise appear twice.
-    const seen = new Set(recipes.value.map((r) => r.id));
-    recipes.value = [...recipes.value, ...result.items.filter((r) => !seen.has(r.id))];
-
-    currentPage = next;
-    hasMore.value = result.hasMore && result.items.length > 0;
-    if (result.totalAvailable !== null) totalAvailable.value = result.totalAvailable;
-  } catch {
-    // Stop auto-loading on failure; the manual button below remains available.
-    hasMore.value = false;
-    error.value = 'Could not load more results.';
-  } finally {
-    isLoadingMore.value = false;
-  }
-}
-
-function observeSentinel() {
-  observer?.disconnect();
-  if (!sentinel.value) return;
-
-  observer = new IntersectionObserver(
-    (entries) => {
-      if (entries.some((e) => e.isIntersecting)) loadMore();
-    },
-    // Start fetching a little before the sentinel is actually visible.
-    { rootMargin: '400px 0px' },
-  );
-  observer.observe(sentinel.value);
-}
-
-/**
- * Show the card's data straight away so the modal opens instantly, then swap in the full
- * record. Search results carry no ingredients or steps - the API fills those in on first read.
- */
-async function openRecipe(recipe: Recipe) {
-  selectedRecipe.value = recipe;
-  if (recipe.ingredients.length && recipe.instructions) return;
-
-  isDetailLoading.value = true;
-  try {
-    const full = await recipeService.getRecipeById(recipe.id);
-    // Guard against a slow response landing after the user has moved on.
-    if (selectedRecipe.value?.id === recipe.id) selectedRecipe.value = full;
-  } catch {
-    // Leave the partial record on screen; the modal says which parts are missing.
-  } finally {
-    isDetailLoading.value = false;
-  }
+  await loadPage(activeQuery.value);
+  await openRequestedRecipe();
 }
 
 /** `?recipe=<id>` (set when a suggestion resolved to a saved recipe) opens straight to detail. */
@@ -224,15 +132,12 @@ async function openRequestedRecipe() {
     await openRecipe(fromResults);
     return;
   }
-  try {
-    selectedRecipe.value = await recipeService.getRecipeById(id);
-  } catch {
-    // A stale id just means no modal — the result list still stands.
-  }
+
+  await openById(id);
 }
 
 function closeDetail() {
-  selectedRecipe.value = null;
+  closeSelected();
   if (route.query.recipe) {
     const { recipe: _drop, ...rest } = route.query;
     router.replace({ path: '/search', query: rest });
@@ -241,7 +146,6 @@ function closeDetail() {
 
 watch(() => route.query.q, load);
 onMounted(load);
-onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
@@ -334,29 +238,27 @@ onBeforeUnmount(() => observer?.disconnect());
       </div>
 
       <!-- Empty -->
-      <div v-else-if="filteredRecipes.length === 0" class="py-20 text-center">
-        <p class="text-5xl">🔍</p>
-        <h2 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          No recipes found
-        </h2>
-        <p class="mx-auto mt-2 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+      <EmptyState v-else-if="filteredRecipes.length === 0" emoji="🔍" title="No recipes found">
+        <template #description>
           <template v-if="activeTags.size">
             Nothing matches every filter at once. Try clearing a filter or two.
           </template>
           <template v-else>
-            Try a broader term — an ingredient like "salmon" or a dish like "curry" usually works
-            better than a full sentence.
+            Try a broader term — an ingredient like "salmon" or a dish like "curry" usually
+            works better than a full sentence.
           </template>
-        </p>
-        <button
-          v-if="activeTags.size"
-          type="button"
-          class="mt-5 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
-          @click="activeTags = new Set()"
-        >
-          Clear filters
-        </button>
-      </div>
+        </template>
+
+        <template v-if="activeTags.size" #actions>
+          <button
+            type="button"
+            class="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+            @click="activeTags = new Set()"
+          >
+            Clear filters
+          </button>
+        </template>
+      </EmptyState>
 
       <!-- Results -->
       <div v-else class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -420,13 +322,14 @@ onBeforeUnmount(() => observer?.disconnect());
       @retry="retryDetail"
     >
       <template #actions>
-        <RouterLink
+        <button
           v-if="authStore.isAuthenticated"
-          to="/meal-plan"
+          type="button"
           class="block w-full rounded-xl bg-green-600 py-3 text-center font-semibold text-white transition-colors hover:bg-green-700"
+          @click="planningRecipe = selectedRecipe"
         >
           Add to Meal Plan
-        </RouterLink>
+        </button>
         <RouterLink
           v-else
           to="/auth/register"
@@ -436,5 +339,13 @@ onBeforeUnmount(() => observer?.disconnect());
         </RouterLink>
       </template>
     </RecipeDetailModal>
+
+    <!-- Outside the detail dialog so it is not clipped by the panel it was opened from. -->
+    <AddToMealPlanModal
+      v-if="planningRecipe"
+      :model-value="true"
+      :recipe="planningRecipe"
+      @update:model-value="planningRecipe = null"
+    />
   </PublicLayout>
 </template>

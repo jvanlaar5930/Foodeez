@@ -34,14 +34,21 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 // Response interceptor — handle 401
-// Only redirect to login for auth-endpoint failures (token expired/missing),
-// not for role-permission failures on other endpoints (that would log out mid-session).
+//
+// A 401 means the token is missing, expired or unreadable, wherever it came from. This used
+// to act only on 401s from /auth/ URLs, to avoid logging someone out over a permission
+// failure - but a permission failure is a 403. The effect was that an expired token left you
+// on a page where every request quietly failed and nothing said why, until you reloaded.
+//
+// Sign-in and registration are excluded: their 401 is "those credentials are wrong", which
+// the form is about to show, and redirecting would throw the message away.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const url: string = error.config?.url ?? '';
-    const isAuthEndpoint = url.includes('/auth/');
-    if (error.response?.status === 401 && isAuthEndpoint) {
+    const isSignIn = url.includes('/auth/login') || url.includes('/auth/register');
+
+    if (error.response?.status === 401 && !isSignIn) {
       authStore?.logout();
       window.location.href = '/auth/login';
     }

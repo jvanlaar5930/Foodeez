@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealLogs;
 using Foodeez.Application.DTOs.Recipes;
 using Foodeez.Application.Interfaces.Services;
@@ -331,39 +332,7 @@ internal static class SpoonacularRecipeMapper
 
     // ── DTO mapping ───────────────────────────────────────────────────────────
 
-    public static RecipeDto MapToDto(Recipe recipe) => new RecipeDto
-    {
-        Id = recipe.Id,
-        Name = recipe.Name,
-        Description = recipe.Description,
-        Instructions = recipe.Instructions,
-        PrepTimeMinutes = recipe.PrepTimeMinutes,
-        CookTimeMinutes = recipe.CookTimeMinutes,
-        Servings = recipe.Servings,
-        Tags = recipe.Tags,
-        ImageUrl = recipe.ImageUrl,
-        IsAIGenerated = recipe.IsAIGenerated,
-        SourceUrl = recipe.SourceUrl,
-        SourceName = recipe.SourceName,
-        HasInstructions = !string.IsNullOrWhiteSpace(recipe.Instructions),
-        CreatedByUserId = recipe.CreatedByUserId,
-        NutritionalInfoPerServing = new NutritionalInfoDto
-        {
-            Calories      = recipe.NutritionalInfoPerServing.Calories,
-            Protein       = recipe.NutritionalInfoPerServing.Protein,
-            Carbohydrates = recipe.NutritionalInfoPerServing.Carbohydrates,
-            Fat           = recipe.NutritionalInfoPerServing.Fat,
-            Fiber         = recipe.NutritionalInfoPerServing.Fiber,
-            Sugar         = recipe.NutritionalInfoPerServing.Sugar,
-            Sodium        = recipe.NutritionalInfoPerServing.Sodium
-        },
-        Ingredients = recipe.Ingredients.Select(i => new RecipeIngredientDto
-        {
-            FoodItemId   = i.FoodItemId,
-            FoodItemName = i.FoodItem?.Name ?? i.IngredientName ?? string.Empty,
-            Quantity     = i.Quantity,
-            Unit         = i.Unit,
-            Notes        = i.Notes
-        }).ToList()
-    };
+    /// <summary>Mapping a stored recipe is not this class of thing's job; it forwards so
+    /// existing call sites keep working. <see cref="RecipeMapper"/> owns the shape.</summary>
+    public static RecipeDto MapToDto(Recipe recipe) => RecipeMapper.ToDto(recipe);
 }

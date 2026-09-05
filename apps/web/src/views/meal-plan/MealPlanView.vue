@@ -12,7 +12,7 @@
             @click="openGenerate"
             :disabled="isGenerating"
             class="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-semibold px-4 py-2 rounded-xl transition-colors">
-            <span v-if="isGenerating" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <LoadingSpinner v-if="isGenerating" size="sm" color="currentColor" />
             <span v-else>✨</span>
             {{ isGenerating ? 'Generating...' : 'Generate Plan' }}
           </button>
@@ -73,7 +73,7 @@
         <LoadingSpinner />
       </div>
 
-      <div v-else class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm overflow-hidden">
+      <AppCard v-else padding="none">
         <!-- Day headers -->
         <div class="grid grid-cols-8 border-b">
           <div class="p-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase"></div>
@@ -101,13 +101,18 @@
             @click="openSlot(day, mealType.value)"
           />
         </div>
-      </div>
+      </AppCard>
 
       <!-- Empty state -->
-      <div v-if="!isLoading && !hasEntriesThisWeek" class="mt-6 text-center py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-sm">
-        <p class="text-4xl mb-3">📅</p>
-        <p class="font-semibold text-gray-700 dark:text-gray-200">No meals planned this week</p>
-        <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Click a slot to add a meal or use AI to generate a full plan</p>
+      <div
+        v-if="!isLoading && !hasEntriesThisWeek"
+        class="mt-6 rounded-2xl bg-white shadow-sm dark:bg-gray-900"
+      >
+        <EmptyState
+          emoji="📅"
+          title="No meals planned this week"
+          description="Click a slot to add a meal, or use AI to generate a full plan"
+        />
       </div>
 
       <!-- Generate dialog: the guidance box is optional, so Enter-to-submit and an empty
@@ -181,6 +186,8 @@
 </template>
 
 <script setup lang="ts">
+import AppCard from '@/components/ui/AppCard.vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
@@ -192,7 +199,14 @@ import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
 import { useAuthStore } from '@/stores/auth';
 import { mealService } from '@/services/mealService';
-import { MealType, type MealLog, type MealPlanEntry, type MealPlanEntryRequest } from '@foodeez/shared';
+import {
+  MEAL_TYPE_SHORT_LABELS,
+  MealType,
+  ORDERED_MEAL_TYPES,
+  type MealLog,
+  type MealPlanEntry,
+  type MealPlanEntryRequest,
+} from '@foodeez/shared';
 
 const authStore = useAuthStore();
 const planStore = useMealPlanStore();
@@ -205,12 +219,7 @@ const generationText = computed(() => planStore.generationText);
 const error = computed(() => planStore.error);
 
 const MEAL_TYPES = [
-  { value: MealType.Breakfast, label: 'Breakfast' },
-  { value: MealType.MorningSnack, label: 'AM Snack' },
-  { value: MealType.Lunch, label: 'Lunch' },
-  { value: MealType.AfternoonSnack, label: 'PM Snack' },
-  { value: MealType.Dinner, label: 'Dinner' },
-  { value: MealType.EveningSnack, label: 'Eve Snack' },
+  ...ORDERED_MEAL_TYPES.map((value) => ({ value, label: MEAL_TYPE_SHORT_LABELS[value] })),
 ];
 
 function getEntry(date: Date, mealType: MealType): MealPlanEntry | undefined {

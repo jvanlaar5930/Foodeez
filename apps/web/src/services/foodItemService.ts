@@ -31,13 +31,5 @@ export const foodItemService = {
     return response.data;
   },
 
-  async getFoodItemById(id: string): Promise<FoodItem> {
-    const response = await api.get<FoodItem>(`/food-items/${id}`);
-    return response.data;
-  },
 
-  async getFoodItemByBarcode(barcode: string): Promise<FoodItem> {
-    const response = await api.get<FoodItem>(`/food-items/barcode/${barcode}`);
-    return response.data;
-  },
 };

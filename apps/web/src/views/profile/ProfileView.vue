@@ -6,7 +6,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left: user card -->
         <div class="lg:col-span-1 space-y-4">
-          <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6 text-center">
+          <AppCard class="text-center">
             <div class="w-20 h-20 rounded-full bg-green-600 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">
               {{ initials }}
             </div>
@@ -18,22 +18,22 @@
             >
               Edit Profile
             </button>
-          </div>
+          </AppCard>
 
           <!-- Stats -->
-          <div v-if="profile" class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-5 space-y-3">
+          <AppCard v-if="profile" padding="sm" class="space-y-3">
             <h3 class="font-bold text-gray-900 dark:text-gray-100">Quick Stats</h3>
             <div v-for="stat in stats" :key="stat.label" class="flex justify-between text-sm">
               <span class="text-gray-500 dark:text-gray-400">{{ stat.label }}</span>
               <span class="font-semibold text-gray-900 dark:text-gray-100">{{ stat.value }}</span>
             </div>
-          </div>
+          </AppCard>
         </div>
 
         <!-- Right: details -->
         <div class="lg:col-span-2 space-y-5">
           <!-- Goals -->
-          <div v-if="profile" class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+          <AppCard v-if="profile">
             <h3 class="font-bold text-gray-900 dark:text-gray-100 mb-4">Goals & Activity</h3>
             <div class="grid grid-cols-2 gap-4">
               <div class="bg-green-50 dark:bg-green-950/40 rounded-xl p-4">
@@ -45,10 +45,10 @@
                 <p class="font-bold text-gray-900 dark:text-gray-100">{{ ACTIVITY_LABELS[profile.activityLevel] }}</p>
               </div>
             </div>
-          </div>
+          </AppCard>
 
           <!-- Foods to avoid -->
-          <div v-if="profile" class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+          <AppCard v-if="profile">
             <h3 class="font-bold text-gray-900 dark:text-gray-100 mb-1">Foods to Avoid</h3>
             <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
               Kept out of every AI meal plan and suggestion.
@@ -70,10 +70,10 @@
             >
               Add foods you cannot or would rather not eat
             </button>
-          </div>
+          </AppCard>
 
           <!-- Daily targets -->
-          <div v-if="profile" class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+          <AppCard v-if="profile">
             <h3 class="font-bold text-gray-900 dark:text-gray-100 mb-4">Daily Nutrition Targets</h3>
             <div class="space-y-3">
               <div class="flex items-center gap-3">
@@ -105,10 +105,10 @@
                 <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 w-20 text-right">{{ Math.round(profile.dailyFatTargetG) }}g</div>
               </div>
             </div>
-          </div>
+          </AppCard>
 
           <!-- Notifications -->
-          <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+          <AppCard>
             <h3 class="font-bold text-gray-900 dark:text-gray-100 mb-4">Notifications</h3>
             <div class="space-y-3">
               <div class="flex items-center justify-between py-2">
@@ -127,7 +127,7 @@
                 <AppToggle v-model="trackingReminder" label="Meal tracking reminders" />
               </div>
             </div>
-          </div>
+          </AppCard>
 
           <!-- Sign out -->
           <button @click="handleLogout"
@@ -143,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import AppCard from '@/components/ui/AppCard.vue';
 import ProfileEditModal from '@/components/profile/ProfileEditModal.vue';
 import AppToggle from '@/components/ui/AppToggle.vue';
 import { ref, computed, onMounted } from 'vue';
@@ -150,8 +151,11 @@ import AppLayout from '@/components/layout/AppLayout.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useProfileStore } from '@/stores/profile';
 import { useAuth } from '@/composables/useAuth';
-import { ActivityLevel, DietaryGoal,
+import {
+  ActivityLevel,
+  DietaryGoal,
   UnitSystem,
+  calculateBMI,
   formatHeight,
   formatWeight,
 } from '@foodeez/shared';
@@ -193,7 +197,7 @@ const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
 const bmi = computed(() => {
   const p = profile.value;
   if (!p) return null;
-  return (p.weightKg / Math.pow(p.heightCm / 100, 2)).toFixed(1);
+  return calculateBMI(p.weightKg, p.heightCm).toFixed(1);
 });
 
 const stats = computed(() => {

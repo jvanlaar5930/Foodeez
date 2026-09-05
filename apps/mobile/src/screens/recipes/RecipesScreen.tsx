@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,29 +11,31 @@ import {
   Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RecipesStackParamList } from '@/navigation/types';
 import { recipeService } from '@/services/recipeService';
 import { useSavedRecipeStore } from '@/store/savedRecipeStore';
 import { SavedRecipeDeck } from '@/components/recipe/SavedRecipeDeck';
-import { isAiRecipeImage, RecipeDto } from '@/types';
+import { DEFAULT_RECIPE_FILTER_TAGS, isAiRecipeImage, RecipeDto } from '@/types';
 import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<RecipesStackParamList, 'RecipesList'>;
 
-const FILTER_TAGS = ['Vegetarian', 'Vegan', 'High-Protein', 'Low-Carb', 'Quick', 'Gluten-Free', 'Dairy-Free'];
-
 export function RecipesScreen({ navigation, route }: Props) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
+  /** Lets the search effect do the initial load without waiting out its debounce. */
+  const isFirstLoad = useRef(true);
   const [recipes, setRecipes] = useState<RecipeDto[]>([]);
-  const [filteredRecipes, setFilteredRecipes] = useState<RecipeDto[]>([]);
   const [search, setSearch] = useState('');
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  // Administrator-managed. The built-in list shows until the server answers with theirs.
+  const [filterTags, setFilterTags] = useState<string[]>([...DEFAULT_RECIPE_FILTER_TAGS]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -108,11 +110,6 @@ export function RecipesScreen({ navigation, route }: Props) {
     }
   }, [hasMore, isLoading, isLoadingMore, search]);
 
-  // Initial load
-  useEffect(() => {
-    loadRecipes();
-  }, []);
-
   // Saves can be made from the detail screen, so re-read them on the way back in.
   // The first fetch is unconditional; later ones only matter once something has loaded.
   useFocusEffect(
@@ -121,25 +118,63 @@ export function RecipesScreen({ navigation, route }: Props) {
     }, [savedHasLoaded, fetchSaved])
   );
 
-  // Debounced server search when text changes
+  /**
+   * The server search, debounced - and the first load too.
+   *
+   * There used to be a separate "initial load" effect as well, so opening the screen fired
+   * two identical requests for page one: this effect runs on mount like any other. It is the
+   * only one now, and skips the wait on that first pass so the list is not empty for 400ms
+   * before anything arrives.
+   */
   useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      loadRecipes(search);
+      return;
+    }
+
     const timer = setTimeout(() => {
       setIsLoading(true);
       loadRecipes(search);
     }, 400);
-    return () => clearTimeout(timer);
-  }, [search]);
 
-  // Client-side tag filter on top of server results
+    return () => clearTimeout(timer);
+  }, [search, loadRecipes]);
+
+  /**
+   * The pills an administrator has configured, read once per mount. A tag they have since
+   * removed is dropped from the selection as well, or the list would stay filtered by
+   * something the screen no longer offers a way to switch off.
+   */
   useEffect(() => {
+    let cancelled = false;
+
+    void recipeService.getFilterTags().then((tags) => {
+      if (cancelled) return;
+
+      setFilterTags(tags);
+      setActiveTags((prev) => {
+        const offered = new Set(tags.map((t) => t.toLowerCase()));
+        const kept = Array.from(prev).filter((t) => offered.has(t.toLowerCase()));
+        return kept.length === prev.size ? prev : new Set(kept);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * The tag filter on top of the server's results. Derived, not stored: keeping it in state
+   * behind a third effect meant every search landed twice - once with the new recipes and the
+   * old filtered list, then again once the effect caught up.
+   */
+  const filteredRecipes = useMemo(() => {
     const tags = Array.from(activeTags);
-    setFilteredRecipes(
-      tags.length === 0
-        ? recipes
-        : recipes.filter(r =>
-            tags.every(t => r.tags?.toLowerCase().includes(t.toLowerCase()))
-          )
-    );
+    if (tags.length === 0) return recipes;
+
+    return recipes.filter((r) => tags.every((t) => r.tags?.toLowerCase().includes(t.toLowerCase())));
   }, [activeTags, recipes]);
 
   const toggleTag = (tag: string) => {
@@ -238,29 +273,23 @@ export function RecipesScreen({ navigation, route }: Props) {
   ) : null;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    // A plain View, not a SafeAreaView: this screen sits under the stack's "Recipes" header,
+    // which has already taken the status bar's height out. Insetting again put a band of
+    // background between the header and the search box.
+    <View style={styles.container}>
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color={C.textSecondary} style={styles.searchIcon} />
-        <TextInput
+        <SearchBar
           ref={searchRef}
-          style={styles.searchInput}
-          placeholder="Search recipes..."
-          placeholderTextColor={C.textHint}
           value={search}
           onChangeText={setSearch}
-          returnKeyType="search"
+          placeholder="Search recipes..."
         />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={18} color={C.textSecondary} />
-          </TouchableOpacity>
-        )}
       </View>
 
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
-        data={FILTER_TAGS}
+        data={filterTags}
         keyExtractor={t => t}
         style={styles.tagFilter}
         contentContainerStyle={styles.tagFilterContent}
@@ -277,11 +306,14 @@ export function RecipesScreen({ navigation, route }: Props) {
       />
 
       {isLoading ? (
-        <ActivityIndicator size="large" color={C.primary} style={{ marginTop: Spacing.xl }} />
+        <LoadingSpinner />
       ) : (
         <FlatList
           data={filteredRecipes}
           keyExtractor={r => r.id}
+          // Takes the column's leftover height instead of asking for all of its content's,
+          // which is what pushed the chip row above into being shrunk.
+          style={styles.results}
           contentContainerStyle={styles.list}
           ListHeaderComponent={deckHeader}
           refreshControl={
@@ -313,7 +345,7 @@ export function RecipesScreen({ navigation, route }: Props) {
           renderItem={renderRecipe}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -329,9 +361,13 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingHorizontal: Spacing.md,
     ...Shadows.sm,
   },
-  searchIcon: { marginRight: Spacing.sm },
-  searchInput: { flex: 1, height: 44, fontSize: FontSize.md, color: C.text },
-  tagFilter: { flexGrow: 0, marginBottom: Spacing.sm },
+  /**
+   * A horizontal list inherits `flexShrink: 1` from ScrollView, and the results list below it
+   * asks for more height than the column has - so this row was being squeezed, and the chips
+   * came out with their tops and bottoms sliced off. It has one job and a fixed height for
+   * it: never grow, never shrink.
+   */
+  tagFilter: { flexGrow: 0, flexShrink: 0, marginBottom: Spacing.sm },
   tagFilterContent: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
@@ -344,11 +380,21 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
+    // Android lays a 14sp label out taller than the padding implies, so the pill gets a
+    // height of its own rather than one derived from the text inside it.
+    minHeight: 32,
+    justifyContent: 'center',
     backgroundColor: C.surface,
   },
   filterChipActive: { backgroundColor: C.primary, borderColor: C.primary },
-  filterChipText: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium },
+  filterChipText: {
+    fontSize: FontSize.sm,
+    lineHeight: 18,
+    color: C.textSecondary,
+    fontWeight: FontWeight.medium,
+  },
   filterChipTextActive: { color: C.surface },
+  results: { flex: 1 },
   list: { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl },
   recipeCard: {
     flexDirection: 'row',

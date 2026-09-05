@@ -1,3 +1,4 @@
+using Foodeez.Domain.ValueObjects;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.MealLogs;
 
@@ -17,32 +18,21 @@ public class GetNutritionSummaryUseCase
         var logs = await _unitOfWork.MealLogs.GetByUserAndDateAsync(userId, date);
         var user = await _unitOfWork.Users.GetByIdAsync(userId);
 
-        var totalCalories = 0f;
-        var totalProtein = 0f;
-        var totalCarbs = 0f;
-        var totalFat = 0f;
-        var totalFiber = 0f;
-
-        foreach (var log in logs)
-        {
-            var total = log.TotalNutrition;
-            totalCalories += total.Calories;
-            totalProtein += total.Protein;
-            totalCarbs += total.Carbohydrates;
-            totalFat += total.Fat;
-            totalFiber += total.Fiber;
-        }
+        // The value object knows how to add itself up. The hand-rolled loop this replaces
+        // accumulated five of the seven nutrients, so adding one to the summary meant
+        // remembering to add it here too.
+        var total = logs.Aggregate(NutritionalInfo.Empty, (running, log) => running + log.TotalNutrition);
 
         var profile = user?.Profile;
 
         return new NutritionSummaryDto
         {
             Date = date,
-            TotalCalories = MathF.Round(totalCalories, 1),
-            TotalProtein = MathF.Round(totalProtein, 1),
-            TotalCarbs = MathF.Round(totalCarbs, 1),
-            TotalFat = MathF.Round(totalFat, 1),
-            TotalFiber = MathF.Round(totalFiber, 1),
+            TotalCalories = MathF.Round(total.Calories, 1),
+            TotalProtein = MathF.Round(total.Protein, 1),
+            TotalCarbs = MathF.Round(total.Carbohydrates, 1),
+            TotalFat = MathF.Round(total.Fat, 1),
+            TotalFiber = MathF.Round(total.Fiber, 1),
             TargetCalories = profile?.DailyCalorieTarget ?? 0,
             TargetProtein = profile?.DailyProteinTargetG ?? 0f,
             TargetCarbs = profile?.DailyCarbTargetG ?? 0f,

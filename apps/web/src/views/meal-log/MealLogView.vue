@@ -50,11 +50,12 @@
         <LoadingSpinner />
       </div>
 
-      <div v-else-if="mealStore.dailyLogs.length === 0" class="py-16 text-center">
-        <p class="mb-4 text-5xl">Meal Log</p>
-        <p class="text-lg font-semibold text-gray-700 dark:text-gray-200">No meals logged {{ isToday ? 'today' : 'on this day' }}</p>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Tap "Log Meal" to start tracking</p>
-      </div>
+      <EmptyState
+        v-else-if="mealStore.dailyLogs.length === 0"
+        emoji="📋"
+        :title="`No meals logged ${isToday ? 'today' : 'on this day'}`"
+        description="Tap &quot;Log Meal&quot; to start tracking"
+      />
 
       <div v-else class="space-y-4">
         <DayAnalysisCard
@@ -88,6 +89,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/ui/EmptyState.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { addDays, format, isToday as dateFnsIsToday } from 'date-fns';
 import type { MealLog } from '@foodeez/shared';

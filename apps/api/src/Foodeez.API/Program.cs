@@ -1,16 +1,9 @@
 using System.Text;
+using Foodeez.API.Configuration;
 using Foodeez.API.Middleware;
-using Foodeez.Application.UseCases.AI;
-using Foodeez.Application.UseCases.FoodItems;
-using Foodeez.Application.UseCases.Recipes;
 using Foodeez.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Foodeez.Application.UseCases.Auth;
-using Foodeez.Application.UseCases.Chat;
-using Foodeez.Application.UseCases.Grocery;
-using Foodeez.Application.UseCases.MealLogs;
-using Foodeez.Application.UseCases.MealPlans;
-using Foodeez.Application.UseCases.Users;
+using Foodeez.Application;
 using Foodeez.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -29,51 +22,18 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MinResponseDataRate = null;
 });
 
+// ── Configuration ─────────────────────────────────────────────────────────────
+// Fail here, naming the key, rather than on someone's first login.
+RequiredConfiguration.Validate(builder.Configuration, builder.Environment);
+
 // ── Infrastructure (DbContext, Repositories, Services) ────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // ── Use Cases ─────────────────────────────────────────────────────────────────
-builder.Services.AddScoped<RegisterUseCase>();
-builder.Services.AddScoped<LoginUseCase>();
-builder.Services.AddScoped<GetUserProfileUseCase>();
-builder.Services.AddScoped<UpdateUserProfileUseCase>();
-builder.Services.AddScoped<LogMealUseCase>();
-builder.Services.AddScoped<UpdateMealLogUseCase>();
-builder.Services.AddScoped<DeleteMealLogUseCase>();
-builder.Services.AddScoped<AnalyzeMealLogUseCase>();
-builder.Services.AddScoped<AnalyzeDayUseCase>();
-builder.Services.AddScoped<ParseMealImageUseCase>();
-builder.Services.AddScoped<QuickAddMealUseCase>();
-builder.Services.AddScoped<MealTemplatesUseCase>();
-builder.Services.AddScoped<ParsedMealResolver>();
-builder.Services.AddScoped<GetDailyLogsUseCase>();
-builder.Services.AddScoped<GetMealLogsRangeUseCase>();
-builder.Services.AddScoped<GetNutritionSummaryUseCase>();
-builder.Services.AddScoped<GetMealPlanUseCase>();
-builder.Services.AddScoped<CreateMealPlanUseCase>();
-builder.Services.AddScoped<GenerateAIMealPlanUseCase>();
-builder.Services.AddScoped<SaveMealPlanEntryUseCase>();
-builder.Services.AddScoped<AddPlannedMealsUseCase>();
-builder.Services.AddScoped<GetConversationsUseCase>();
-builder.Services.AddScoped<SendChatMessageUseCase>();
-builder.Services.AddScoped<AcceptSuggestionsUseCase>();
-builder.Services.AddScoped<SaveChatRecipesUseCase>();
-builder.Services.AddScoped<PlannedMealReader>();
-builder.Services.AddScoped<GenerateGroceryListUseCase>();
-builder.Services.AddScoped<EditGroceryListUseCase>();
-builder.Services.AddScoped<GetDietaryRecommendationsUseCase>();
-builder.Services.AddScoped<AnalyzeMealUseCase>();
-builder.Services.AddScoped<StreamMealAnalysisUseCase>();
-builder.Services.AddScoped<EstimateNutritionUseCase>();
-builder.Services.AddScoped<SearchRecipesUseCase>();
-builder.Services.AddScoped<AutocompleteRecipesUseCase>();
-builder.Services.AddScoped<GetRecipeDetailUseCase>();
-builder.Services.AddScoped<SavedRecipesUseCase>();
-builder.Services.AddScoped<SearchFoodItemsUseCase>();
+builder.Services.AddApplication();
 
 // ── JWT Authentication ────────────────────────────────────────────────────────
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key configuration is required.");
+var jwtKey = builder.Configuration["Jwt:Key"]!;   // validated above
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -128,12 +88,31 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+// Development stays wide open on purpose: the Expo client runs from a device on the LAN and
+// Vite from another port, so their origins are not knowable ahead of time.
+//
+// Anywhere else the origins come from Cors:AllowedOrigins. An empty list therefore permits no
+// cross-origin browser calls at all, which is the right default for the deployment we have -
+// nginx proxies /api/ to the API, so the web app is same-origin and never needs CORS, and the
+// mobile client is not a browser and is not subject to it. Only add an origin here when a
+// browser app is genuinely served from somewhere else.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    {
+        if (builder.Environment.IsDevelopment())
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        else
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+    }));
 
 // ── Controllers ───────────────────────────────────────────────────────────────
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+    {
+        // Checked once for every action rather than in twenty action bodies.
+        options.Filters.Add<Foodeez.API.Filters.RequireTokenSubjectFilter>();
+    })
     .AddJsonOptions(opts =>
     {
         opts.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
@@ -147,10 +126,26 @@ var app = builder.Build();
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── Auto-migrate on startup ───────────────────────────────────────────────────
-using (var scope = app.Services.CreateScope())
+// On by default in Development, where a schema that follows the branch you are on is exactly
+// what you want. Anywhere else it has to be asked for with Database:AutoMigrate, because
+// applying a migration is a one-way change to real data, made by whichever instance happened
+// to boot first, at a moment nobody chose.
+var autoMigrate = builder.Configuration.GetValue<bool?>("Database:AutoMigrate")
+                  ?? app.Environment.IsDevelopment();
+
+if (autoMigrate)
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+
+    // Migrations are a relational concept. Integration tests swap in the in-memory provider,
+    // where this call throws rather than being a harmless no-op, so it is guarded rather than
+    // unconditional - the test host boots the real Program and would otherwise fail here
+    // before reaching a single endpoint.
+    if (db.Database.IsRelational())
+    {
+        db.Database.Migrate();
+    }
 }
 
 // ── Middleware pipeline ───────────────────────────────────────────────────────

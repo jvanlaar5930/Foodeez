@@ -16,6 +16,7 @@ public class LogMealUseCaseTests
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IFoodItemRepository> _foodItemRepoMock;
     private readonly Mock<IMealLogRepository> _mealLogRepoMock;
+    private readonly Mock<IUserRepository> _userRepoMock;
     private readonly LogMealUseCase _sut;
 
     public LogMealUseCaseTests()
@@ -23,9 +24,17 @@ public class LogMealUseCaseTests
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _foodItemRepoMock = new Mock<IFoodItemRepository>();
         _mealLogRepoMock = new Mock<IMealLogRepository>();
+        _userRepoMock = new Mock<IUserRepository>();
 
         _unitOfWorkMock.Setup(u => u.FoodItems).Returns(_foodItemRepoMock.Object);
         _unitOfWorkMock.Setup(u => u.MealLogs).Returns(_mealLogRepoMock.Object);
+
+        // MealLogRequestApplier reads the user's excluded foods to fingerprint the analysis,
+        // so the Users repository has to be there even for tests that are not about analysis.
+        // A null user is a valid answer to that lookup and keeps these tests on their subject.
+        _unitOfWorkMock.Setup(u => u.Users).Returns(_userRepoMock.Object);
+        _userRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
+
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         _sut = new LogMealUseCase(_unitOfWorkMock.Object);

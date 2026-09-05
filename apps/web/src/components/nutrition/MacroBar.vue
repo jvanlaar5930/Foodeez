@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { OVER_TARGET_COLOR } from '@/utils/macroColors';
 import { computed } from 'vue';
 
 interface Props {
@@ -34,7 +35,7 @@ const isOver = computed(() => props.current > props.target);
     </div>
     <div class="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
       <div
-        :style="{ width: `${percentage}%`, backgroundColor: isOver ? '#ef4444' : color }"
+        :style="{ width: `${percentage}%`, backgroundColor: isOver ? OVER_TARGET_COLOR : color }"
         class="h-2 rounded-full transition-all duration-500"
       />
     </div>

@@ -1,3 +1,4 @@
+import { getAuthToken } from './authBridge';
 import { API_URL } from '@/constants/api';
 
 /** One frame on the wire, matching the API's AIStreamEvent. */
@@ -145,7 +146,5 @@ export function streamAI<T>(
 
 /** The bearer token, read the same way the axios interceptor reads it. */
 export function authToken(): string | null {
-  // Lazy require, to avoid the circular import between store and service modules.
-  const { useAuthStore } = require('@/store/authStore');
-  return useAuthStore.getState().token ?? null;
+  return getAuthToken();
 }

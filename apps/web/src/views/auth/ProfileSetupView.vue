@@ -12,7 +12,7 @@
         </div>
       </div>
 
-      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-8">
+      <AppCard padding="lg">
         <!-- Step 1: Basic info -->
         <div v-show="currentStep === 1">
           <div class="flex items-start justify-between mb-1">
@@ -246,22 +246,24 @@
             :disabled="isLoading"
             class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
             @click="handleComplete">
-            <span v-if="isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <LoadingSpinner v-if="isLoading" size="sm" color="currentColor" />
             {{ isLoading ? 'Saving...' : 'Complete Setup' }}
           </button>
         </div>
-      </div>
+      </AppCard>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import AppCard from '@/components/ui/AppCard.vue';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import FoodExclusionsInput from '@/components/profile/FoodExclusionsInput.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useProfileStore } from '@/stores/profile';
-import { Gender, ActivityLevel, DietaryGoal } from '@foodeez/shared';
+import { Gender, ActivityLevel, DietaryGoal, calculateTargets } from '@foodeez/shared';
 import AppAlert from '@/components/ui/AppAlert.vue';
 
 const router = useRouter();
@@ -363,34 +365,15 @@ const ACTIVITY_LEVELS = [
   { value: ActivityLevel.ExtraActive, label: 'Extra Active', description: 'Very hard exercise + physical job' },
 ];
 
-const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
-  [ActivityLevel.Sedentary]: 1.2,
-  [ActivityLevel.LightlyActive]: 1.375,
-  [ActivityLevel.ModeratelyActive]: 1.55,
-  [ActivityLevel.VeryActive]: 1.725,
-  [ActivityLevel.ExtraActive]: 1.9,
-};
+// The same calculation the server runs on save, so this preview is what actually gets
+// stored. Previously this screen had its own formula and showed numbers the profile page
+// then contradicted.
+const estimatedTargets = computed(() => calculateTargets(profile.value));
 
-const GOAL_ADJUSTMENTS: Record<DietaryGoal, number> = {
-  [DietaryGoal.WeightLoss]: -500,
-  [DietaryGoal.WeightMaintenance]: 0,
-  [DietaryGoal.WeightGain]: 300,
-  [DietaryGoal.MuscleGain]: 250,
-  [DietaryGoal.GeneralHealth]: 0,
-};
-
-const estimatedCalories = computed(() => {
-  const { heightCm, weightKg, age, gender, activityLevel, dietaryGoal } = profile.value;
-  const bmr = gender === Gender.Female
-    ? 10 * weightKg + 6.25 * heightCm - 5 * age - 161
-    : 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
-  const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
-  return Math.round(tdee + GOAL_ADJUSTMENTS[dietaryGoal]);
-});
-
-const estimatedProtein = computed(() => Math.round(profile.value.weightKg * 1.6));
-const estimatedCarbs = computed(() => Math.round((estimatedCalories.value * 0.45) / 4));
-const estimatedFat = computed(() => Math.round((estimatedCalories.value * 0.25) / 9));
+const estimatedCalories = computed(() => estimatedTargets.value.calories);
+const estimatedProtein = computed(() => Math.round(estimatedTargets.value.proteinG));
+const estimatedCarbs = computed(() => Math.round(estimatedTargets.value.carbsG));
+const estimatedFat = computed(() => Math.round(estimatedTargets.value.fatG));
 
 function nextStep() {
   currentStep.value++;

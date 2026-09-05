@@ -31,18 +31,29 @@ const percentage = computed(() => {
   return Math.min((props.consumed / props.target) * 100, 150);
 });
 
+/**
+ * Chart.js draws to a canvas and cannot read a CSS variable, so the palette value is
+ * resolved to a real colour here rather than written out as a hex literal that has to be
+ * kept in step with the Tailwind classes used beside it.
+ */
+function token(name: string): string {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-' + name)
+    .trim();
+}
+
 // The arc is canvas, but this same colour labels the percentage text on the card, so the
 // dark variants are the lighter 400 steps that clear AA against the dark surface.
 const fillColor = computed(() => {
   const pct = percentage.value;
   const dark = themeStore.isDark;
-  if (pct > 100) return dark ? '#f87171' : '#ef4444'; // red — over
-  if (pct >= 80) return dark ? '#fbbf24' : '#f59e0b'; // amber — nearly there
-  return dark ? '#4ade80' : '#16a34a'; // green — on track / under
+  if (pct > 100) return token(dark ? 'red-400' : 'red-500'); // over
+  if (pct >= 80) return token(dark ? 'amber-400' : 'amber-500'); // nearly there
+  return token(dark ? 'green-400' : 'green-600'); // on track / under
 });
 
-/** The unfilled remainder of the ring: gray-200 on light, gray-700 on dark. */
-const trackColor = computed(() => (themeStore.isDark ? '#374151' : '#e5e7eb'));
+/** The unfilled remainder of the ring. */
+const trackColor = computed(() => token(themeStore.isDark ? 'gray-700' : 'gray-200'));
 
 const chartData = computed<ChartData<'doughnut'>>(() => ({
   labels: ['Consumed', 'Remaining'],

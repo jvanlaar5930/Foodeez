@@ -11,10 +11,12 @@ public class FoodItemRepository : BaseRepository<FoodItem>, IFoodItemRepository
 
     public async Task<IReadOnlyList<FoodItem>> SearchAsync(string query, int limit = 20)
     {
-        var lowerQuery = query.ToLowerInvariant();
+        // Tracked: a match found here is attached to the meal log being built from it.
+        // No ToLower(): MySQL's collation compares case-insensitively already, and calling
+        // it wraps the column in a function no index can be used through.
         return await _dbSet
-            .Where(f => f.Name.ToLower().Contains(lowerQuery) ||
-                        (f.Brand != null && f.Brand.ToLower().Contains(lowerQuery)))
+            .Where(f => f.Name.Contains(query) ||
+                        (f.Brand != null && f.Brand.Contains(query)))
             .Take(limit)
             .ToListAsync();
     }
@@ -27,14 +29,14 @@ public class FoodItemRepository : BaseRepository<FoodItem>, IFoodItemRepository
 
     public async Task<FoodItem?> FindCustomByNameAsync(Guid userId, string name, string servingUnit)
     {
-        var loweredName = name.Trim().ToLowerInvariant();
-        var loweredUnit = servingUnit.Trim().ToLowerInvariant();
+        var wantedName = name.Trim();
+        var wantedUnit = servingUnit.Trim();
 
         return await _dbSet.FirstOrDefaultAsync(f =>
             f.IsCustom &&
             f.CreatedByUserId == userId &&
-            f.Name.ToLower() == loweredName &&
-            f.ServingUnit.ToLower() == loweredUnit);
+            f.Name == wantedName &&
+            f.ServingUnit == wantedUnit);
     }
 
     public async Task<IReadOnlyList<FoodItem>> GetByFdcIdsAsync(IEnumerable<int> fdcIds)

@@ -9,6 +9,7 @@ import { MealSection } from '@/components/meal/MealSection';
 import { DayAnalysisCard } from '@/components/meal/DayAnalysisCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuthStore } from '@/store/authStore';
+import { DateRangeNav } from '@/components/ui/DateRangeNav';
 import { useMealStore } from '@/store/mealStore';
 import { FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
@@ -23,14 +24,12 @@ export function MealLogScreen() {
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<MealLogNav>();
   const user = useAuthStore((state) => state.user);
-  const {
-    dailyLogs,
-    selectedDate,
-    isLoading,
-    setSelectedDate,
-    refreshDay,
-    deleteMealLog,
-  } = useMealStore();
+  const dailyLogs = useMealStore((state) => state.dailyLogs);
+  const selectedDate = useMealStore((state) => state.selectedDate);
+  const isLoading = useMealStore((state) => state.isLoading);
+  const setSelectedDate = useMealStore((state) => state.setSelectedDate);
+  const refreshDay = useMealStore((state) => state.refreshDay);
+  const deleteMealLog = useMealStore((state) => state.deleteMealLog);
   const [refreshing, setRefreshing] = useState(false);
 
   const currentDate = parseApiDate(selectedDate);
@@ -97,26 +96,14 @@ export function MealLogScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.dateNav}>
-        <TouchableOpacity style={styles.dateNavBtn} onPress={goToPrevDay}>
-          <Ionicons name="chevron-back" size={24} color={C.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.dateCenter} onPress={goToToday}>
-          <Text style={styles.dateText}>{displayDate}</Text>
-          {!isToday(currentDate) && <Text style={styles.dateSub}>Tap to go to today</Text>}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.dateNavBtn, !canGoNext && styles.dateNavBtnDisabled]}
-          onPress={goToNextDay}
-          disabled={!canGoNext}
-        >
-          <Ionicons
-            name="chevron-forward"
-            size={24}
-            color={canGoNext ? C.text : C.textHint}
-          />
-        </TouchableOpacity>
-      </View>
+      <DateRangeNav
+        label={displayDate}
+        onPrevious={goToPrevDay}
+        onNext={goToNextDay}
+        // Tomorrow has nothing logged in it by definition.
+        canGoNext={canGoNext}
+        onReset={isToday(currentDate) ? undefined : goToToday}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -167,7 +154,7 @@ export function MealLogScreen() {
           <Ionicons name="camera-outline" size={22} color={C.secondary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('AddMeal', {})}>
-          <Ionicons name="add" size={28} color={C.surface} />
+          <Ionicons name="add" size={28} color={C.onPrimary} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -178,38 +165,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: C.background,
-  },
-  dateNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.surface,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: C.divider,
-  },
-  dateNavBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dateNavBtnDisabled: {
-    opacity: 0.3,
-  },
-  dateCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  dateText: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: C.text,
-  },
-  dateSub: {
-    fontSize: FontSize.xs,
-    color: C.primary,
-    marginTop: 2,
   },
   scroll: {
     flex: 1,

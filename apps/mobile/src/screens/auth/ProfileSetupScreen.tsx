@@ -13,19 +13,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/store/authStore';
+import { ChoiceList } from '@/components/profile/ChoiceList';
 import { useProfileStore } from '@/store/profileStore';
 import {
   ActivityLevel,
   DietaryGoal,
   Gender,
 } from '@/types';
-import {
-  calculateBMR,
-  calculateMacroTargets,
-  calculateTDEE,
-  formatCalories,
-  formatMacro,
-} from '@/utils/nutritionUtils';
+import { calculateTargets } from '@foodeez/shared';
+import { formatCalories, formatMacro } from '@/utils/nutritionUtils';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
@@ -112,7 +108,8 @@ export function ProfileSetupScreen() {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const user = useAuthStore((state) => state.user);
-  const { updateProfile, isLoading } = useProfileStore();
+  const updateProfile = useProfileStore((state) => state.updateProfile);
+  const isLoading = useProfileStore((state) => state.isLoading);
 
   const [step, setStep] = useState(1);
   const [data, setData] = useState<ProfileData>({
@@ -133,14 +130,17 @@ export function ProfileSetupScreen() {
     const height = parseFloat(data.heightCm);
     const age = parseInt(data.age, 10);
     if (!weight || !height || !age || !data.gender || !data.activityLevel || !data.dietaryGoal) {
-      return { calories: 2000, protein: 150, carbs: 250, fat: 67 };
+      return { calories: 2000, proteinG: 150, carbsG: 250, fatG: 67 };
     }
-    const bmr = calculateBMR(weight, height, age, data.gender);
-    let tdee = calculateTDEE(bmr, data.activityLevel);
-    if (data.dietaryGoal === DietaryGoal.WeightLoss) tdee -= 500;
-    if (data.dietaryGoal === DietaryGoal.WeightGain || data.dietaryGoal === DietaryGoal.MuscleGain) tdee += 300;
-    const macros = calculateMacroTargets(tdee, data.dietaryGoal);
-    return { calories: tdee, ...macros };
+    // Same calculation the server will run on save, so this preview is what gets stored.
+    return calculateTargets({
+      weightKg: weight,
+      heightCm: height,
+      age,
+      gender: data.gender,
+      activityLevel: data.activityLevel,
+      dietaryGoal: data.dietaryGoal,
+    });
   };
 
   const validateStep = (): boolean => {
@@ -285,74 +285,25 @@ export function ProfileSetupScreen() {
             <View>
               <Text style={styles.stepTitle}>What's your goal?</Text>
               <Text style={styles.stepSubtitle}>Choose the goal that best fits your vision</Text>
-              <View style={styles.goalList}>
-                {GOAL_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[
-                      styles.goalCard,
-                      data.dietaryGoal === opt.value && styles.goalCardActive,
-                    ]}
-                    onPress={() => updateData('dietaryGoal', opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.goalEmoji}>{opt.emoji}</Text>
-                    <View style={styles.goalText}>
-                      <Text
-                        style={[
-                          styles.goalTitle,
-                          data.dietaryGoal === opt.value && styles.goalTitleActive,
-                        ]}
-                      >
-                        {opt.title}
-                      </Text>
-                      <Text style={styles.goalDesc}>{opt.description}</Text>
-                    </View>
-                    {data.dietaryGoal === opt.value && (
-                      <View style={styles.checkCircle}>
-                        <Text style={styles.checkMark}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <ChoiceList
+                options={GOAL_OPTIONS}
+                value={data.dietaryGoal}
+                onChange={(value) => updateData('dietaryGoal', value)}
+              />
             </View>
           )}
 
           {step === 3 && (
             <View>
               <Text style={styles.stepTitle}>How active are you?</Text>
-              <Text style={styles.stepSubtitle}>Your activity level affects your daily calorie needs</Text>
-              <View style={styles.goalList}>
-                {ACTIVITY_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[
-                      styles.goalCard,
-                      data.activityLevel === opt.value && styles.goalCardActive,
-                    ]}
-                    onPress={() => updateData('activityLevel', opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.goalText}>
-                      <Text
-                        style={[
-                          styles.goalTitle,
-                          data.activityLevel === opt.value && styles.goalTitleActive,
-                        ]}
-                      >
-                        {opt.title}
-                      </Text>
-                      <Text style={styles.goalDesc}>{opt.description}</Text>
-                    </View>
-                    {data.activityLevel === opt.value && (
-                      <View style={styles.checkCircle}>
-                        <Text style={styles.checkMark}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text style={styles.stepSubtitle}>
+                Your activity level affects your daily calorie needs
+              </Text>
+              <ChoiceList
+                options={ACTIVITY_OPTIONS}
+                value={data.activityLevel}
+                onChange={(value) => updateData('activityLevel', value)}
+              />
             </View>
           )}
 
@@ -371,9 +322,9 @@ export function ProfileSetupScreen() {
                 <View style={styles.macroDivider} />
                 <View style={styles.macroGrid}>
                   {[
-                    { label: 'Protein', value: targets.protein, color: C.info },
-                    { label: 'Carbs', value: targets.carbs, color: C.secondary },
-                    { label: 'Fat', value: targets.fat, color: '#FFC107' },
+                    { label: 'Protein', value: targets.proteinG, color: C.info },
+                    { label: 'Carbs', value: targets.carbsG, color: C.secondary },
+                    { label: 'Fat', value: targets.fatG, color: '#FFC107' },
                   ].map((macro) => (
                     <View key={macro.label} style={styles.macroItem}>
                       <Text style={[styles.macroValue, { color: macro.color }]}>
@@ -512,58 +463,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   genderBtnTextActive: {
     color: C.primaryDark,
-  },
-  goalList: {
-    gap: Spacing.sm,
-  },
-  goalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1.5,
-    borderColor: C.divider,
-    gap: Spacing.md,
-  },
-  goalCardActive: {
-    borderColor: C.primary,
-    backgroundColor: C.primaryLight,
-  },
-  goalEmoji: {
-    fontSize: 28,
-    width: 36,
-    textAlign: 'center',
-  },
-  goalText: {
-    flex: 1,
-  },
-  goalTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-    color: C.text,
-    marginBottom: 2,
-  },
-  goalTitleActive: {
-    color: C.primaryDark,
-  },
-  goalDesc: {
-    fontSize: FontSize.sm,
-    color: C.textSecondary,
-    lineHeight: 18,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: C.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkMark: {
-    color: C.surface,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
   },
   targetCard: {
     backgroundColor: C.surface,

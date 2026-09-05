@@ -22,25 +22,6 @@ public class GetUserProfileUseCase
         if (profile == null)
             throw new KeyNotFoundException($"Profile for user '{userId}' was not found.");
 
-        return new UserProfileDto
-        {
-            UserId = profile.UserId,
-            HeightCm = profile.HeightCm,
-            WeightKg = profile.WeightKg,
-            TargetWeightKg = profile.TargetWeightKg,
-            Age = profile.Age,
-            Gender = profile.Gender,
-            ActivityLevel = profile.ActivityLevel,
-            DietaryGoal = profile.DietaryGoal,
-            DailyCalorieTarget = profile.DailyCalorieTarget,
-            DailyProteinTargetG = profile.DailyProteinTargetG,
-            DailyCarbTargetG = profile.DailyCarbTargetG,
-            DailyFatTargetG = profile.DailyFatTargetG,
-            Notes = profile.Notes,
-            ExcludedFoods = profile.ExcludedFoods.ToList(),
-            ProfileCompleted = profile.ProfileCompleted,
-            DarkMode = profile.DarkMode,
-            UnitSystem = profile.UnitSystem
-        };
+        return UserProfileMapper.ToDto(profile);
     }
 }

@@ -53,8 +53,10 @@ export function EditProfileScreen() {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation();
-  const { user } = useAuthStore();
-  const { profile, updateProfile, isLoading } = useProfileStore();
+  const user = useAuthStore((state) => state.user);
+  const profile = useProfileStore((state) => state.profile);
+  const updateProfile = useProfileStore((state) => state.updateProfile);
+  const isLoading = useProfileStore((state) => state.isLoading);
 
   // Seed from whatever the profile already holds; the screen is only reachable once loaded.
   const [heightCm, setHeightCm] = useState(String(profile?.heightCm ?? ''));
@@ -302,7 +304,7 @@ const makeStyles = (C: Palette) =>
     },
     chipActive: { backgroundColor: C.primary, borderColor: C.primary },
     chipText: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium },
-    chipTextActive: { color: '#FFFFFF' },
+    chipTextActive: { color: C.onPrimary },
     footnote: {
       fontSize: FontSize.sm,
       color: C.textSecondary,

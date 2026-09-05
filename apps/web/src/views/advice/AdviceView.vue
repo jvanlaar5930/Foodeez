@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppAlert from '@/components/ui/AppAlert.vue';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import ChatBubble from '@/components/chat/ChatBubble.vue';
@@ -182,12 +183,7 @@ async function saveRecipes(messageId: string) {
         >
           {{ planNotice }}
         </p>
-        <p
-          v-if="chatStore.error"
-          class="mb-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300"
-        >
-          {{ chatStore.error }}
-        </p>
+        <AppAlert v-if="chatStore.error" variant="error" :message="chatStore.error" class="mb-2" />
 
         <ChatComposer
           :disabled="chatStore.isSending"

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as mealService from '@/services/mealService';
+import { runAsync } from '@/store/asyncState';
 import { formatApiDate } from '@/utils/dateUtils';
 import type { LogMealRequest, MealLogDto, NutritionSummaryDto } from '@/types';
 
@@ -31,74 +32,54 @@ export const useMealStore = create<MealState>()((set, get) => ({
   },
 
   refreshDay: async (userId: string, date: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const [logs, summary] = await Promise.all([
+    await runAsync(set, { fallback: 'Could not refresh this day.' }, async () => {
+      const [dailyLogs, nutritionSummary] = await Promise.all([
         mealService.getDailyLogs(userId, date),
         mealService.getNutritionSummary(userId, date),
       ]);
-      set({ dailyLogs: logs, nutritionSummary: summary, isLoading: false });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to refresh nutrition data.';
-      set({ isLoading: false, error: message });
-    }
+      set({ dailyLogs, nutritionSummary });
+    });
   },
 
   fetchDailyLogs: async (userId: string, date: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const logs = await mealService.getDailyLogs(userId, date);
-      set({ dailyLogs: logs, isLoading: false });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch meal logs.';
-      set({ isLoading: false, error: message });
-    }
+    await runAsync(set, { fallback: "That day's meals could not be loaded." }, async () => {
+      set({ dailyLogs: await mealService.getDailyLogs(userId, date) });
+    });
   },
 
   fetchNutritionSummary: async (userId: string, date: string) => {
-    try {
-      const summary = await mealService.getNutritionSummary(userId, date);
-      set({ nutritionSummary: summary });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch nutrition summary.';
-      set({ error: message });
-    }
+    // No spinner: this runs alongside the meal list, which is already showing one.
+    await runAsync(
+      set,
+      { fallback: "That day's totals could not be loaded.", loading: false },
+      async () => {
+        set({ nutritionSummary: await mealService.getNutritionSummary(userId, date) });
+      },
+    );
   },
 
+  // The three writes rethrow: each is triggered by a screen that only closes or navigates
+  // away once the save has actually gone through.
+
   logMeal: async (data: LogMealRequest) => {
-    set({ isLoading: true, error: null });
-    try {
+    await runAsync(set, { fallback: 'That meal could not be saved.', rethrow: true }, async () => {
       await mealService.logMeal(data);
       await get().refreshDay(data.userId, data.logDate);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to log meal.';
-      set({ isLoading: false, error: message });
-      throw err;
-    }
+    });
   },
 
   updateMealLog: async (mealLogId: string, data: LogMealRequest) => {
-    set({ isLoading: true, error: null });
-    try {
+    await runAsync(set, { fallback: 'That meal could not be updated.', rethrow: true }, async () => {
       await mealService.updateMealLog(mealLogId, data);
       await get().refreshDay(data.userId, data.logDate);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update meal log.';
-      set({ isLoading: false, error: message });
-      throw err;
-    }
+    });
   },
 
   deleteMealLog: async (mealLogId: string, userId: string) => {
-    set({ isLoading: true, error: null });
-    try {
+    await runAsync(set, { fallback: 'That meal could not be deleted.', rethrow: true }, async () => {
       await mealService.deleteMealLog(mealLogId);
       await get().refreshDay(userId, get().selectedDate);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete meal log.';
-      set({ isLoading: false, error: message });
-      throw err;
-    }
+    });
   },
 
   clearError: () => {

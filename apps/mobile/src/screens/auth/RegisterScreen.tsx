@@ -53,7 +53,8 @@ export function RegisterScreen() {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<RegisterNav>();
-  const { register, isLoading } = useAuthStore();
+  const register = useAuthStore((state) => state.register);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   const [form, setForm] = useState({
     firstName: '',

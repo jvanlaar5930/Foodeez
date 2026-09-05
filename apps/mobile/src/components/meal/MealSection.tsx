@@ -3,9 +3,10 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MealLogItemRow } from './MealLogItemRow';
 import { FontSize, FontWeight, Spacing, BorderRadius } from '@/constants/theme';
+import { DEFAULT_MEAL_TYPE_ICON, MEAL_TYPE_ICONS } from '@/constants/mealTypes';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
-import { scoreColor } from '@/utils/analysisScore';
-import { MealType, type MealLogDto } from '@/types';
+import { scoreColor } from '@foodeez/shared';
+import { MEAL_TYPE_LABELS, MealType, type MealLogDto } from '@/types';
 
 interface MealSectionProps {
   mealLog: MealLogDto;
@@ -13,32 +14,20 @@ interface MealSectionProps {
   onDeleteMeal?: (mealLog: MealLogDto) => void;
 }
 
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
-
-const MEAL_TYPE_ICONS: Record<MealType, keyof typeof Ionicons.glyphMap> = {
-  [MealType.Breakfast]: 'sunny-outline',
-  [MealType.MorningSnack]: 'cafe-outline',
-  [MealType.Lunch]: 'restaurant-outline',
-  [MealType.AfternoonSnack]: 'nutrition-outline',
-  [MealType.Dinner]: 'moon-outline',
-  [MealType.EveningSnack]: 'ice-cream-outline',
-};
-
-export function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionProps) {
+/**
+ * One meal on the log screen - its foods, and what they add up to.
+ *
+ * Memoised: the screen holds several of these and re-renders whenever any part of the
+ * day changes, though only the meal that changed needs redrawing.
+ */
+export const MealSection = React.memo(function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionProps) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [isExpanded, setIsExpanded] = useState(true);
 
   const calories = Math.round(mealLog.totalNutrition.calories);
   const label = MEAL_TYPE_LABELS[mealLog.mealType] ?? mealLog.mealType;
-  const icon = MEAL_TYPE_ICONS[mealLog.mealType] ?? 'restaurant-outline';
+  const icon = MEAL_TYPE_ICONS[mealLog.mealType] ?? DEFAULT_MEAL_TYPE_ICON;
 
   return (
     <View style={styles.container}>
@@ -103,7 +92,7 @@ export function MealSection({ mealLog, onEditMeal, onDeleteMeal }: MealSectionPr
       )}
     </View>
   );
-}
+});
 
 const makeStyles = (C: Palette) => StyleSheet.create({
   container: {

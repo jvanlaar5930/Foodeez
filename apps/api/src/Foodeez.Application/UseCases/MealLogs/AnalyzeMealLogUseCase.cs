@@ -28,22 +28,12 @@ public class AnalyzeMealLogUseCase
 
     public async Task<MealAnalysisDto> ExecuteAsync(Guid mealLogId, bool refresh = false, CancellationToken ct = default)
     {
-        var mealLog = await _unitOfWork.MealLogs.GetDetailedByIdAsync(mealLogId);
-        if (mealLog == null)
-        {
-            throw new KeyNotFoundException($"MealLog with id '{mealLogId}' was not found.");
-        }
-
-        var excludedFoods = await ExclusionsAsync(mealLog.UserId);
-        var fingerprint = MealAnalysisFingerprint.For(mealLog, excludedFoods);
+        var (mealLog, request, fingerprint) = await PrepareAsync(mealLogId);
 
         if (!refresh && mealLog.Analysis is { } stored && stored.Matches(fingerprint))
         {
             return MealAnalysisMapper.ToDto(stored);
         }
-
-        var request = MealAnalysisMapper.ToRequest(mealLog);
-        request.ExcludedFoods = excludedFoods;
 
         var result = await _aiService.AnalyzeMealAsync(request, ct);
 
@@ -71,23 +61,13 @@ public class AnalyzeMealLogUseCase
         bool refresh = false,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var mealLog = await _unitOfWork.MealLogs.GetDetailedByIdAsync(mealLogId);
-        if (mealLog == null)
-        {
-            throw new KeyNotFoundException($"MealLog with id '{mealLogId}' was not found.");
-        }
-
-        var excludedFoods = await ExclusionsAsync(mealLog.UserId);
-        var fingerprint = MealAnalysisFingerprint.For(mealLog, excludedFoods);
+        var (mealLog, request, fingerprint) = await PrepareAsync(mealLogId);
 
         if (!refresh && mealLog.Analysis is { } stored && stored.Matches(fingerprint))
         {
             yield return AIStreamEvent.Result(MealAnalysisMapper.ToDto(stored));
             yield break;
         }
-
-        var request = MealAnalysisMapper.ToRequest(mealLog);
-        request.ExcludedFoods = excludedFoods;
 
         var transcript = new StringBuilder();
         var prompt = MealAnalysisPrompt.Build(request);
@@ -129,9 +109,32 @@ public class AnalyzeMealLogUseCase
     }
 
     /// <summary>The owner's standing exclusions, which no suggestion may ignore.</summary>
-    private async Task<List<string>> ExclusionsAsync(Guid userId)
+    /// <summary>
+    /// The meal, the request that describes it, and the fingerprint saying what any stored
+    /// analysis was made for.
+    ///
+    /// Both entry points need all three and used to work them out in two copies of the same
+    /// eight lines - including the exclusion lookup, which is the part that must not be
+    /// forgotten: a suggestion written before someone recorded a peanut allergy must not go
+    /// on being served afterwards, and the fingerprint is what retires it.
+    /// </summary>
+    private async Task<(MealLog MealLog, MealAnalysisRequest Request, string Fingerprint)> PrepareAsync(
+        Guid mealLogId)
     {
-        var user = await _unitOfWork.Users.GetByIdAsync(userId);
-        return user?.Profile?.ExcludedFoods.ToList() ?? new List<string>();
+        var mealLog = await _unitOfWork.MealLogs.GetDetailedByIdAsync(mealLogId);
+        if (mealLog == null)
+        {
+            throw new KeyNotFoundException($"MealLog with id '{mealLogId}' was not found.");
+        }
+
+        var excludedFoods = await ExclusionsAsync(mealLog.UserId);
+
+        var request = MealAnalysisMapper.ToRequest(mealLog);
+        request.ExcludedFoods = excludedFoods;
+
+        return (mealLog, request, MealAnalysisFingerprint.For(mealLog, excludedFoods));
     }
+
+    private Task<List<string>> ExclusionsAsync(Guid userId) =>
+        MealExclusions.LoadAsync(_unitOfWork, userId);
 }

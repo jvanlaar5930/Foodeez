@@ -20,7 +20,7 @@ import { useProfileStore } from '@/store/profileStore';
 import { ActivityLevel, DietaryGoal, UnitSystem } from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { useTheme, useThemedStyles, useThemeMode, type Palette } from '@/theme';
-import { formatHeight, formatWeight } from '@/utils/units';
+import { calculateBMI, formatHeight, formatWeight } from '@foodeez/shared';
 import { describeApiError } from '@/utils/apiError';
 import type { ProfileStackParamList } from '@/navigation/types';
 
@@ -53,8 +53,11 @@ export function ProfileScreen() {
   const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<ProfileNav>();
   const { mode, setMode } = useThemeMode();
-  const { user, logout } = useAuthStore();
-  const { profile, fetchProfile, updateProfile } = useProfileStore();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const profile = useProfileStore((state) => state.profile);
+  const fetchProfile = useProfileStore((state) => state.fetchProfile);
+  const updateProfile = useProfileStore((state) => state.updateProfile);
   const units = profile?.unitSystem ?? UnitSystem.Metric;
   const [weightReminderEnabled, setWeightReminderEnabled] = useState(true);
   const [trackingReminderEnabled, setTrackingReminderEnabled] = useState(true);
@@ -107,9 +110,7 @@ export function ProfileScreen() {
 
   const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : '??';
 
-  const bmi = profile
-    ? (profile.weightKg / Math.pow(profile.heightCm / 100, 2)).toFixed(1)
-    : null;
+  const bmi = profile ? calculateBMI(profile.weightKg, profile.heightCm) : null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -201,7 +202,7 @@ export function ProfileScreen() {
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Weight History</Text>
             <TouchableOpacity style={styles.logWeightButton} onPress={() => setShowLogWeightModal(true)}>
-              <Ionicons name="add" size={16} color={C.surface} />
+              <Ionicons name="add" size={16} color={C.onPrimary} />
               <Text style={styles.logWeightButtonText}>Log Weight</Text>
             </TouchableOpacity>
           </View>
@@ -428,7 +429,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   segmentActive: { backgroundColor: C.primary, borderColor: C.primary },
   segmentText: { fontSize: FontSize.sm, color: C.textSecondary, fontWeight: FontWeight.medium },
   segmentHint: { fontSize: FontSize.xs, color: C.textHint },
-  segmentTextActive: { color: '#FFFFFF' },
+  segmentTextActive: { color: C.onPrimary },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',

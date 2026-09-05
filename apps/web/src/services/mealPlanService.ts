@@ -26,16 +26,6 @@ export const mealPlanService = {
     return response.data;
   },
 
-  async generateAIMealPlan(data: GenerateMealPlanRequest, signal?: AbortSignal): Promise<MealPlan> {
-    // Generation lives on the meal-plans controller, not the AI one - `/ai/generate-meal-plan`
-    // has never existed and every click of AI Generate was a 404.
-    //
-    // The signal is not cosmetic: aborting closes the connection, which the API surfaces as
-    // RequestAborted and passes down to the model call, so a cancel here actually stops the
-    // work rather than just hiding it.
-    const response = await api.post<MealPlan>('/meal-plans/generate', data, { signal });
-    return response.data;
-  },
 
   /**
    * The same generation, streamed: `onDelta` receives the plan's rationale as the model

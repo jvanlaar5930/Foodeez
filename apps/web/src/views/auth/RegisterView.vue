@@ -6,107 +6,98 @@
         <p class="text-gray-500 dark:text-gray-400 mt-1">Create your account</p>
       </div>
 
-      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-8">
+      <AppCard padding="lg">
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">First Name</label>
-              <input
-                v-model="form.firstName"
-                type="text"
-                autocomplete="given-name"
-                class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                :class="errors.firstName ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
-                placeholder="Jane"
-              />
-              <p v-if="errors.firstName" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.firstName }}</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Last Name</label>
-              <input
-                v-model="form.lastName"
-                type="text"
-                autocomplete="family-name"
-                class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                :class="errors.lastName ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
-                placeholder="Doe"
-              />
-              <p v-if="errors.lastName" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.lastName }}</p>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Email</label>
-            <input
-              v-model="form.email"
-              type="email"
-              autocomplete="email"
-              class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              :class="errors.email ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
-              placeholder="jane@example.com"
+            <AppInput
+              v-model="form.firstName"
+              label="First Name"
+              autocomplete="given-name"
+              placeholder="Jane"
+              :error="errors.firstName"
             />
-            <p v-if="errors.email" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.email }}</p>
+            <AppInput
+              v-model="form.lastName"
+              label="Last Name"
+              autocomplete="family-name"
+              placeholder="Doe"
+              :error="errors.lastName"
+            />
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password</label>
-            <div class="relative">
-              <input
-                v-model="form.password"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 pr-10"
-                :class="errors.password ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
-                placeholder="Min. 8 characters"
-              />
-              <button type="button" class="absolute right-3 top-2.5 text-gray-400" @click="showPassword = !showPassword">
-                <span class="text-sm">{{ showPassword ? '🙈' : '👁' }}</span>
+          <AppInput
+            v-model="form.email"
+            label="Email"
+            type="email"
+            autocomplete="email"
+            placeholder="jane@example.com"
+            :error="errors.email"
+          />
+
+          <AppInput
+            v-model="form.password"
+            label="Password"
+            :type="showPassword ? 'text' : 'password'"
+            autocomplete="new-password"
+            placeholder="Min. 8 characters"
+            :error="errors.password"
+          >
+            <template #suffix>
+              <button
+                type="button"
+                class="text-gray-400"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                @click="showPassword = !showPassword"
+              >
+                <span class="text-sm" aria-hidden="true">{{ showPassword ? '🙈' : '👁' }}</span>
               </button>
-            </div>
-            <div v-if="form.password" class="mt-1">
-              <div class="flex gap-1">
-                <div v-for="i in 4" :key="i" class="h-1 flex-1 rounded" :class="passwordStrength >= i ? strengthColor : 'bg-gray-200 dark:bg-gray-700'" />
-              </div>
-              <p class="text-xs mt-1" :class="strengthTextColor">{{ strengthLabel }}</p>
-            </div>
-            <p v-if="errors.password" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.password }}</p>
-          </div>
+            </template>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Confirm Password</label>
-            <input
-              v-model="form.confirmPassword"
-              :type="showPassword ? 'text' : 'password'"
-              autocomplete="new-password"
-              class="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              :class="errors.confirmPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'"
-              placeholder="Repeat password"
-            />
-            <p v-if="errors.confirmPassword" class="text-red-500 dark:text-red-400 text-xs mt-1">{{ errors.confirmPassword }}</p>
-          </div>
+            <template #below>
+              <div v-if="form.password">
+                <div class="flex gap-1">
+                  <div
+                    v-for="i in 4"
+                    :key="i"
+                    class="h-1 flex-1 rounded"
+                    :class="passwordStrength >= i ? strengthColor : 'bg-gray-200 dark:bg-gray-700'"
+                  />
+                </div>
+                <p class="mt-1 text-xs" :class="strengthTextColor">{{ strengthLabel }}</p>
+              </div>
+            </template>
+          </AppInput>
+
+          <AppInput
+            v-model="form.confirmPassword"
+            label="Confirm Password"
+            :type="showPassword ? 'text' : 'password'"
+            autocomplete="new-password"
+            placeholder="Repeat password"
+            :error="errors.confirmPassword"
+          />
 
           <AppAlert v-if="apiError" variant="error" :message="apiError" />
 
-          <button
-            type="submit"
-            :disabled="isLoading"
-            class="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            <span v-if="isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          <AppButton type="submit" size="lg" :loading="isLoading" class="w-full">
             {{ isLoading ? 'Creating account...' : 'Create Account' }}
-          </button>
+          </AppButton>
         </form>
 
         <p class="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
           Already have an account?
           <RouterLink to="/auth/login" class="text-green-600 dark:text-green-400 font-semibold ml-1">Sign in</RouterLink>
         </p>
-      </div>
+      </AppCard>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AppButton from '@/components/ui/AppButton.vue';
+import AppCard from '@/components/ui/AppCard.vue';
+import AppInput from '@/components/ui/AppInput.vue';
+import { extractErrorMessage } from '@/utils/apiError';
 import { ref, computed } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
@@ -168,8 +159,8 @@ async function handleSubmit() {
       password: form.value.password,
     });
     router.push('/auth/setup');
-  } catch (err: any) {
-    apiError.value = err.response?.data?.detail ?? 'Registration failed. Please try again.';
+  } catch (err: unknown) {
+    apiError.value = extractErrorMessage(err, 'Registration failed. Please try again.');
   } finally {
     isLoading.value = false;
   }

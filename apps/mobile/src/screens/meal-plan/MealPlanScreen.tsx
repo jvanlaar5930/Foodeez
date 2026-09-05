@@ -7,10 +7,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Modal,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   addDays,
@@ -23,40 +21,29 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
+import { entryLabel } from '@/utils/mealPlanLabels';
+import { ModalActions } from '@/components/ui/ModalActions';
+import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useAuthStore } from '@/store/authStore';
 import { mealService } from '@/services/mealService';
-import { MealLogDto, MealPlanEntryDto, MealType } from '@/types';
+import {
+  MEAL_TYPE_LABELS,
+  MealLogDto,
+  MealPlanEntryDto,
+  MealType,
+  ORDERED_MEAL_TYPES,
+} from '@/types';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 
 type Props = NativeStackScreenProps<MealPlanStackParamList, 'MealPlanHome'>;
-
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  [MealType.Breakfast]: 'Breakfast',
-  [MealType.MorningSnack]: 'Morning Snack',
-  [MealType.Lunch]: 'Lunch',
-  [MealType.AfternoonSnack]: 'Afternoon Snack',
-  [MealType.Dinner]: 'Dinner',
-  [MealType.EveningSnack]: 'Evening Snack',
-};
-
-const MEAL_TYPES = [
-  MealType.Breakfast,
-  MealType.MorningSnack,
-  MealType.Lunch,
-  MealType.AfternoonSnack,
-  MealType.Dinner,
-  MealType.EveningSnack,
-];
 
 /**
  * What to call a planned meal. AI-generated entries have no Recipe or FoodItem row behind
  * them, so both names are null and the meal's own name is in `notes` - without this every
  * generated slot read "Custom meal".
  */
-function entryLabel(entry: MealPlanEntryDto): string {
-  return entry.recipeName ?? entry.foodItemName ?? entry.notes ?? 'Custom meal';
-}
 
 export function MealPlanScreen({ navigation }: Props) {
   const C = useTheme();
@@ -67,8 +54,13 @@ export function MealPlanScreen({ navigation }: Props) {
   /** Free text for the next generation. Held here so a failed attempt can be retried as asked. */
   const [guidance, setGuidance] = useState('');
 
-  const { user } = useAuthStore();
-  const { plans, activePlan, isLoading, isGenerating, fetchPlans, generatePlan } = useMealPlanStore();
+  const user = useAuthStore((state) => state.user);
+  const plans = useMealPlanStore((state) => state.plans);
+  const activePlan = useMealPlanStore((state) => state.activePlan);
+  const isLoading = useMealPlanStore((state) => state.isLoading);
+  const isGenerating = useMealPlanStore((state) => state.isGenerating);
+  const fetchPlans = useMealPlanStore((state) => state.fetchPlans);
+  const generatePlan = useMealPlanStore((state) => state.generatePlan);
   // What was actually logged for the visible week, shown read-only alongside what was
   // planned - a display-only overlay, so a failed fetch just leaves the grid unannotated.
   const [loggedLogs, setLoggedLogs] = useState<MealLogDto[]>([]);
@@ -134,7 +126,10 @@ export function MealPlanScreen({ navigation }: Props) {
   const hasEntriesThisWeek = weekDays.some(d => getEntriesForDay(d).length > 0 || dayHasLoggedMeal(d));
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    // A plain View, not a SafeAreaView: this screen sits under the stack's "Meal Plan"
+    // header, which has already taken the status bar's height out. Insetting again put a
+    // band of background between the header and the week picker.
+    <View style={styles.container}>
       {/* Week navigation */}
       <View style={styles.weekHeader}>
         <TouchableOpacity onPress={() => setWeekStart(d => addDays(d, -7))}>
@@ -200,9 +195,9 @@ export function MealPlanScreen({ navigation }: Props) {
 
         {/* Meal slots for selected day */}
         {isLoading ? (
-          <ActivityIndicator size="large" color={C.primary} style={{ marginTop: Spacing.xl }} />
+          <LoadingSpinner />
         ) : (
-          MEAL_TYPES.map(mealType => {
+          ORDERED_MEAL_TYPES.map(mealType => {
             const entry = getEntryForDayAndMeal(selectedDay, mealType);
             const loggedLabel = entry ? undefined : getLoggedLabel(selectedDay, mealType);
             return (
@@ -242,7 +237,7 @@ export function MealPlanScreen({ navigation }: Props) {
               Get a personalized meal plan based on your dietary goals and preferences.
             </Text>
             <TouchableOpacity style={styles.generateButton} onPress={() => setShowGenerateModal(true)}>
-              <Ionicons name="sparkles" size={18} color={C.surface} />
+              <Ionicons name="sparkles" size={18} color={C.onPrimary} />
               <Text style={styles.generateButtonText}>Generate Plan</Text>
             </TouchableOpacity>
           </View>
@@ -258,45 +253,41 @@ export function MealPlanScreen({ navigation }: Props) {
       </ScrollView>
 
       {/* Generate confirm modal */}
-      <Modal visible={showGenerateModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="sparkles" size={40} color={C.secondary} />
-            <Text style={styles.modalTitle}>Generate Plan</Text>
-            <Text style={styles.modalText}>
-              A full week for {format(weekStart, 'MMM d')} –{' '}
-              {format(addDays(weekStart, 6), 'MMM d')}, built around your targets and the
-              foods you avoid.
-            </Text>
+      <ModalSheet
+        visible={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
+        title="Generate Plan"
+        footer={
+          <ModalActions
+            confirmLabel="Generate"
+            onConfirm={handleGeneratePlan}
+            onCancel={() => setShowGenerateModal(false)}
+          />
+        }
+      >
+        <Text style={styles.modalText}>
+          A full week for {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')},
+          built around your targets and the foods you avoid.
+        </Text>
 
-            <Text style={styles.modalLabel}>Anything specific? (optional)</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={guidance}
-              onChangeText={setGuidance}
-              placeholder="e.g. more variety in the dinners, and reuse last week's breakfasts"
-              placeholderTextColor={C.textSecondary}
-              multiline
-              numberOfLines={3}
-              maxLength={1000}
-              textAlignVertical="top"
-            />
-            <Text style={styles.modalHint}>
-              Mention last week and the plan you already have is used as the reference.
-            </Text>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowGenerateModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={handleGeneratePlan}>
-                <Text style={styles.modalConfirmText}>Generate</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+        <Text style={styles.modalLabel}>Anything specific? (optional)</Text>
+        <TextInput
+          style={styles.modalInput}
+          value={guidance}
+          onChangeText={setGuidance}
+          placeholder="e.g. more variety in the dinners, and reuse last week's breakfasts"
+          placeholderTextColor={C.textSecondary}
+          multiline
+          numberOfLines={3}
+          maxLength={1000}
+          textAlignVertical="top"
+          accessibilityLabel="Anything specific?"
+        />
+        <Text style={styles.modalHint}>
+          Mention last week and the plan you already have is used as the reference.
+        </Text>
+      </ModalSheet>
+    </View>
   );
 }
 
@@ -328,7 +319,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   dayPillSelected: { backgroundColor: C.primary, borderColor: C.primary },
   dayPillName: { fontSize: FontSize.xs, color: C.textSecondary, fontWeight: FontWeight.medium },
   dayPillNumber: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text, marginTop: 2 },
-  dayPillTextSelected: { color: C.surface },
+  dayPillTextSelected: { color: C.onPrimary },
   dayDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary, marginTop: 2 },
   dayDotSelected: { backgroundColor: C.surface },
   todayIndicator: {
@@ -383,13 +374,10 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     borderRadius: BorderRadius.lg,
     marginTop: Spacing.sm,
   },
-  generateButtonText: { color: C.surface, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
+  generateButtonText: { color: C.onPrimary, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
   generatingState: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
   generatingText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: C.text },
   generatingSubText: { fontSize: FontSize.md, color: C.textSecondary },
-  modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
-  modalContent: { backgroundColor: C.surface, borderRadius: BorderRadius.xl, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md, width: '100%' },
-  modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: C.text },
   modalText: { fontSize: FontSize.md, color: C.textSecondary, textAlign: 'center', lineHeight: 22 },
   modalLabel: {
     alignSelf: 'flex-start',
@@ -417,9 +405,4 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     fontSize: FontSize.xs,
     color: C.textSecondary,
   },
-  modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm, width: '100%' },
-  modalCancel: { flex: 1, borderWidth: 2, borderColor: C.divider, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalCancelText: { color: C.textSecondary, fontWeight: FontWeight.semibold },
-  modalConfirm: { flex: 1, backgroundColor: C.secondary, borderRadius: BorderRadius.lg, paddingVertical: Spacing.md, alignItems: 'center' },
-  modalConfirmText: { color: C.surface, fontWeight: FontWeight.semibold },
 });

@@ -8,7 +8,13 @@ interface MealLogItemRowProps {
   item: MealLogItemDto;
 }
 
-export function MealLogItemRow({ item }: MealLogItemRowProps) {
+/**
+ * One food inside a logged meal.
+ *
+ * Memoised: it sits in a list under a screen that re-renders whenever the day's
+ * totals refresh, and nothing about a row changes when they do.
+ */
+export const MealLogItemRow = React.memo(function MealLogItemRow({ item }: MealLogItemRowProps) {
   const C = useTheme();
   const styles = useThemedStyles(makeStyles);
   const calories = Math.round(item.nutritionalInfo.calories);
@@ -40,7 +46,7 @@ export function MealLogItemRow({ item }: MealLogItemRowProps) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const makeStyles = (C: Palette) => StyleSheet.create({
   container: {

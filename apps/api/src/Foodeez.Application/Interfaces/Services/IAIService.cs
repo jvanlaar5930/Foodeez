@@ -14,7 +14,6 @@ namespace Foodeez.Application.Interfaces.Services;
 public interface IAIService
 {
     Task<DietaryRecommendationsDto> GetDietaryRecommendationsAsync(UserProfileDto profile, DailyNutritionDto? recentNutrition = null, CancellationToken ct = default);
-    Task<GeneratedMealPlanDto> GenerateMealPlanAsync(GenerateMealPlanRequest request, UserProfileDto profile, CancellationToken ct = default);
     /// <summary>
     /// Read a meal out of a photograph as a list of separate foods with amounts. A provider
     /// that cannot see returns no items and says so in the note, rather than inventing one.

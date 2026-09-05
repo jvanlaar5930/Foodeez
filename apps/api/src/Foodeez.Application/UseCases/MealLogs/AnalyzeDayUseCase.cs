@@ -208,11 +208,11 @@ public class AnalyzeDayUseCase
         Date = date,
         IsToday = date == DateOnly.FromDateTime(DateTime.UtcNow),
         DietaryGoal = profile?.DietaryGoal.ToString(),
-        ExcludedFoods = profile?.ExcludedFoods.ToList() ?? new List<string>(),
+        ExcludedFoods = MealExclusions.Of(profile),
         Summary = summary,
         Meals = logs.Select(ToMealRequest).ToList()
     };
 
     private static List<string> Exclusions(UserProfile? profile) =>
-        profile?.ExcludedFoods.ToList() ?? new List<string>();
+        MealExclusions.Of(profile);
 }
