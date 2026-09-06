@@ -10,9 +10,11 @@ import GroceryRangePicker from '@/components/grocery/GroceryRangePicker.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useGroceryStore } from '@/stores/grocery';
+import { useToastStore } from '@/stores/toast';
 import { addDays, startOfWeek, toISODate, type RangeMode } from '@/utils/dateRange';
 
 const groceryStore = useGroceryStore();
+const toastStore = useToastStore();
 
 // A week is what people shop for, so that is where the tab opens.
 const mode = ref<RangeMode>('week');
@@ -48,6 +50,25 @@ function onRangeChange(range: { startDate: string; endDate: string }) {
 
 async function build(refresh: boolean) {
   await groceryStore.generate(startDate.value, endDate.value, refresh);
+
+  // Building a list is a minutes-long wait people walk away from. A failure is left to the
+  // banner at the foot of the page, which says why.
+  if (!groceryStore.error) {
+    toastStore.success(refresh ? 'Your list has been rebuilt.' : 'Your grocery list is ready.');
+  }
+}
+
+/**
+ * Named in the message because the row is gone by the time it is read - and taking the wrong
+ * thing off a shopping list is easy to do and easy to miss.
+ */
+async function remove(itemId: string) {
+  const name = list.value?.items.find((item) => item.id === itemId)?.name;
+  await groceryStore.removeItem(itemId);
+
+  if (!groceryStore.error) {
+    toastStore.success(name ? `${name} removed from the list.` : 'Item removed from the list.');
+  }
 }
 
 function save(itemId: string, item: GroceryItemRequest) {
@@ -190,7 +211,7 @@ function save(itemId: string, item: GroceryItemRequest) {
                 :item="item"
                 @toggle="groceryStore.setChecked"
                 @save="save"
-                @remove="groceryStore.removeItem"
+                @remove="remove"
               />
             </ul>
           </section>

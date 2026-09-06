@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue';
 import { RouterView } from 'vue-router';
+import ToastHost from '@/components/ui/ToastHost.vue';
 import { useProfileStore } from '@/stores/profile';
 import { useThemeStore } from '@/stores/theme';
 
@@ -20,4 +21,7 @@ watch(
 
 <template>
   <RouterView />
+
+  <!-- Outside the router view, so a toast outlives the navigation that caused it. -->
+  <ToastHost />
 </template>

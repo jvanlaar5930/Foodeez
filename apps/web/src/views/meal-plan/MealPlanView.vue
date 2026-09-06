@@ -237,6 +237,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useMealPlanStore } from '@/stores/mealPlan';
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
 import { mealService } from '@/services/mealService';
 import {
   MEAL_TYPE_SHORT_LABELS,
@@ -249,6 +250,7 @@ import {
 
 const authStore = useAuthStore();
 const planStore = useMealPlanStore();
+const toastStore = useToastStore();
 
 const weekStart = ref(startOfWeek(new Date(), { weekStartsOn: 1 }));
 const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart.value, i)));
@@ -393,8 +395,15 @@ async function onLogSaved() {
   await fetchLoggedWeek();
 }
 
+/** What the slot being worked on is called, for a message that names it. */
+function slotLabel(): string {
+  return `${MEAL_TYPE_SHORT_LABELS[slotMealType.value].toLowerCase()} on ${format(slotDate.value, 'EEEE d MMM')}`;
+}
+
 async function handleSaveSlot(payload: MealPlanEntryRequest) {
   if (!authStore.user?.id) return;
+  // Read before the save, which is what makes the slot occupied.
+  const wasEdit = slotEntry.value !== undefined;
   slotSaving.value = true;
   slotError.value = null;
   try {
@@ -408,6 +417,11 @@ async function handleSaveSlot(payload: MealPlanEntryRequest) {
     );
     await planStore.saveEntry(plan.id, slotEntry.value?.id ?? null, payload);
     slotOpen.value = false;
+    // The dialog is gone by the time this lands, and one filled cell in a grid of forty is
+    // easy to miss.
+    toastStore.success(
+      wasEdit ? `Updated ${slotLabel()}.` : `Added ${slotLabel()} to your plan.`,
+    );
   } catch {
     // Shown in the dialog, which stays open so the typed-in meal is not lost.
     slotError.value = planStore.error;
@@ -423,8 +437,10 @@ async function handleRemoveSlot() {
   slotSaving.value = true;
   slotError.value = null;
   try {
+    const label = slotLabel();
     await planStore.removeEntry(entry.mealPlanId, entry.id);
     slotOpen.value = false;
+    toastStore.success(`Removed ${label} from your plan.`);
   } catch {
     slotError.value = planStore.error;
     planStore.clearError();
@@ -445,7 +461,7 @@ function confirmGenerate() {
 async function handleGeneratePlan() {
   if (!authStore.user?.id) return;
   try {
-    await planStore.generatePlan({
+    const outcome = await planStore.generatePlan({
       userId: authStore.user.id,
       startDate: format(weekDays.value[0], 'yyyy-MM-dd'),
       endDate: format(weekDays.value[6], 'yyyy-MM-dd'),
@@ -453,6 +469,12 @@ async function handleGeneratePlan() {
       // the request that was made, not quietly drop what was asked for.
       guidance: guidance.value.trim() || undefined,
     });
+
+    // The amber banner below only appears when something went wrong, so a week that came
+    // back whole would otherwise end with the spinner simply vanishing.
+    if (outcome.failedDates.length === 0 && !outcome.stoppedEarly) {
+      toastStore.success('Your week is planned.');
+    }
   } catch {
     // The store has already put the reason in `error`, which the banner above renders.
     // Without this catch the rethrow escaped as an unhandled rejection and the button

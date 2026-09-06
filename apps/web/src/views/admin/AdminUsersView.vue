@@ -2,9 +2,12 @@
 import { ref, onMounted } from 'vue';
 import { adminService, type AdminUser } from '@/services/adminService';
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { extractErrorMessage } from '@/utils/apiError';
 import AppLayout from '@/components/layout/AppLayout.vue';
 
 const authStore = useAuthStore();
+const toastStore = useToastStore();
 const users = ref<AdminUser[]>([]);
 const isLoading = ref(false);
 const togglingId = ref<string | null>(null);
@@ -18,12 +21,19 @@ async function fetchUsers() {
   }
 }
 
+// A toggled row changes one word in a table of them, and a refused change used to look
+// exactly like a successful one - so both outcomes say so.
 async function toggleAdmin(user: AdminUser) {
   if (user.id === authStore.user?.id) return;
   togglingId.value = user.id;
   try {
     const result = await adminService.toggleAdmin(user.id);
     user.isAdmin = result.isAdmin;
+    toastStore.success(
+      `${user.email} is ${result.isAdmin ? 'now an administrator' : 'no longer an administrator'}.`,
+    );
+  } catch (err: unknown) {
+    toastStore.error(extractErrorMessage(err, 'That change could not be saved.'));
   } finally {
     togglingId.value = null;
   }
@@ -35,6 +45,9 @@ async function toggleActive(user: AdminUser) {
   try {
     const result = await adminService.toggleActive(user.id);
     user.isActive = result.isActive;
+    toastStore.success(`${user.email} is ${result.isActive ? 'active again' : 'now deactivated'}.`);
+  } catch (err: unknown) {
+    toastStore.error(extractErrorMessage(err, 'That change could not be saved.'));
   } finally {
     togglingId.value = null;
   }

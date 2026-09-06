@@ -7,13 +7,13 @@ import ChatComposer from '@/components/chat/ChatComposer.vue';
 import ConversationList from '@/components/chat/ConversationList.vue';
 import StreamingText from '@/components/ai/StreamingText.vue';
 import { useChatStore } from '@/stores/chat';
+import { useToastStore } from '@/stores/toast';
 
 const chatStore = useChatStore();
+const toastStore = useToastStore();
 
 const thread = ref<HTMLElement | null>(null);
 const showHistory = ref(false);
-/** Said once meals from a reply land on the calendar, so the action has a visible result. */
-const planNotice = ref<string | null>(null);
 
 const hasMessages = computed(() => chatStore.messages.length > 0);
 
@@ -48,34 +48,37 @@ watch(
 );
 
 async function send(text: string) {
-  planNotice.value = null;
   await chatStore.send(text);
 }
 
 async function openConversation(conversationId: string) {
   showHistory.value = false;
-  planNotice.value = null;
   await chatStore.openConversation(conversationId);
 }
 
 function startNew() {
   showHistory.value = false;
-  planNotice.value = null;
   chatStore.startNew();
 }
 
+// Both of these land somewhere else entirely - the calendar, the recipe collection - so the
+// only sign anything happened is what is said here. A failure is left to the error banner
+// below the thread, which the stores already feed.
 async function addToPlan(messageId: string) {
-  planNotice.value = (await chatStore.addSuggestionsToPlan(messageId))
-    ? 'Added to your meal plan. They are on the calendar and in your grocery list.'
-    : null;
+  if (await chatStore.addSuggestionsToPlan(messageId)) {
+    toastStore.success(
+      'Added to your meal plan. They are on the calendar and in your grocery list.',
+    );
+  }
 }
 
 async function saveRecipes(messageId: string) {
   const saved = await chatStore.saveRecipes(messageId);
-  planNotice.value =
-    saved > 0
-      ? `Saved ${saved === 1 ? 'the recipe' : `${saved} recipes`} to your recipe collection.`
-      : null;
+  if (saved > 0) {
+    toastStore.success(
+      `Saved ${saved === 1 ? 'the recipe' : `${saved} recipes`} to your recipe collection.`,
+    );
+  }
 }
 </script>
 
@@ -177,12 +180,6 @@ async function saveRecipes(messageId: string) {
           </div>
         </div>
 
-        <p
-          v-if="planNotice"
-          class="mb-2 rounded-xl bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300"
-        >
-          {{ planNotice }}
-        </p>
         <AppAlert v-if="chatStore.error" variant="error" :message="chatStore.error" class="mb-2" />
 
         <ChatComposer

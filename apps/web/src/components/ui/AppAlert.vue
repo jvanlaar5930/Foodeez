@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="visible"
-    role="alert"
+    :role="role"
     class="flex items-start gap-3 rounded-xl border px-4 py-3 text-sm"
     :class="styles.container"
   >
@@ -37,8 +37,14 @@ const props = withDefaults(defineProps<{
   message?: string;
   title?: string;
   dismissible?: boolean;
+  /**
+   * How loudly a screen reader should take it. 'alert' interrupts, which is right for a
+   * failure and wrong for a confirmation that arrives while the reader is mid-sentence.
+   */
+  role?: string;
 }>(), {
   dismissible: false,
+  role: 'alert',
 });
 
 const emit = defineEmits<{ dismiss: [] }>();
