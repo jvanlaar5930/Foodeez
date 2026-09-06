@@ -2,7 +2,56 @@ import { create } from 'zustand';
 import { describeApiError } from '@/utils/apiError';
 import { runAsync } from '@/store/asyncState';
 import * as mealPlanService from '@/services/mealPlanService';
-import type { GenerateMealPlanRequest, MealPlanDto, MealPlanEntryRequest } from '@/types';
+import type {
+  GenerateMealPlanRequest,
+  MealPlanDayDto,
+  MealPlanDto,
+  MealPlanEntryRequest,
+  MealPlanGenerationResultDto,
+  MealPlanProgressDto,
+} from '@/types';
+
+/** Replaces a plan already in the list, or adds it if this is the first sight of it. */
+function upsertPlan(plans: MealPlanDto[], plan: MealPlanDto): MealPlanDto[] {
+  const index = plans.findIndex((p) => p.id === plan.id);
+  if (index < 0) return [plan, ...plans];
+
+  const next = [...plans];
+  next[index] = plan;
+  return next;
+}
+
+/**
+ * Folds one freshly generated day into the plan being rendered.
+ *
+ * The plan row exists from the first successful day, but its full shape only arrives with the
+ * final result - so the first day to land may belong to a plan not in the list yet, and a stub
+ * is created for it rather than the day being dropped on the floor.
+ */
+function mergeGeneratedDay(plans: MealPlanDto[], day: MealPlanDayDto): MealPlanDto[] {
+  const existing = plans.find((p) => p.id === day.planId);
+
+  const merged: MealPlanDto = existing
+    ? {
+        ...existing,
+        entriesByDate: { ...existing.entriesByDate, [day.date]: day.entries },
+        // The range grows as days land, so the calendar's plan lookup keeps matching.
+        startDate: day.date < existing.startDate ? day.date : existing.startDate,
+        endDate: day.date > existing.endDate ? day.date : existing.endDate,
+      }
+    : {
+        id: day.planId,
+        userId: '',
+        name: 'AI Meal Plan',
+        startDate: day.date,
+        endDate: day.date,
+        isAIGenerated: true,
+        entriesByDate: { [day.date]: day.entries },
+        createdAt: new Date().toISOString(),
+      };
+
+  return upsertPlan(plans, merged);
+}
 
 interface MealPlanState {
   plans: MealPlanDto[];
@@ -11,6 +60,12 @@ interface MealPlanState {
   hasLoaded: boolean;
   isLoading: boolean;
   isGenerating: boolean;
+  /** What the model has written for the day in progress. Cleared as each new day starts. */
+  generationText: string;
+  /** Which day of the run is being worked on, so a multi-minute wait has something to show. */
+  generationProgress: MealPlanProgressDto | null;
+  /** How the last run turned out, kept afterwards because a partly written week is normal. */
+  lastGeneration: MealPlanGenerationResultDto | null;
   error: string | null;
   fetchPlans: (userId: string) => Promise<void>;
   generatePlan: (data: GenerateMealPlanRequest) => Promise<void>;
@@ -34,6 +89,9 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   hasLoaded: false,
   isLoading: false,
   isGenerating: false,
+  generationText: '',
+  generationProgress: null,
+  lastGeneration: null,
   error: null,
 
   fetchPlans: async (userId: string) => {
@@ -44,13 +102,45 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
   },
 
   generatePlan: async (data: GenerateMealPlanRequest) => {
-    set({ isGenerating: true, error: null });
+    set({
+      isGenerating: true,
+      error: null,
+      generationText: '',
+      generationProgress: null,
+      lastGeneration: null,
+    });
+
     try {
-      const newPlan = await mealPlanService.generateAIMealPlan(data);
-      const currentPlans = get().plans;
-      set({ plans: [newPlan, ...currentPlans], activePlan: newPlan, isGenerating: false });
+      const outcome = await mealPlanService.generateAIMealPlanStream(
+        data,
+        (text) => set((state) => ({ generationText: state.generationText + text })),
+        {
+          onProgress: (progress) =>
+            set({
+              generationProgress: progress,
+              // Each day narrates itself, so the previous day's text is cleared rather than
+              // left to grow into a wall nobody reads on a phone screen.
+              ...(progress.status === 'planning' ? { generationText: '' } : {}),
+            }),
+          onPart: (day) => set((state) => ({ plans: mergeGeneratedDay(state.plans, day) })),
+        },
+      );
+
+      set((state) => ({
+        isGenerating: false,
+        generationProgress: null,
+        lastGeneration: outcome,
+        plans: outcome.plan ? upsertPlan(state.plans, outcome.plan) : state.plans,
+        activePlan: outcome.plan ?? state.activePlan,
+      }));
     } catch (err: unknown) {
-      set({ isGenerating: false, error: describeApiError(err, 'That plan could not be generated.') });
+      // Days written before the failure are already saved server-side, so the error is about
+      // the rest of the week rather than about losing what was done.
+      set({
+        isGenerating: false,
+        generationProgress: null,
+        error: describeApiError(err, 'That plan could not be generated.'),
+      });
       throw err;
     }
   },

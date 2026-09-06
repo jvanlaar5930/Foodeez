@@ -7,6 +7,7 @@ using Foodeez.Application.DTOs.Users;
 using Foodeez.Application.UseCases.Grocery;
 using Foodeez.Application.Interfaces.Services;
 using Foodeez.Domain.Entities;
+using Foodeez.Domain.Enums;
 using Foodeez.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 
@@ -31,44 +32,52 @@ public class GenerateAIMealPlanUseCase
         _logger = logger;
     }
 
+    /// <summary>
+    /// How many days in a row may fail before the run is abandoned.
+    ///
+    /// One failed day is a day the model made a mess of; two in a row is the provider being
+    /// down, and there is nothing to gain from spending several more minutes discovering that
+    /// five more times. Whatever was written before the run stopped is kept and reported.
+    /// </summary>
+    private const int MaxConsecutiveFailures = 2;
+
     public async Task<MealPlanDto> ExecuteAsync(GenerateMealPlanRequest request, CancellationToken ct = default)
     {
-        var profileDto = await LoadProfileAsync(request.UserId);
-        await AttachPreviousPeriodAsync(request);
+        MealPlanGenerationResultDto? outcome = null;
 
-        // Built from MealPlanPrompt, exactly as the streaming path below does, rather than
-        // delegated to each provider's own prompt builder. Only Claude's mentioned
-        // ExcludeIngredients, so on every other provider this path planned meals around foods
-        // the user had told us they cannot eat; the per-provider parsers also dropped
-        // ingredients and instructions. One prompt and one parser means one behaviour.
-        var transcript = new StringBuilder();
-        await foreach (var chunk in _streaming.StreamAsync(BuildPrompt(request, profileDto), ct))
+        // The same day-by-day walk the streamed path takes, with the narration dropped on the
+        // floor. Two implementations of this would be two sets of rules about what happens to
+        // a half-written week.
+        await foreach (var streamEvent in ExecuteStreamAsync(request, ct))
         {
-            transcript.Append(chunk);
+            if (streamEvent.Type == "result" && streamEvent.Data is MealPlanGenerationResultDto result)
+            {
+                outcome = result;
+            }
+            else if (streamEvent.Type == "error")
+            {
+                throw new AIGenerationFailedException(
+                    streamEvent.Message ?? "The AI service could not produce a meal plan right now.");
+            }
         }
 
-        var generated = MealPlanPrompt.Parse(transcript.ToString());
-
-        // Providers swallow their own transport errors and hand back an empty result, so an
-        // outage arrives here looking exactly like a plan with no days in it. Saving that
-        // would hand the user a persisted, permanently blank week and report success -
-        // refusing is the only honest answer, and it leaves nothing to clean up.
-        if (generated.Days.Count == 0)
+        if (outcome?.Plan == null)
         {
-            _logger.LogWarning(
-                "AI meal plan produced no usable days. Raw response ({Length} chars): {Response}",
-                transcript.Length, Truncate(transcript.ToString(), 4000));
-
             throw new AIGenerationFailedException(
                 "The AI service could not produce a meal plan right now. Please try again in a moment.");
         }
 
-        return await PersistAsync(request, generated);
+        return outcome.Plan;
     }
 
     /// <summary>
-    /// The same generation, streamed as the model writes it: the plan's rationale reaches the
-    /// screen while the week is still being written, and the plan is saved once it is whole.
+    /// Generates the plan a day at a time, saving each day before asking for the next.
+    ///
+    /// The whole week used to be one call: one prompt, one answer, one parse, one save at the
+    /// end. Anything that went wrong anywhere in it cost the entire week and said only that
+    /// "the AI service could not produce a meal plan" - no indication of where it had got to,
+    /// and nothing kept. Now each day stands on its own, so a failure costs that day, the
+    /// caller is told which date it was, and the days that worked are already saved.
     /// </summary>
     public async IAsyncEnumerable<AIStreamEvent> ExecuteStreamAsync(
         GenerateMealPlanRequest request,
@@ -77,40 +86,250 @@ public class GenerateAIMealPlanUseCase
         var profileDto = await LoadProfileAsync(request.UserId);
         await AttachPreviousPeriodAsync(request);
 
-        var transcript = new StringBuilder();
-        await foreach (var delta in AINarration.NarrateAsync(
-            _streaming, BuildPrompt(request, profileDto), transcript, ct))
+        var effective = WithProfileExclusions(request, profileDto);
+        var dates = DatesOf(request);
+
+        if (dates.Count == 0)
         {
-            yield return AIStreamEvent.Delta(delta);
+            yield return AIStreamEvent.Error("That date range covers no days. Pick an end date on or after the start date.");
+            yield break;
         }
 
-        var generated = MealPlanPrompt.Parse(transcript.ToString());
-        if (generated.Days.Count == 0)
-        {
-            // Same judgement as the blocking path: a plan with no days is an outage, not a
-            // plan, and saving it would hand the user a permanently blank week. Logging the
-            // raw text is what turns "it failed" into an actual diagnosis - a truncated
-            // response, a model that ignored the JSON-only instruction, and a genuine
-            // provider outage all reach here identically otherwise.
-            _logger.LogWarning(
-                "AI meal plan stream produced no usable days. Raw response ({Length} chars): {Response}",
-                transcript.Length, Truncate(transcript.ToString(), 4000));
+        // What is already in the calendar across the range, so no generated meal can displace
+        // something the user put there by hand.
+        var occupied = await ReadOccupiedSlotsAsync(request.UserId, request.StartDate, request.EndDate);
 
+        MealPlan? plan = null;
+        var recipes = new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase);
+        var planned = new List<string>();
+        var failed = new List<string>();
+        var kept = new List<string>();
+        var consecutiveFailures = 0;
+        var stoppedEarly = false;
+
+        for (var index = 0; index < dates.Count; index++)
+        {
+            var date = dates[index];
+            var slotsTaken = occupied.TryGetValue(date, out var taken) ? taken : new List<string>();
+
+            yield return AIStreamEvent.Progress(new MealPlanProgressDto
+            {
+                Date = date,
+                DayNumber = index + 1,
+                TotalDays = dates.Count,
+                Status = "planning"
+            });
+
+            var prompt = MealPlanPrompt.BuildDay(effective, profileDto, date, slotsTaken, planned);
+
+            var transcript = new StringBuilder();
+            var failure = null as string;
+
+            // The stream is stepped by hand because a provider fault has to become this day's
+            // failure rather than the whole run's: yield return cannot appear inside a try
+            // with a catch, so the reading and the yielding are separated.
+            await foreach (var delta in ReadDayAsync(prompt, transcript, ct))
+            {
+                if (delta.Failure is { } message)
+                {
+                    failure = message;
+                    break;
+                }
+
+                yield return AIStreamEvent.Delta(delta.Text!);
+            }
+
+            var day = failure == null
+                ? MealPlanPrompt.ParseDay(transcript.ToString(), date)
+                : new GeneratedDayDto { Date = date };
+
+            if (failure != null || day.Meals.Count == 0)
+            {
+                if (failure == null)
+                {
+                    _logger.LogWarning(
+                        "AI meal plan produced no usable meals for {Date}. Raw response ({Length} chars): {Response}",
+                        date, transcript.Length, Truncate(transcript.ToString(), 2000));
+                }
+
+                failed.Add(date.ToString("yyyy-MM-dd"));
+                consecutiveFailures++;
+
+                yield return AIStreamEvent.Progress(new MealPlanProgressDto
+                {
+                    Date = date,
+                    DayNumber = index + 1,
+                    TotalDays = dates.Count,
+                    Status = "failed",
+                    Message = failure ?? "Nothing usable came back for this day."
+                });
+
+                if (consecutiveFailures >= MaxConsecutiveFailures)
+                {
+                    stoppedEarly = true;
+                    break;
+                }
+
+                continue;
+            }
+
+            consecutiveFailures = 0;
+
+            // Created on the first day that actually produced something, not before: a run
+            // that fails on day one leaves no empty plan behind to clean up.
+            plan ??= await StartPlanAsync(request);
+
+            var saved = await SaveDayAsync(plan, request.UserId, day, slotsTaken, recipes);
+
+            foreach (var meal in day.Meals)
+            {
+                var name = meal.RecipeName?.Trim();
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    planned.Add($"{date:yyyy-MM-dd} {meal.MealType}: {name}");
+                }
+            }
+
+            if (saved.Count == 0)
+            {
+                kept.Add(date.ToString("yyyy-MM-dd"));
+            }
+            else
+            {
+                yield return AIStreamEvent.Part(new MealPlanDayDto
+                {
+                    Date = date,
+                    PlanId = plan.Id,
+                    Entries = saved.Select(GetMealPlanUseCase.MapEntry).ToList()
+                });
+            }
+
+            yield return AIStreamEvent.Progress(new MealPlanProgressDto
+            {
+                Date = date,
+                DayNumber = index + 1,
+                TotalDays = dates.Count,
+                Status = saved.Count == 0 ? "kept" : "saved"
+            });
+        }
+
+        if (plan == null)
+        {
+            // Not one day survived, so there is nothing to show and nothing was stored.
             yield return AIStreamEvent.Error(
                 "The AI service could not produce a meal plan right now. Please try again in a moment.");
             yield break;
         }
 
-        yield return AIStreamEvent.Result(await PersistAsync(request, generated));
+        yield return AIStreamEvent.Result(new MealPlanGenerationResultDto
+        {
+            Plan = GetMealPlanUseCase.MapToDto(plan),
+            FailedDates = failed,
+            KeptDates = kept,
+            StoppedEarly = stoppedEarly,
+            Message = Summarise(dates.Count, failed, kept, stoppedEarly)
+        });
     }
 
+    /// <summary>A delta from the model, or the reason there will not be any more.</summary>
+    private readonly record struct DayChunk(string? Text, string? Failure);
+
     /// <summary>
-    /// The one prompt both paths use. Exclusions are folded in here so that no route to the
-    /// model can lose them - a food someone is allergic to must not depend on which endpoint
-    /// the client happened to call.
+    /// One day's narration, with a provider fault turned into a value rather than an exception
+    /// so the caller can keep going to the next day.
     /// </summary>
-    private static string BuildPrompt(GenerateMealPlanRequest request, UserProfileDto profile) =>
-        MealPlanPrompt.Build(WithProfileExclusions(request, profile), profile);
+    private async IAsyncEnumerable<DayChunk> ReadDayAsync(
+        string prompt,
+        StringBuilder transcript,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        var stream = AINarration.NarrateAsync(_streaming, prompt, transcript, ct).GetAsyncEnumerator(ct);
+
+        try
+        {
+            while (true)
+            {
+                // Filled in inside the try and acted on outside it: C# will not allow a yield
+                // anywhere in a try that has a catch.
+                string? text = null;
+                string? failure = null;
+                var finished = false;
+
+                try
+                {
+                    if (await stream.MoveNextAsync())
+                    {
+                        text = stream.Current;
+                    }
+                    else
+                    {
+                        finished = true;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // The caller gave up on the whole run; that is not this day's problem.
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "AI meal plan: the provider failed while writing a day.");
+                    failure = "The AI service stopped part-way through this day.";
+                }
+
+                if (finished)
+                {
+                    yield break;
+                }
+
+                if (failure != null)
+                {
+                    yield return new DayChunk(null, failure);
+                    yield break;
+                }
+
+                yield return new DayChunk(text, null);
+            }
+        }
+        finally
+        {
+            await stream.DisposeAsync();
+        }
+    }
+
+    private static List<DateOnly> DatesOf(GenerateMealPlanRequest request)
+    {
+        var dates = new List<DateOnly>();
+
+        for (var date = request.StartDate; date <= request.EndDate; date = date.AddDays(1))
+        {
+            dates.Add(date);
+        }
+
+        return dates;
+    }
+
+    /// <summary>A sentence about how the run went, so no client has to compose one itself.</summary>
+    private static string Summarise(int total, List<string> failed, List<string> kept, bool stoppedEarly)
+    {
+        var written = total - failed.Count - kept.Count;
+
+        if (stoppedEarly)
+        {
+            return $"Stopped after {failed.Count} days in a row could not be planned - the AI service looks " +
+                   $"to be unavailable. {written} of {total} days were saved; the rest are untouched.";
+        }
+
+        if (failed.Count == 0)
+        {
+            return kept.Count == 0
+                ? $"All {total} days planned."
+                : $"{written} days planned; {kept.Count} left as they were, already full.";
+        }
+
+        return $"{written} of {total} days planned. These could not be: {string.Join(", ", failed)}. " +
+               "Everything else was saved - generate again to fill them in.";
+    }
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..max] + "…";
@@ -220,7 +439,15 @@ public class GenerateAIMealPlanUseCase
         };
     }
 
-    private async Task<MealPlanDto> PersistAsync(GenerateMealPlanRequest request, GeneratedMealPlanDto generated)
+    /// <summary>
+    /// The plan row, saved on its own before any day is written into it.
+    ///
+    /// Saved immediately rather than at the end because every day that follows is committed
+    /// against it: an unsaved parent would make each day's save the whole plan's save, and a
+    /// failure on day four would take days one to three with it - the very thing this design
+    /// exists to prevent.
+    /// </summary>
+    private async Task<MealPlan> StartPlanAsync(GenerateMealPlanRequest request)
     {
         var plan = new MealPlan
         {
@@ -231,51 +458,101 @@ public class GenerateAIMealPlanUseCase
             IsAIGenerated = true
         };
 
-        // One recipe per distinct dish across the whole week, reusing the rows this person
-        // already has: a plan that repeats the same breakfast five times should leave one
-        // recipe behind, not five identical ones, and regenerating a week should leave none.
-        var recipes = await LoadReusableRecipesAsync(request.UserId, generated);
-
-        // Persist generated day entries
-        foreach (var day in generated.Days)
-        {
-            foreach (var meal in day.Meals)
-            {
-                // Notes still carries the name: it is what the calendar card renders for an
-                // entry with nothing else to show, and taking only RecipeDescription - which
-                // most providers never even parse - left every generated plan showing seven
-                // blank slots.
-                var label = string.IsNullOrWhiteSpace(meal.RecipeName)
-                    ? meal.RecipeDescription
-                    : string.IsNullOrWhiteSpace(meal.RecipeDescription)
-                        ? meal.RecipeName
-                        : $"{meal.RecipeName} - {meal.RecipeDescription}";
-
-                // The model writes a whole recipe for every meal - method, ingredients,
-                // timings, macros - and all of it used to be dropped on the floor in favour
-                // of that one label. Keeping it as a real recipe is what lets someone open a
-                // planned meal and find out how to actually cook it.
-                var recipe = await ResolveRecipeAsync(request.UserId, meal, recipes);
-
-                plan.Entries.Add(new MealPlanEntry
-                {
-                    MealPlanId = plan.Id,
-                    EntryDate = day.Date,
-                    MealType = meal.MealType,
-                    RecipeId = recipe?.Id,
-                    // Attached so the response carries the meal's name straight away, rather
-                    // than the client having to refetch the plan to learn what was saved.
-                    Recipe = recipe,
-                    Notes = label,
-                    Servings = meal.Servings > 0 ? meal.Servings : 1f
-                });
-            }
-        }
-
         await _unitOfWork.MealPlans.AddAsync(plan);
         await _unitOfWork.SaveChangesAsync();
 
-        return GetMealPlanUseCase.MapToDto(plan);
+        return plan;
+    }
+
+    /// <summary>
+    /// Writes one day's meals and commits them, skipping any slot that is already spoken for.
+    /// </summary>
+    /// <returns>The entries actually added - empty when every slot that day was already full.</returns>
+    private async Task<List<MealPlanEntry>> SaveDayAsync(
+        MealPlan plan,
+        Guid userId,
+        GeneratedDayDto day,
+        IReadOnlyCollection<string> occupied,
+        Dictionary<string, Recipe> recipes)
+    {
+        await LoadReusableRecipesAsync(userId, day, recipes);
+
+        var taken = occupied
+            .Select(line => line.Split(':', 2)[0].Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var added = new List<MealPlanEntry>();
+        var usedThisDay = new HashSet<MealType>();
+
+        foreach (var meal in day.Meals)
+        {
+            // Told plainly in the prompt not to plan these, but a model that does it anyway
+            // must not be allowed to overwrite something a person put there.
+            if (taken.Contains(meal.MealType.ToString()) || !usedThisDay.Add(meal.MealType))
+            {
+                continue;
+            }
+
+            // Notes still carries the name: it is what the calendar card renders for an
+            // entry with nothing else to show, and taking only RecipeDescription - which
+            // most providers never even parse - left every generated plan showing seven
+            // blank slots.
+            var label = string.IsNullOrWhiteSpace(meal.RecipeName)
+                ? meal.RecipeDescription
+                : string.IsNullOrWhiteSpace(meal.RecipeDescription)
+                    ? meal.RecipeName
+                    : $"{meal.RecipeName} - {meal.RecipeDescription}";
+
+            // The model writes a whole recipe for every meal - method, ingredients, timings,
+            // macros - and all of it used to be dropped on the floor in favour of that one
+            // label. Keeping it as a real recipe is what lets someone open a planned meal and
+            // find out how to actually cook it.
+            var recipe = await ResolveRecipeAsync(userId, meal, recipes);
+
+            var entry = new MealPlanEntry
+            {
+                MealPlanId = plan.Id,
+                EntryDate = day.Date,
+                MealType = meal.MealType,
+                RecipeId = recipe?.Id,
+                // Attached so the response carries the meal's name straight away, rather
+                // than the client having to refetch the plan to learn what was saved.
+                Recipe = recipe,
+                Notes = label,
+                Servings = meal.Servings > 0 ? meal.Servings : 1f
+            };
+
+            plan.Entries.Add(entry);
+            await _unitOfWork.MealPlans.AddEntryAsync(entry);
+            added.Add(entry);
+        }
+
+        if (added.Count > 0)
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        return added;
+    }
+
+    /// <summary>
+    /// The slots already filled across the range, as "MealType: name" lines per date.
+    ///
+    /// Read once before the walk rather than per day: it is one pass over the user's plans
+    /// either way, and doing it inside the loop would repeat that for every date.
+    /// </summary>
+    private async Task<Dictionary<DateOnly, List<string>>> ReadOccupiedSlotsAsync(
+        Guid userId, DateOnly startDate, DateOnly endDate)
+    {
+        var existing = await _plannedMeals.ReadAsync(userId, startDate, endDate);
+
+        return existing
+            .GroupBy(meal => meal.Date)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(meal => $"{meal.MealType}: {meal.Label}")
+                    .ToList());
     }
 
     /// <summary>
@@ -355,28 +632,34 @@ public class GenerateAIMealPlanUseCase
     /// can serve, each pulling back every loose match with its ingredients and food items,
     /// only to keep the one row whose name matched exactly.
     /// </summary>
-    private async Task<Dictionary<string, Recipe>> LoadReusableRecipesAsync(
-        Guid userId, GeneratedMealPlanDto generated)
+    private async Task LoadReusableRecipesAsync(
+        Guid userId, GeneratedDayDto day, Dictionary<string, Recipe> known)
     {
-        var names = generated.Days
-            .SelectMany(day => day.Meals)
+        var names = day.Meals
             .Select(meal => meal.RecipeName?.Trim())
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Select(name => name!)
+            .Where(name => !known.ContainsKey(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        if (names.Count == 0)
+        {
+            return;
+        }
 
         var existing = await _unitOfWork.Recipes.GetOwnedByNamesAsync(userId, names);
 
         // Names compare case-insensitively here, so a plan asking for "Greek Salad" reuses a
         // stored "greek salad" rather than adding a second row. Two rows differing only in
         // case would both match; the first is as good as the other.
-        var reusable = new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase);
+        //
+        // The dictionary is carried across the whole run rather than rebuilt per day, which is
+        // what stops a week that eats the same breakfast five times leaving five identical
+        // recipes behind.
         foreach (var recipe in existing)
         {
-            reusable.TryAdd(recipe.Name, recipe);
+            known.TryAdd(recipe.Name, recipe);
         }
-
-        return reusable;
     }
 }

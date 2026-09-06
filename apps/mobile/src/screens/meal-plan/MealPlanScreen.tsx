@@ -59,6 +59,8 @@ export function MealPlanScreen({ navigation }: Props) {
   const activePlan = useMealPlanStore((state) => state.activePlan);
   const isLoading = useMealPlanStore((state) => state.isLoading);
   const isGenerating = useMealPlanStore((state) => state.isGenerating);
+  const progress = useMealPlanStore((state) => state.generationProgress);
+  const lastGeneration = useMealPlanStore((state) => state.lastGeneration);
   const fetchPlans = useMealPlanStore((state) => state.fetchPlans);
   const generatePlan = useMealPlanStore((state) => state.generatePlan);
   // What was actually logged for the visible week, shown read-only alongside what was
@@ -120,6 +122,24 @@ export function MealPlanScreen({ navigation }: Props) {
       Alert.alert('Error', 'Failed to generate meal plan. Please try again.');
     }
   };
+
+  /** Named for the day being worked on, so a long wait says what it is waiting on. */
+  const generatingHeading = (() => {
+    if (!progress) return 'AI is crafting your meal plan…';
+
+    const day = format(parseISO(progress.date), 'EEEE d MMM');
+
+    switch (progress.status) {
+      case 'failed':
+        return `${day} could not be planned — moving on`;
+      case 'kept':
+        return `${day} was already planned`;
+      case 'saved':
+        return `${day} saved`;
+      default:
+        return `Planning ${day}`;
+    }
+  })();
 
   const selectedDayEntries = getEntriesForDay(selectedDay);
   const dayHasLoggedMeal = (date: Date) => loggedLogs.some((l) => l.logDate === format(date, 'yyyy-MM-dd'));
@@ -246,8 +266,38 @@ export function MealPlanScreen({ navigation }: Props) {
         {isGenerating && (
           <View style={styles.generatingState}>
             <ActivityIndicator size="large" color={C.primary} />
-            <Text style={styles.generatingText}>AI is crafting your meal plan...</Text>
-            <Text style={styles.generatingSubText}>This may take a moment</Text>
+            <Text style={styles.generatingText}>{generatingHeading}</Text>
+
+            {/* The plan is written a day at a time, and one day on a self-hosted model can
+                take minutes. Counting the days is what tells someone it is working rather
+                than stuck - the old copy said "this may take a moment" for the whole week. */}
+            {progress ? (
+              <>
+                <Text style={styles.generatingSubText}>
+                  Day {progress.dayNumber} of {progress.totalDays}
+                </Text>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${(progress.dayNumber / progress.totalDays) * 100}%` },
+                    ]}
+                  />
+                </View>
+              </>
+            ) : (
+              <Text style={styles.generatingSubText}>Reading your profile and targets…</Text>
+            )}
+          </View>
+        )}
+
+        {/* A week can come back partly written; the days that worked are already saved. */}
+        {!isGenerating && lastGeneration && (lastGeneration.failedDates.length > 0 || lastGeneration.stoppedEarly) && (
+          <View style={styles.partialNotice}>
+            <Text style={styles.partialText}>{lastGeneration.message}</Text>
+            <TouchableOpacity onPress={() => void handleGeneratePlan()}>
+              <Text style={styles.partialAction}>Try the rest</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -378,6 +428,24 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   generatingState: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
   generatingText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: C.text },
   generatingSubText: { fontSize: FontSize.md, color: C.textSecondary },
+  progressTrack: {
+    height: 6,
+    width: '80%',
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: C.divider,
+  },
+  progressFill: { height: '100%', borderRadius: 3, backgroundColor: C.primary },
+  partialNotice: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.warning,
+    gap: Spacing.sm,
+  },
+  partialText: { fontSize: FontSize.md, color: C.text },
+  partialAction: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: C.primary },
   modalText: { fontSize: FontSize.md, color: C.textSecondary, textAlign: 'center', lineHeight: 22 },
   modalLabel: {
     alignSelf: 'flex-start',

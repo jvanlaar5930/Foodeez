@@ -3,7 +3,7 @@ import { API_URL } from '@/constants/api';
 
 /** One frame on the wire, matching the API's AIStreamEvent. */
 interface StreamFrame<T> {
-  type: 'delta' | 'result' | 'error';
+  type: 'delta' | 'result' | 'error' | 'progress' | 'part';
   text?: string;
   data?: T;
   message?: string;
@@ -27,7 +27,19 @@ export interface StreamHandle {
  * does report progress, and its `responseText` grows as bytes land, so the new part of it on
  * each progress event is the stream.
  */
-export function streamAI<T>(
+/**
+ * Work that arrives in pieces reports two more kinds of frame: `progress`, saying where it has
+ * got to, and `part`, carrying a finished piece that is already saved. A meal plan uses both,
+ * so a week fills in as it is written instead of appearing all at once at the end.
+ *
+ * Both are optional - a caller that ignores them behaves exactly as it did before.
+ */
+export interface StreamHandlers<TProgress = unknown, TPart = unknown> {
+  onProgress?: (progress: TProgress) => void;
+  onPart?: (part: TPart) => void;
+}
+
+export function streamAI<T, TProgress = unknown, TPart = unknown>(
   path: string,
   options: {
     body?: unknown;
@@ -35,6 +47,7 @@ export function streamAI<T>(
     token: string | null;
   },
   onDelta: (text: string) => void,
+  handlers: StreamHandlers<TProgress, TPart> = {},
 ): Promise<T> & StreamHandle {
   const query = options.params
     ? `?${Object.entries(options.params)
@@ -68,6 +81,10 @@ export function streamAI<T>(
           onDelta(event.text);
         } else if (event.type === 'result' && event.data !== undefined) {
           result = event.data;
+        } else if (event.type === 'progress' && event.data !== undefined) {
+          handlers.onProgress?.(event.data as unknown as TProgress);
+        } else if (event.type === 'part' && event.data !== undefined) {
+          handlers.onPart?.(event.data as unknown as TPart);
         } else if (event.type === 'error') {
           failure = event.message ?? 'The AI service could not complete this request.';
         }

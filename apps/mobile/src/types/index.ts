@@ -28,7 +28,10 @@ import type {
   MealLog,
   MealLogItem,
   MealPlan,
+  MealPlanDay,
   MealPlanEntry,
+  MealPlanGenerationResult,
+  MealPlanProgress,
   MealTemplate,
   MealTemplateItem,
   NutritionSummary,
@@ -58,6 +61,9 @@ export type DayAnalysisDto = DayAnalysis;
 export type NutritionSummaryDto = NutritionSummary;
 export type MealPlanDto = MealPlan;
 export type MealPlanEntryDto = MealPlanEntry;
+export type MealPlanProgressDto = MealPlanProgress;
+export type MealPlanDayDto = MealPlanDay;
+export type MealPlanGenerationResultDto = MealPlanGenerationResult;
 export type RecipeDto = Recipe;
 export type RecipeIngredientDto = RecipeIngredient;
 export type MealTemplateDto = MealTemplate;

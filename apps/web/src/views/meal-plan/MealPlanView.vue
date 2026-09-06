@@ -34,10 +34,49 @@
         v-if="isGenerating"
         class="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-4 dark:border-purple-900 dark:bg-purple-950/40"
       >
-        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
-          Writing your plan
-        </p>
+        <div class="mb-2 flex items-baseline justify-between gap-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
+            {{ progressHeading }}
+          </p>
+          <p v-if="progress" class="text-xs tabular-nums text-purple-600 dark:text-purple-400">
+            Day {{ progress.dayNumber }} of {{ progress.totalDays }}
+          </p>
+        </div>
+
+        <!-- A week is written a day at a time, and each day against a slow local model is a
+             wait of its own. A bar that actually advances is the difference between waiting
+             and wondering whether it has hung. -->
+        <div
+          v-if="progress"
+          class="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-purple-200 dark:bg-purple-900"
+        >
+          <div
+            class="h-full rounded-full bg-purple-600 transition-all duration-500 dark:bg-purple-400"
+            :style="{ width: `${(progress.dayNumber / progress.totalDays) * 100}%` }"
+          />
+        </div>
+
         <StreamingText :text="generationText" placeholder="Reading your profile and targets..." />
+      </div>
+
+      <!-- A week can now come back partly written. Saying which days are missing - and that
+           the rest were kept - is the whole point of generating a day at a time. -->
+      <div
+        v-if="!isGenerating && lastGeneration && (lastGeneration.failedDates.length > 0 || lastGeneration.stoppedEarly)"
+        class="mb-4 flex items-start justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/40 dark:bg-amber-950/30"
+      >
+        <div class="text-sm text-amber-800 dark:text-amber-200">
+          <p>{{ lastGeneration.message }}</p>
+          <p class="mt-1 text-xs opacity-80">
+            The days that worked are saved. Generating again fills in only what is missing.
+          </p>
+        </div>
+        <button
+          class="shrink-0 text-sm font-semibold text-amber-900 underline dark:text-amber-100"
+          @click="handleGeneratePlan()"
+        >
+          Try the rest
+        </button>
       </div>
 
       <!-- Generation can fail for reasons worth reading: the AI provider being overloaded
@@ -189,7 +228,7 @@
 import AppCard from '@/components/ui/AppCard.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { ref, computed, onMounted, watch } from 'vue';
-import { format, startOfWeek, addDays, isToday } from 'date-fns';
+import { format, startOfWeek, addDays, isToday, parseISO } from 'date-fns';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import DayMealSlot from '@/components/mealplan/DayMealSlot.vue';
 import MealSlotModal from '@/components/mealplan/MealSlotModal.vue';
@@ -216,6 +255,27 @@ const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => addDays(week
 const isLoading = computed(() => planStore.isLoading);
 const isGenerating = computed(() => planStore.isGenerating);
 const generationText = computed(() => planStore.generationText);
+const progress = computed(() => planStore.generationProgress);
+const lastGeneration = computed(() => planStore.lastGeneration);
+
+/** Named for the day being worked on, so a long wait says which day it is waiting on. */
+const progressHeading = computed(() => {
+  const current = progress.value;
+  if (!current) return 'Writing your plan';
+
+  const day = format(parseISO(current.date), 'EEEE d MMM');
+
+  switch (current.status) {
+    case 'failed':
+      return `${day} could not be planned - moving on`;
+    case 'kept':
+      return `${day} was already planned - left as it was`;
+    case 'saved':
+      return `${day} saved`;
+    default:
+      return `Planning ${day}`;
+  }
+});
 const error = computed(() => planStore.error);
 
 const MEAL_TYPES = [
