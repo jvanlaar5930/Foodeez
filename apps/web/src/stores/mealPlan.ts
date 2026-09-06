@@ -9,6 +9,7 @@ import type {
   MealPlan,
   MealPlanDay,
   MealPlanEntry,
+  MealPlanEntryMoveRequest,
   MealPlanEntryRequest,
   MealPlanGenerationResult,
   MealPlanProgress,
@@ -264,6 +265,81 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     }
   }
 
+  /**
+   * Puts one or two moved entries where the server says they now are.
+   *
+   * Not `placeEntry` twice: that drops any other occupant of the slot it is writing into, so
+   * placing the dragged meal would delete the very entry the swap is about to put back.
+   * Both are pulled out first, then both are re-added.
+   */
+  function placeMoved(plan: MealPlan, moved: MealPlanEntry, swapped?: MealPlanEntry): void {
+    const ids = new Set([moved.id, swapped?.id].filter((id): id is string => !!id));
+
+    for (const [date, entries] of Object.entries(plan.entriesByDate)) {
+      const kept = entries.filter((e) => !ids.has(e.id));
+      if (kept.length !== entries.length) plan.entriesByDate[date] = kept;
+    }
+
+    for (const entry of [moved, swapped].filter((e): e is MealPlanEntry => !!e)) {
+      plan.entriesByDate[entry.entryDate] = [
+        ...(plan.entriesByDate[entry.entryDate] ?? []),
+        entry,
+      ];
+    }
+  }
+
+  /**
+   * Drags one meal to another day or slot, swapping with whatever is already there.
+   *
+   * The grid moves on the drop rather than on the response. The move is a single PUT, but that
+   * PUT can be waiting on a server that has spun down, and a cell that stays where it was for
+   * several seconds reads as the drag not having worked - which invites a second drag, and a
+   * second move. The snapshot is what puts it back when the request turns out to have failed.
+   */
+  async function moveEntry(
+    planId: string,
+    entryId: string,
+    destination: MealPlanEntryMoveRequest,
+  ): Promise<void> {
+    error.value = null;
+
+    const plan = plans.value.find((p) => p.id === planId);
+    if (!plan) return;
+
+    const snapshot = Object.fromEntries(
+      Object.entries(plan.entriesByDate).map(([date, entries]) => [date, [...entries]]),
+    );
+
+    const moving = Object.values(plan.entriesByDate)
+      .flat()
+      .find((e) => e.id === entryId);
+
+    if (moving) {
+      const occupant = (plan.entriesByDate[destination.entryDate] ?? []).find(
+        (e) => e.mealType === destination.mealType && e.id !== entryId,
+      );
+
+      placeMoved(
+        plan,
+        { ...moving, entryDate: destination.entryDate, mealType: destination.mealType },
+        occupant
+          ? { ...occupant, entryDate: moving.entryDate, mealType: moving.mealType }
+          : undefined,
+      );
+    }
+
+    try {
+      const result = await mealPlanService.moveEntry(planId, entryId, destination);
+      // Reconciled against what actually happened rather than left on the guess above - the
+      // server decides, and the two disagree if anything changed the plan in between.
+      placeMoved(plan, result.entry, result.swapped);
+    } catch (err: unknown) {
+      plan.entriesByDate = snapshot;
+      error.value = extractErrorMessage(err);
+      throw err;
+    }
+  }
+
   async function removeEntry(planId: string, entryId: string): Promise<void> {
     error.value = null;
     try {
@@ -303,6 +379,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     planCovering,
     ensurePlanFor,
     saveEntry,
+    moveEntry,
     removeEntry,
     clearError,
   };

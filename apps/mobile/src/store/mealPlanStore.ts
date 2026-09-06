@@ -6,6 +6,7 @@ import type {
   GenerateMealPlanRequest,
   MealPlanDayDto,
   MealPlanDto,
+  MealPlanEntryMoveRequest,
   MealPlanEntryRequest,
   MealPlanGenerationResultDto,
   MealPlanProgressDto,
@@ -79,6 +80,16 @@ interface MealPlanState {
     planId: string,
     entryId: string | null,
     payload: MealPlanEntryRequest,
+  ) => Promise<void>;
+  /**
+   * Sends one meal to another day or slot, swapping with whatever is already there.
+   * `destination.targetPlanId` names the plan the new day belongs to when it is not this one.
+   */
+  moveEntry: (
+    userId: string,
+    planId: string,
+    entryId: string,
+    destination: MealPlanEntryMoveRequest,
   ) => Promise<void>;
   removeEntry: (userId: string, planId: string, entryId: string) => Promise<void>;
 }
@@ -182,6 +193,28 @@ export const useMealPlanStore = create<MealPlanState>()((set, get) => ({
       set({ plans, activePlan: active });
     } catch (err: unknown) {
       set({ error: describeApiError(err, 'That meal could not be saved.') });
+      throw err;
+    }
+  },
+
+  moveEntry: async (
+    userId: string,
+    planId: string,
+    entryId: string,
+    destination: MealPlanEntryMoveRequest,
+  ) => {
+    set({ error: null });
+    try {
+      await mealPlanService.moveEntry(planId, entryId, destination);
+      // A move can change two plans at once - the one the meal left and the one it landed in,
+      // and a swap moves a second meal the other way - so the list is refetched rather than
+      // patched. Patching would have to guess at both sides of that.
+      const plans = await mealPlanService.getMealPlans(userId);
+      const landedIn = destination.targetPlanId ?? planId;
+      const active = plans.find((p) => p.id === landedIn) ?? plans[0] ?? null;
+      set({ plans, activePlan: active });
+    } catch (err: unknown) {
+      set({ error: describeApiError(err, 'That meal could not be moved.') });
       throw err;
     }
   },

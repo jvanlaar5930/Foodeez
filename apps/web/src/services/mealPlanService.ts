@@ -6,6 +6,8 @@ import type {
   MealPlan,
   MealPlanDay,
   MealPlanEntry,
+  MealPlanEntryMoveRequest,
+  MealPlanEntryMoveResponse,
   MealPlanEntryRequest,
   MealPlanGenerationResult,
   MealPlanProgress,
@@ -73,6 +75,25 @@ export const mealPlanService = {
     const response = await api.put<MealPlanEntry>(
       `/meal-plans/${planId}/entries/${entryId}`,
       entry,
+    );
+    return response.data;
+  },
+
+  /**
+   * Drags one meal to another day or slot.
+   *
+   * Not `updateEntry` with two fields changed: that endpoint replaces whatever occupies the
+   * destination, which is right when a meal was deliberately chosen for a slot and wrong for a
+   * drag. This one swaps, so a misaimed drop costs a second drag rather than a lost meal.
+   */
+  async moveEntry(
+    planId: string,
+    entryId: string,
+    destination: MealPlanEntryMoveRequest,
+  ): Promise<MealPlanEntryMoveResponse> {
+    const response = await api.put<MealPlanEntryMoveResponse>(
+      `/meal-plans/${planId}/entries/${entryId}/move`,
+      destination,
     );
     return response.data;
   },

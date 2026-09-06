@@ -122,6 +122,36 @@ public class MealPlansController : FoodeezController
         };
     }
 
+    /// <summary>
+    /// Move a meal to another day or slot, swapping with whatever is already there.
+    ///
+    /// Separate from the edit above because the two want opposite things from an occupied
+    /// destination: an edit replaces it, a drag must not throw away a meal the person was not
+    /// even pointing at.
+    /// </summary>
+    [HttpPut("{planId:guid}/entries/{entryId:guid}/move")]
+    [ProducesResponseType(typeof(MealPlanEntryMoveResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MoveEntry(
+        [FromRoute] Guid planId,
+        [FromRoute] Guid entryId,
+        [FromBody] MealPlanEntryMoveRequest request,
+        CancellationToken ct)
+    {
+        var result = await _saveEntryUseCase.MoveAsync(planId, entryId, UserId, request, ct);
+        return result.Outcome switch
+        {
+            SaveEntryOutcome.Saved => Ok(new MealPlanEntryMoveResponse
+            {
+                Entry = result.Entry!,
+                Swapped = result.Swapped
+            }),
+            SaveEntryOutcome.Rejected => BadRequest(Failure(result.Reason ?? "That move was rejected.")),
+            _ => NotFound()
+        };
+    }
+
     /// <summary>Clear one slot.</summary>
     [HttpDelete("{planId:guid}/entries/{entryId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
