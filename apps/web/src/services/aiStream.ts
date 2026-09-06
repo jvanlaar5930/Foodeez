@@ -2,10 +2,22 @@ import { getAuthToken } from './api';
 
 /** One frame on the wire, matching the API's AIStreamEvent. */
 interface StreamFrame<T> {
-  type: 'delta' | 'result' | 'error';
+  type: 'delta' | 'result' | 'error' | 'progress' | 'part';
   text?: string;
   data?: T;
   message?: string;
+}
+
+/**
+ * Work that arrives in pieces reports two more kinds of frame: `progress`, saying where it has
+ * got to, and `part`, carrying a finished piece that is already saved. A meal plan uses both,
+ * so a week fills the calendar in as it is written instead of appearing all at once at the end.
+ *
+ * Both are optional. A caller that ignores them sees exactly the behaviour it saw before.
+ */
+export interface StreamHandlers<TProgress = unknown, TPart = unknown> {
+  onProgress?: (progress: TProgress) => void;
+  onPart?: (part: TPart) => void;
 }
 
 /** A stream that ended without a usable result - `message` is meant to be shown as-is. */
@@ -27,10 +39,11 @@ export interface StreamRequest {
  * Uses fetch rather than axios: axios buffers the whole response before resolving, which
  * would defeat the point, and EventSource cannot carry the bearer token or a request body.
  */
-export async function streamAI<T>(
+export async function streamAI<T, TProgress = unknown, TPart = unknown>(
   path: string,
   request: StreamRequest,
   onDelta: (text: string) => void,
+  handlers: StreamHandlers<TProgress, TPart> = {},
 ): Promise<T> {
   const query = request.params
     ? `?${new URLSearchParams(
@@ -81,6 +94,10 @@ export async function streamAI<T>(
         onDelta(event.text);
       } else if (event.type === 'result' && event.data !== undefined) {
         result = event.data;
+      } else if (event.type === 'progress' && event.data !== undefined) {
+        handlers.onProgress?.(event.data as unknown as TProgress);
+      } else if (event.type === 'part' && event.data !== undefined) {
+        handlers.onPart?.(event.data as unknown as TPart);
       } else if (event.type === 'error') {
         failure = event.message ?? 'The AI service could not complete this request.';
       }

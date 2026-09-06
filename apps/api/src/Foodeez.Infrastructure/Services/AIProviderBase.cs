@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealLogs;
@@ -34,8 +35,101 @@ public abstract class AIProviderBase : IAIService, IStreamingAIService
     /// <summary>One prompt in, the model's whole answer out.</summary>
     protected abstract Task<string> SendAsync(string prompt, CancellationToken ct);
 
+    // ── The deadline ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// How long one call to this provider may take. Infinite unless a provider says otherwise,
+    /// which every one of them now does from its own admin-editable setting.
+    /// </summary>
+    protected virtual ValueTask<TimeSpan> RequestTimeoutAsync() => new(Timeout.InfiniteTimeSpan);
+
+    /// <summary>
+    /// Runs one call to this provider under its deadline, translating an expiry into a
+    /// failure rather than letting it escape as a cancellation.
+    ///
+    /// That translation is the whole point. Cancelling because the reader closed the tab and
+    /// cancelling because the model is still thinking after five minutes arrive as the very
+    /// same exception type, and they call for opposite responses: the first must propagate
+    /// untouched, the second is a provider fault like any other and belongs on the fallback
+    /// path. Only the code holding the token source can tell which fired, so it decides here
+    /// and hands the rest of the class two clearly different things.
+    /// </summary>
+    private protected async Task<T> UnderDeadlineAsync<T>(
+        Func<CancellationToken, Task<T>> work, CancellationToken ct)
+    {
+        var timeout = await RequestTimeoutAsync();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (timeout != Timeout.InfiniteTimeSpan)
+        {
+            cts.CancelAfter(timeout);
+        }
+
+        try
+        {
+            return await work(cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            throw new AIGenerationFailedException(TimedOutMessage(timeout));
+        }
+    }
+
+    /// <summary>
+    /// Says which provider ran out of time and how long it was given, because the fix is
+    /// almost always to give it longer and the person reading this has no other way to learn
+    /// what the current limit even is.
+    /// </summary>
+    private string TimedOutMessage(TimeSpan timeout) =>
+        $"{ProviderName} did not answer within {timeout.TotalSeconds:0}s. If the model is " +
+        "simply slow, raise its request timeout in Admin > Settings.";
+
     /// <inheritdoc />
-    public abstract IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct = default);
+    /// <remarks>
+    /// Sealed so the deadline cannot be forgotten by a provider added later; the HTTP call
+    /// itself goes in <see cref="StreamCoreAsync"/>.
+    /// </remarks>
+    public async IAsyncEnumerable<string> StreamAsync(
+        string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var timeout = await RequestTimeoutAsync();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (timeout != Timeout.InfiniteTimeSpan)
+        {
+            cts.CancelAfter(timeout);
+        }
+
+        // Stepped by hand rather than with await foreach, because the deadline has to be
+        // caught around each MoveNextAsync: a stream that stops halfway is exactly the case
+        // this exists for, and a bare cancellation escaping here would be read by the SSE
+        // writer as the reader having walked away - logged as a shrug, with the person still
+        // watching told nothing at all.
+        await using var chunks = StreamCoreAsync(prompt, cts.Token).GetAsyncEnumerator(cts.Token);
+
+        while (true)
+        {
+            bool moved;
+            try
+            {
+                moved = await chunks.MoveNextAsync();
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                throw new AIGenerationFailedException(TimedOutMessage(timeout));
+            }
+
+            if (!moved)
+            {
+                yield break;
+            }
+
+            yield return chunks.Current;
+        }
+    }
+
+    /// <summary>The provider's own streaming call, already bound to the deadline.</summary>
+    protected abstract IAsyncEnumerable<string> StreamCoreAsync(string prompt, CancellationToken ct);
 
     // ── The shared envelope ───────────────────────────────────────────────────
 
@@ -72,6 +166,13 @@ public abstract class AIProviderBase : IAIService, IStreamingAIService
         {
             // The caller gave up. That is not a provider failure and must not be logged as
             // one, nor flattened into an empty result the caller would treat as data.
+            //
+            // This provider's own deadline never reaches here as a cancellation: UnderDeadline
+            // turns that into an AIGenerationFailedException first, precisely so that the two
+            // stay distinguishable. Deciding it here instead - by asking whether the caller's
+            // token had fired - looked equivalent and was not: a request with no cancellation
+            // token at all, which is most of them, made every genuine cancellation read as a
+            // timeout and become a fallback.
             throw;
         }
         catch (Exception ex)
@@ -90,7 +191,11 @@ public abstract class AIProviderBase : IAIService, IStreamingAIService
         string activity,
         CancellationToken ct)
         where T : class =>
-        RunAsync(async () => parse(await SendAsync(prompt, ct)), fallback, activity, ct);
+        RunAsync(
+            () => UnderDeadlineAsync(async token => parse(await SendAsync(prompt, token)), ct),
+            fallback,
+            activity,
+            ct);
 
     // ── IAIService, once ──────────────────────────────────────────────────────
 
@@ -180,7 +285,8 @@ public abstract class AIProviderBase : IAIService, IStreamingAIService
         // RunAsync rather than ExecuteAsync: an image request is not one prompt string, so the
         // subclass builds and sends the whole thing itself and only the envelope is shared.
         return await RunAsync(
-            async () => await ReadMealImageAsync(imageData, mimeType, ct),
+            () => UnderDeadlineAsync<ParsedMealDto?>(
+                async token => await ReadMealImageAsync(imageData, mimeType, token), ct),
             () => ParsedMealDto.Unreadable,
             "read a meal from a photo",
             ct);

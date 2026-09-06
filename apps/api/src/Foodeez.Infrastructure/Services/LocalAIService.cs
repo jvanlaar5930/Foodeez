@@ -27,19 +27,16 @@ public sealed class LocalAIService : AIProviderBase
     private const int DefaultTimeoutSeconds = 300;
 
     private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
-    private readonly IAppSettingRepository _settings;
+    private readonly ProviderConfiguration _configuration;
 
     public LocalAIService(
         HttpClient httpClient,
-        IConfiguration configuration,
-        IAppSettingRepository settings,
+        ProviderConfiguration configuration,
         ILogger<LocalAIService> logger)
         : base(logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
-        _settings = settings;
     }
 
     protected override string ProviderName => "Local LLM";
@@ -53,15 +50,13 @@ public sealed class LocalAIService : AIProviderBase
 
     // ────────────────────────── Configuration ──────────────────────────
 
-    /// <summary>Admin-editable settings win; appsettings is the fallback for a machine with no rows yet.</summary>
-    private async Task<string?> ResolveAsync(string settingKey, string configKey)
-    {
-        var value = await _settings.GetValueAsync(settingKey);
-        if (!string.IsNullOrWhiteSpace(value)) return value.Trim();
-
-        value = _configuration[configKey];
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
+    /// <summary>
+    /// Admin-editable settings win; appsettings is the fallback for a machine with no rows yet.
+    /// The lookup itself now lives in <see cref="ProviderConfiguration"/>, shared with every
+    /// other provider - this stays only to keep the call sites below reading the same way.
+    /// </summary>
+    private Task<string?> ResolveAsync(string settingKey, string configKey) =>
+        _configuration.ResolveAsync(settingKey, configKey);
 
     /// <summary>
     /// Accepts whatever shape the admin pasted - "http://localhost:8080",
@@ -88,12 +83,8 @@ public sealed class LocalAIService : AIProviderBase
         return bool.TryParse(raw, out var enabled) && enabled;
     }
 
-    private async Task<TimeSpan> TimeoutAsync()
-    {
-        var raw = await ResolveAsync("local.timeoutSeconds", "LocalAI:TimeoutSeconds");
-        var seconds = int.TryParse(raw, out var parsed) && parsed > 0 ? parsed : DefaultTimeoutSeconds;
-        return TimeSpan.FromSeconds(seconds);
-    }
+    protected override async ValueTask<TimeSpan> RequestTimeoutAsync() =>
+        await _configuration.ResolveTimeoutAsync("local.timeoutSeconds", "LocalAI:TimeoutSeconds", DefaultTimeoutSeconds);
 
     /// <summary>
     /// How much a loaded model can actually produce in one response is not something we can
@@ -135,43 +126,40 @@ public sealed class LocalAIService : AIProviderBase
         return MealParsePrompt.Parse(await SendMessagesAsync(messages, ct));
     }
 
+    /// <remarks>
+    /// The deadline used to be applied here, and separately again in the streaming method
+    /// below. It now comes from <see cref="AIProviderBase"/>, which links it onto the caller's
+    /// token before either of these is entered - so the caller going away still ends the
+    /// request, and no provider can be added later that forgets to set one.
+    /// </remarks>
     private async Task<string> SendMessagesAsync(object[] messages, CancellationToken ct)
     {
         var baseUrl = await ResolveAsync("local.baseUrl", "LocalAI:BaseUrl") ?? DefaultBaseUrl;
         using var request = await BuildRequestAsync(baseUrl, messages, stream: false);
 
-        // Linked, not standalone: the timeout still applies, but the caller going away now
-        // ends the request too. A local model can hold a GPU for minutes, and before this the
-        // only way to stop one was to restart the server.
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(await TimeoutAsync());
-
-        using var response = await _httpClient.SendAsync(request, cts.Token);
+        using var response = await _httpClient.SendAsync(request, ct);
 
         if (!response.IsSuccessStatusCode)
         {
-            var error = await response.Content.ReadAsStringAsync(cts.Token);
+            var error = await response.Content.ReadAsStringAsync(ct);
             throw new HttpRequestException(
                 $"Local LLM at {baseUrl} returned {(int)response.StatusCode} {response.ReasonPhrase}: {Truncate(error, 500)}");
         }
 
-        return ExtractContent(await response.Content.ReadAsStringAsync(cts.Token));
+        return ExtractContent(await response.Content.ReadAsStringAsync(ct));
     }
 
-    public override async IAsyncEnumerable<string> StreamAsync(
-        string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    protected override async IAsyncEnumerable<string> StreamCoreAsync(
+        string prompt, [EnumeratorCancellation] CancellationToken ct)
     {
         var baseUrl = await ResolveAsync("local.baseUrl", "LocalAI:BaseUrl") ?? DefaultBaseUrl;
         using var request = await BuildRequestAsync(
             baseUrl, [new { role = "user", content = prompt }], stream: true);
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(await TimeoutAsync());
-
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
-        await foreach (var payload in StreamingHttp.ReadServerSentEventsAsync(response, cts.Token))
+        await foreach (var payload in StreamingHttp.ReadServerSentEventsAsync(response, ct))
         {
             var text = StreamingHttp.OpenAiDelta(payload);
             if (text.Length > 0) yield return text;

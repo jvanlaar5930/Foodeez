@@ -175,6 +175,13 @@ See `.claude/workflows.md` for step-by-step procedures.
 - **AI HTTP clients are not resilience-wrapped, on purpose** - a model call is non-idempotent,
   billed per attempt, and its streaming body cannot be replayed. Spoonacular and USDA *are*
   wrapped (idempotent GETs).
+- **Every AI provider's request timeout is admin-editable** (`<provider>.timeoutSeconds` in the
+  `AppSettings` table, `<Provider>:TimeoutSeconds` in appsettings). The `HttpClient` timeouts
+  are infinite by design; `AIProviderBase` applies the real deadline per request. See
+  `domains/ai-providers.md` for why a timeout must not be detected by checking the caller's
+  cancellation token.
+- **A meal plan is generated one day at a time**, each day saved before the next is requested,
+  so a failure costs one day rather than the week. See `domains/meal-planning.md`.
 - **Kestrel's minimum response data rate is disabled** (`Program.cs`) so a slow AI stream is
   not aborted mid-thought; nginx correspondingly sets `proxy_buffering off` and 600s timeouts.
 - **`Failure(...)` / `ProblemDetails` is the only refusal shape.** Clients read `detail` and

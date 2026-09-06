@@ -64,8 +64,7 @@ public class LocalAIServiceVisionTests
 
         var service = new LocalAIService(
             new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan },
-            configuration,
-            settings.Object,
+            new ProviderConfiguration(settings.Object, configuration),
             NullLogger<LocalAIService>.Instance);
 
         return (service, handler);

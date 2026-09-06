@@ -4,6 +4,9 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY Foodeez.sln ./
+# Central package management decides every version and global.json pins the SDK band -
+# restore below fails without them, since no PackageReference carries its own Version.
+COPY Directory.Packages.props global.json ./
 COPY src/Foodeez.Domain/Foodeez.Domain.csproj src/Foodeez.Domain/
 COPY src/Foodeez.Application/Foodeez.Application.csproj src/Foodeez.Application/
 COPY src/Foodeez.Infrastructure/Foodeez.Infrastructure.csproj src/Foodeez.Infrastructure/

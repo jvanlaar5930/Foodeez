@@ -117,6 +117,12 @@ Optional, only if you use them — `Spoonacular:ApiKey`, `FoodData:ApiKey`, `Gem
 Everything that is *not* a secret — model names, Ollama/LocalAI URLs, token ceilings, log
 levels — stays in `appsettings.json`, where it is reviewable in diffs.
 
+> **Admin > Settings overrides all of it at runtime.** Every provider's key, model, and
+> request timeout can be edited there without a redeploy; what is in `appsettings.json` is the
+> starting point a fresh installation uses until a row is saved. Timeouts are worth knowing
+> about: a self-hosted model can spend minutes on one prompt, and the timeout is what decides
+> whether that is patience or a failure.
+
 > **Environments.** User-secrets are loaded only in Development. `launchSettings.json` and
 > `start-all.bat` both set `ASPNETCORE_ENVIRONMENT=Development`, which is also what enables
 > Swagger. Deployed environments get their configuration from environment variables instead
@@ -297,6 +303,7 @@ Secrets come from user-secrets in Development and environment variables when dep
 | `Jwt:ExpiryHours` | no | How long tokens stay valid | `24` |
 | `Claude:ApiKey` | yes | Anthropic API key | `sk-ant-api03-...` |
 | `Claude:Model` | no | Claude model to use | `claude-sonnet-4-6` |
+| `<Provider>:TimeoutSeconds` | no | How long one call to that provider may run before it is abandoned and the feature falls back. Every provider has one: `Claude` and `Gemini` 120, `Groq` 60, `Ollama` and `LocalAI` 300. | `120` |
 | `Spoonacular:ApiKey` | yes | Recipe search | |
 | `FoodData:ApiKey` | yes | USDA food search | `DEMO_KEY` works for light use |
 | `Gemini:ApiKey` / `Groq:ApiKey` | yes | Alternative AI providers | |

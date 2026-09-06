@@ -1,11 +1,14 @@
-import { streamAI } from './aiStream';
+import { streamAI, type StreamHandlers } from './aiStream';
 import api from './api';
 import type {
   CreateMealPlanRequest,
   GenerateMealPlanRequest,
   MealPlan,
+  MealPlanDay,
   MealPlanEntry,
   MealPlanEntryRequest,
+  MealPlanGenerationResult,
+  MealPlanProgress,
 } from '@foodeez/shared';
 
 export const mealPlanService = {
@@ -28,16 +31,28 @@ export const mealPlanService = {
 
 
   /**
-   * The same generation, streamed: `onDelta` receives the plan's rationale as the model
-   * writes it, and the saved plan comes back at the end. Aborting the signal closes the
-   * connection, which is what stops the work on the server.
+   * Generation, streamed a day at a time.
+   *
+   * `onDelta` receives the rationale as the model writes it, `onProgress` fires once per day
+   * with where the run has got to, and `onPart` carries each day's entries as soon as they are
+   * saved - so the calendar fills in while the rest of the week is still being written.
+   *
+   * The result is no longer the plan alone: a week can now come back partly written, and the
+   * dates that failed are part of the answer. Aborting the signal closes the connection, which
+   * is what stops the work on the server; days already saved stay saved.
    */
   async generateAIMealPlanStream(
     data: GenerateMealPlanRequest,
     onDelta: (text: string) => void,
+    handlers: StreamHandlers<MealPlanProgress, MealPlanDay> = {},
     signal?: AbortSignal,
-  ): Promise<MealPlan> {
-    return streamAI<MealPlan>('/meal-plans/generate/stream', { body: data, signal }, onDelta);
+  ): Promise<MealPlanGenerationResult> {
+    return streamAI<MealPlanGenerationResult, MealPlanProgress, MealPlanDay>(
+      '/meal-plans/generate/stream',
+      { body: data, signal },
+      onDelta,
+      handlers,
+    );
   },
 
   async deleteMealPlan(planId: string): Promise<void> {

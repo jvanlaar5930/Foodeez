@@ -1,6 +1,14 @@
 import { api } from './api';
-import { AI_REQUEST_TIMEOUT } from '@/constants/api';
-import type { GenerateMealPlanRequest, MealPlanDto, MealPlanEntryDto, MealPlanEntryRequest } from '@/types';
+import { authToken, streamAI, type StreamHandlers } from './aiStream';
+import type {
+  GenerateMealPlanRequest,
+  MealPlanDayDto,
+  MealPlanDto,
+  MealPlanEntryDto,
+  MealPlanEntryRequest,
+  MealPlanGenerationResultDto,
+  MealPlanProgressDto,
+} from '@/types';
 
 export async function getMealPlans(userId: string): Promise<MealPlanDto[]> {
   // The controller takes userId from the query string; `/meal-plans/{userId}` matches no
@@ -24,13 +32,27 @@ export async function createMealPlan(data: {
   return response.data;
 }
 
-export async function generateAIMealPlan(data: GenerateMealPlanRequest): Promise<MealPlanDto> {
-  // A week's worth of days and meals for the model to reason through routinely takes well
-  // past the app's ordinary 30s timeout to answer - same reasoning as the other AI calls.
-  const response = await api.post<MealPlanDto>('/meal-plans/generate', data, {
-    timeout: AI_REQUEST_TIMEOUT,
-  });
-  return response.data;
+/**
+ * Generation, streamed a day at a time.
+ *
+ * This used to POST to the blocking endpoint and wait, which on a self-hosted model could not
+ * work at all: one day alone can take longer than the app's whole AI timeout, so a week never
+ * had a chance of arriving before the client gave up - and when it did give up, the week was
+ * lost rather than merely unfinished. Streaming means each day is saved as it is written, the
+ * screen can say which day it is on, and the connection carries bytes throughout instead of
+ * sitting idle for minutes waiting for one enormous answer.
+ */
+export function generateAIMealPlanStream(
+  data: GenerateMealPlanRequest,
+  onDelta: (text: string) => void,
+  handlers: StreamHandlers<MealPlanProgressDto, MealPlanDayDto> = {},
+) {
+  return streamAI<MealPlanGenerationResultDto, MealPlanProgressDto, MealPlanDayDto>(
+    '/meal-plans/generate/stream',
+    { body: data, token: authToken() },
+    onDelta,
+    handlers,
+  );
 }
 
 export async function deleteMealPlan(planId: string): Promise<void> {

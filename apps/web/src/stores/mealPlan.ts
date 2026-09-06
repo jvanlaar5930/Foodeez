@@ -7,8 +7,11 @@ import type {
   CreateMealPlanRequest,
   GenerateMealPlanRequest,
   MealPlan,
+  MealPlanDay,
   MealPlanEntry,
   MealPlanEntryRequest,
+  MealPlanGenerationResult,
+  MealPlanProgress,
 } from '@foodeez/shared';
 
 export const useMealPlanStore = defineStore('mealPlan', () => {
@@ -23,6 +26,17 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
   const isGenerating = ref(false);
   /** What the model has written so far this generation, for the view to show as it arrives. */
   const generationText = ref('');
+  /**
+   * Where the generation has got to. A week is written a day at a time, and each day against a
+   * slow local model is a wait of its own - without this the screen would sit on one spinner
+   * for several minutes with nothing to say whether it was working or hung.
+   */
+  const generationProgress = ref<MealPlanProgress | null>(null);
+  /**
+   * How the last generation turned out, kept after it finishes because a partly written week
+   * is now a normal outcome and the dates that failed are worth showing.
+   */
+  const lastGeneration = ref<MealPlanGenerationResult | null>(null);
   const { isLoading, error, run, runOrThrow } = useAsyncState();
 
   const sortedPlans = computed(() =>
@@ -53,30 +67,58 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
   // Held outside the action so cancelGeneration can reach the in-flight request.
   let generateController: AbortController | null = null;
 
-  async function generatePlan(data: GenerateMealPlanRequest): Promise<MealPlan> {
+  async function generatePlan(data: GenerateMealPlanRequest): Promise<MealPlanGenerationResult> {
     // A second click should replace the first request, not race it.
     generateController?.abort();
     generateController = new AbortController();
     const controller = generateController;
 
+    /** Only the current request may write to shared state; an aborted older one may not. */
+    const isCurrent = () => generateController === controller;
+
     isGenerating.value = true;
     generationText.value = '';
+    generationProgress.value = null;
+    lastGeneration.value = null;
     error.value = null;
     try {
-      const plan = await mealPlanService.generateAIMealPlanStream(
+      const outcome = await mealPlanService.generateAIMealPlanStream(
         data,
         (text) => {
-          // Only the current request may write to the shared buffer; an aborted older one
-          // would otherwise keep typing over its replacement.
-          if (generateController === controller) {
+          if (isCurrent()) {
             generationText.value += text;
           }
         },
+        {
+          onProgress: (progress) => {
+            if (isCurrent()) {
+              generationProgress.value = progress;
+              // Each day starts its own narration, so the previous day's is cleared rather
+              // than left to accumulate into a wall of text nobody reads.
+              if (progress.status === 'planning') {
+                generationText.value = '';
+              }
+            }
+          },
+          onPart: (day) => {
+            // The day is already saved server-side. Merging it as it lands is what makes the
+            // calendar fill in while the rest of the week is still being written.
+            if (isCurrent()) {
+              mergeGeneratedDay(day);
+            }
+          },
+        },
         controller.signal,
       );
-      plans.value.unshift(plan);
-      activePlan.value = plan;
-      return plan;
+
+      lastGeneration.value = outcome;
+
+      if (outcome.plan) {
+        upsertPlan(outcome.plan);
+        activePlan.value = outcome.plan;
+      }
+
+      return outcome;
     } catch (err: unknown) {
       // A cancel is not a failure and must not leave an error banner behind.
       if (controller.signal.aborted) {
@@ -94,12 +136,61 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     }
   }
 
-  /** Stops an in-flight generation. Closing the connection is what stops the model call. */
+  /**
+   * Stops an in-flight generation. Closing the connection is what stops the model call.
+   *
+   * Days already written are left exactly where they are: they were saved as they were
+   * generated, so cancelling half way through a week keeps the half that was done.
+   */
   function cancelGeneration(): void {
     generateController?.abort();
     generateController = null;
     isGenerating.value = false;
     generationText.value = '';
+    generationProgress.value = null;
+  }
+
+  /** Replaces a plan already in the list, or adds it if this is the first sight of it. */
+  function upsertPlan(plan: MealPlan): void {
+    const index = plans.value.findIndex((p) => p.id === plan.id);
+
+    if (index >= 0) {
+      plans.value[index] = plan;
+    } else {
+      plans.value.unshift(plan);
+    }
+  }
+
+  /**
+   * Folds one freshly generated day into the plan the calendar is rendering.
+   *
+   * The plan row exists from the first successful day, but the client only learns its shape
+   * from the final result - so the first day to arrive may be for a plan not in the list yet,
+   * and a stub is created for it rather than the day being dropped.
+   */
+  function mergeGeneratedDay(day: MealPlanDay): void {
+    let plan = plans.value.find((p) => p.id === day.planId);
+
+    if (!plan) {
+      plan = {
+        id: day.planId,
+        userId: '',
+        name: 'AI Meal Plan',
+        startDate: day.date,
+        endDate: day.date,
+        isAIGenerated: true,
+        entriesByDate: {},
+        createdAt: new Date().toISOString(),
+      };
+      plans.value.unshift(plan);
+      activePlan.value = plan;
+    }
+
+    plan.entriesByDate = { ...plan.entriesByDate, [day.date]: day.entries };
+
+    // The range grows as days land, so the calendar's `planCovering` lookup keeps matching.
+    if (day.date < plan.startDate) plan.startDate = day.date;
+    if (day.date > plan.endDate) plan.endDate = day.date;
   }
 
   function setActivePlan(plan: MealPlan): void {
@@ -202,6 +293,8 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     isLoading,
     isGenerating,
     generationText,
+    generationProgress,
+    lastGeneration,
     error,
     fetchPlans,
     createPlan,

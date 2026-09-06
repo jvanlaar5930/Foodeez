@@ -50,12 +50,19 @@ public static class DependencyInjection
         // that cannot be replayed. AIProviderBase already turns a failure into a fallback the
         // caller can show, which is the right answer here - retrying silently would double the
         // cost of an outage and stall the request while doing it.
-        services.AddHttpClient<ClaudeAIService>();
-        services.AddHttpClient<GeminiAIService>();
-        services.AddHttpClient<GroqAIService>();
-        services.AddHttpClient<OllamaAIService>();
-        // Self-hosted OpenAI-compatible servers (LM Studio, llama.cpp, vLLM, LocalAI, …). They can
-        // spend minutes on one prompt, so the deadline is set per request instead of by HttpClient.
+        //
+        // Every one of these gets an infinite HttpClient timeout, and none of them is
+        // unbounded as a result: AIProviderBase attaches the provider's own admin-editable
+        // deadline to each call. HttpClient.Timeout is fixed once the client is built and
+        // applies to every request through it, so it cannot express "this provider waits five
+        // minutes and that one waits sixty seconds" - and its expiry is indistinguishable
+        // from a caller hanging up, which is the distinction the whole timeout story turns on.
+        services.AddScoped<ProviderConfiguration>();
+        services.AddHttpClient<ClaudeAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddHttpClient<GeminiAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddHttpClient<GroqAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddHttpClient<OllamaAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        // Self-hosted OpenAI-compatible servers (LM Studio, llama.cpp, vLLM, LocalAI, …).
         services.AddHttpClient<LocalAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         // DynamicAIService is the active IAIService — reads provider from AppSettings at runtime
         // Registered once and shared by both interfaces, so streaming and non-streaming calls
