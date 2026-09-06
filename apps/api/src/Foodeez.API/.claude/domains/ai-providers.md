@@ -14,7 +14,7 @@ and chat - goes through one interface pair with a provider chosen at runtime.
 - `apps/api/src/Foodeez.Infrastructure/Services/AIProviderBase.cs` - the shared envelope
   (prompt, parse, fallback, logging, cancellation).
 - Providers: `ClaudeAIService`, `GeminiAIService`, `GroqAIService`, `OllamaAIService`,
-  `LocalAIService` (any OpenAI-compatible server).
+  `OpenRouterAIService`, `LocalAIService` (any OpenAI-compatible server).
 - `apps/api/src/Foodeez.Infrastructure/Services/{AIJson.cs,StreamingHttp.cs,Json/NullTolerantConverters.cs}`
 - Prompts and stream types in `apps/api/src/Foodeez.Application/Common/`:
   `MealAnalysisPrompt`, `DayAnalysisPrompt`, `MealParsePrompt`, `MealPlanPrompt`,
@@ -35,9 +35,17 @@ fields the admin panel had always offered were saved and then never read by anyt
 **Provider selection** - `DynamicAIService.ResolveAsync()` reads the `ai.provider` row from the
 `AppSettings` table (default `claude`) and resolves the matching registered service. The result
 is cached in the instance, and the instance is scoped, so one request resolves once. Accepted
-names: `claude` (default/fallback), `gemini`, `groq`, `ollama`, and for `LocalAIService` the
-aliases `local`, `lmstudio`, `lm-studio`, `llamacpp`, `llama.cpp`, `llama-cpp`, `localai`,
-`vllm`, `jan`, `openai-compatible`.
+names: `claude` (default/fallback), `gemini`, `groq`, `ollama`, `openrouter` (alias
+`open-router`), and for `LocalAIService` the aliases `local`, `lmstudio`, `lm-studio`,
+`llamacpp`, `llama.cpp`, `llama-cpp`, `localai`, `vllm`, `jan`, `openai-compatible`.
+
+**OpenRouter's free/paid switch** - `openrouter.useFreeModels` (default on) routes every call
+through `openrouter/free`, OpenRouter's own router over the zero-cost models; it picks one per
+request and bills nothing. Free mode deliberately ignores `openrouter.model`, so a paid slug
+cannot outrank the switch. Two consequences follow from the model changing per request: no
+`max_tokens` is sent unless one is configured (any ceiling would be wrong for some of them),
+and vision is always available in free mode, while a hand-picked slug needs
+`openrouter.supportsVision` because nothing here can tell whether it can see.
 
 **A blocking call** - `AIProviderBase.ExecuteAsync(prompt, parse, fallback, activity, ct)`
 sends one prompt via the subclass's `SendAsync`, parses the answer, and on any failure logs
