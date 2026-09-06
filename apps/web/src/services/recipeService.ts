@@ -1,5 +1,9 @@
 import api from './api';
-import { DEFAULT_RECIPE_FILTER_TAGS, type Recipe } from '@foodeez/shared';
+import {
+  DEFAULT_RECIPE_FILTER_TAGS,
+  type Recipe,
+  type RecipeQueryFilters,
+} from '@foodeez/shared';
 
 /** One page of results plus what the client needs to decide whether to ask for another. */
 export interface PagedRecipes {
@@ -49,19 +53,36 @@ export interface RecipeSuggestion {
 }
 
 export const recipeService = {
+  /**
+   * One page of the library, narrowed by the pills.
+   *
+   * The filters go to the server rather than being applied to what comes back: filtering the
+   * pages already loaded means a pill hides recipes it should show, purely because nobody has
+   * scrolled far enough to fetch them yet.
+   */
   async getRecipes(
     page = 1,
-    tags?: string[],
+    filters?: RecipeQueryFilters,
     pageSize = RECIPE_PAGE_SIZE,
   ): Promise<PagedRecipes> {
     const response = await api.get<unknown>('/recipes', {
       params: {
         page,
         pageSize,
-        ...(tags && tags.length > 0 ? { tags: tags.join(',') } : {}),
+        ...(filters?.tags.length ? { tags: filters.tags.join(',') } : {}),
+        ...(filters?.previousMeals ? { previousMeals: true } : {}),
+        ...(filters?.favorites ? { favorites: true } : {}),
       },
     });
     return toPage(response.data, page, pageSize);
+  },
+
+  async saveRecipe(id: string): Promise<void> {
+    await api.put(`/recipes/${id}/save`);
+  },
+
+  async unsaveRecipe(id: string): Promise<void> {
+    await api.delete(`/recipes/${id}/save`);
   },
 
   async getRecipeById(id: string): Promise<Recipe> {
@@ -94,6 +115,15 @@ export const recipeService = {
     } catch {
       return [...DEFAULT_RECIPE_FILTER_TAGS];
     }
+  },
+
+  /**
+   * The signed-in user's marked recipes, newest first. The same endpoint the mobile app
+   * reads, so a recipe kept on either shows as kept on both.
+   */
+  async getSavedRecipes(): Promise<Recipe[]> {
+    const response = await api.get<Recipe[]>('/recipes/saved');
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   async autocomplete(query: string, signal?: AbortSignal): Promise<RecipeSuggestion[]> {

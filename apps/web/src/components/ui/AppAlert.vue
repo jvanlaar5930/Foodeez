@@ -5,7 +5,7 @@
     class="flex items-start gap-3 rounded-xl border px-4 py-3 text-sm"
     :class="styles.container"
   >
-    <span class="flex-shrink-0 text-base leading-5" aria-hidden="true">{{ styles.icon }}</span>
+    <span class="flex-shrink-0 text-base leading-5" aria-hidden="true">{{ icon ?? styles.icon }}</span>
 
     <div class="flex-1 min-w-0">
       <p v-if="title" class="font-semibold mb-0.5" :class="styles.title">{{ title }}</p>
@@ -42,6 +42,13 @@ const props = withDefaults(defineProps<{
    * failure and wrong for a confirmation that arrives while the reader is mid-sentence.
    */
   role?: string;
+  /**
+   * Overrides the variant's own glyph, for a confirmation whose colour should say something
+   * the variant does not - undoing something is a success, and still not green.
+   *
+   * Decorative only: the span is aria-hidden, so the message has to carry the meaning.
+   */
+  icon?: string;
 }>(), {
   dismissible: false,
   role: 'alert',

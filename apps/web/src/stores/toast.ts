@@ -8,6 +8,8 @@ export interface Toast {
   variant: ToastVariant;
   message: string;
   title?: string;
+  /** Overrides the variant's glyph. Decorative - the message still carries the meaning. */
+  icon?: string;
   /** How long it stays on screen, in ms. Zero keeps it until it is dismissed by hand. */
   duration: number;
 }
@@ -15,6 +17,11 @@ export interface Toast {
 export interface ToastOptions {
   title?: string;
   duration?: number;
+  /**
+   * A different glyph from the variant's own, for a confirmation whose colour should say
+   * something the variant does not - undoing something is a success, and still not green.
+   */
+  icon?: string;
 }
 
 /** Long enough to read a sentence, short enough to stay out of the way. */
@@ -62,6 +69,7 @@ export const useToastStore = defineStore('toast', () => {
       variant,
       message,
       title: options.title,
+      icon: options.icon,
       duration,
     };
 

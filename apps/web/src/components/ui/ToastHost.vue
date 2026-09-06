@@ -44,6 +44,7 @@ function roleFor(variant: ToastVariant): string {
             :variant="toast.variant"
             :title="toast.title"
             :message="toast.message"
+            :icon="toast.icon"
             :role="roleFor(toast.variant)"
             dismissible
             @dismiss="toastStore.dismiss(toast.id)"

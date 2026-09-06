@@ -124,7 +124,10 @@ public class SaveChatRecipesUseCase
     /// <summary>A recipe this user already kept from the assistant under this exact name.</summary>
     private async Task<Recipe?> FindOwnAsync(Guid userId, string name)
     {
-        var matches = await _unitOfWork.Recipes.SearchAsync(name);
+        // As this user, so their own generated recipes are in range at all - the search hides
+        // AI-generated rows from everyone but the person they were written for, and this is
+        // looking for exactly one of those.
+        var matches = await _unitOfWork.Recipes.SearchAsync(name, userId);
 
         return matches.FirstOrDefault(r =>
             r.CreatedByUserId == userId

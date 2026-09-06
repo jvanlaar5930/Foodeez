@@ -1,5 +1,9 @@
 import { api } from './api';
-import { DEFAULT_RECIPE_FILTER_TAGS, type RecipeDto } from '@/types';
+import {
+  DEFAULT_RECIPE_FILTER_TAGS,
+  type RecipeDto,
+  type RecipeQueryFilters,
+} from '@/types';
 
 /** One page of results plus what the client needs to decide whether to ask for another. */
 export interface PagedRecipes {
@@ -41,16 +45,25 @@ function toPage(data: unknown, page: number, pageSize: number): PagedRecipes {
 }
 
 export const recipeService = {
+  /**
+   * One page of the library, narrowed by the pills.
+   *
+   * The filters go to the server rather than being applied to what comes back: filtering the
+   * pages already loaded means a pill hides recipes it should show, purely because the list
+   * has not been scrolled far enough to fetch them yet.
+   */
   async getRecipes(
     page = 1,
-    tags?: string[],
+    filters?: RecipeQueryFilters,
     pageSize = RECIPE_PAGE_SIZE,
   ): Promise<PagedRecipes> {
     const response = await api.get<unknown>('/recipes', {
       params: {
         page,
         pageSize,
-        ...(tags && tags.length > 0 ? { tags: tags.join(',') } : {}),
+        ...(filters?.tags.length ? { tags: filters.tags.join(',') } : {}),
+        ...(filters?.previousMeals ? { previousMeals: true } : {}),
+        ...(filters?.favorites ? { favorites: true } : {}),
       },
     });
     return toPage(response.data, page, pageSize);

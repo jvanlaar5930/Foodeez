@@ -1,3 +1,4 @@
+using Foodeez.Application.DTOs.Recipes;
 using Foodeez.Application.Interfaces.Repositories;
 using Foodeez.Domain.Entities;
 using Foodeez.Infrastructure.Data;
@@ -17,11 +18,24 @@ public class RecipeRepository : BaseRepository<Recipe>, IRecipeRepository
             .FirstOrDefaultAsync(r => r.Id == id);
     }
 
-    public async Task<IReadOnlyList<Recipe>> SearchAsync(string query)
+    /// <summary>
+    /// Hides AI-generated recipes that belong to somebody else.
+    ///
+    /// They are written into the shared library as a plan is generated, which is what makes
+    /// them reusable - but they were written *for* one person, from their targets and their
+    /// excluded foods, and everyone else was seeing them in the same list as the real ones.
+    /// A signed-out caller sees none of them at all.
+    /// </summary>
+    private static IQueryable<Recipe> VisibleTo(IQueryable<Recipe> query, Guid? viewerId) =>
+        viewerId is { } viewer
+            ? query.Where(r => !r.IsAIGenerated || r.CreatedByUserId == viewer)
+            : query.Where(r => !r.IsAIGenerated);
+
+    public async Task<IReadOnlyList<Recipe>> SearchAsync(string query, Guid? viewerId)
     {
         // No ToLower(): MySQL's default collation compares case-insensitively already, and
         // calling it wraps the column in a function no index can be used through.
-        return await _dbSet
+        return await VisibleTo(_dbSet, viewerId)
             .Where(r => r.Name.Contains(query) ||
                         (r.Description != null && r.Description.Contains(query)))
             .Include(r => r.Ingredients)
@@ -29,10 +43,9 @@ public class RecipeRepository : BaseRepository<Recipe>, IRecipeRepository
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<Recipe>> SearchPagedAsync(string query, int skip, int take)
+    public async Task<IReadOnlyList<Recipe>> SearchPagedAsync(string query, Guid? viewerId, int skip, int take)
     {
-        return await _dbSet
-            .AsNoTracking()
+        return await VisibleTo(_dbSet.AsNoTracking(), viewerId)
             .Where(r => r.Name.Contains(query) ||
                         (r.Description != null && r.Description.Contains(query)))
             // A stable sort is what makes paging safe: without it the database is free to
@@ -45,10 +58,35 @@ public class RecipeRepository : BaseRepository<Recipe>, IRecipeRepository
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<Recipe>> GetPagedAsync(int skip, int take)
+    public async Task<IReadOnlyList<Recipe>> BrowseAsync(RecipeBrowseFilter filter, int skip, int take)
     {
-        return await _dbSet
-            .AsNoTracking()
+        var query = VisibleTo(_dbSet.AsNoTracking(), filter.ViewerId);
+
+        if (filter.OnlyPreviousMeals)
+        {
+            // Nobody's own meals when nobody is signed in, rather than everybody's.
+            query = filter.ViewerId is { } viewer
+                ? query.Where(r => r.IsAIGenerated && r.CreatedByUserId == viewer)
+                : query.Where(_ => false);
+        }
+
+        if (filter.OnlyFavorites)
+        {
+            // A join row rather than a flag, because the library is shared - see SavedRecipe.
+            query = filter.ViewerId is { } viewer
+                ? query.Where(r => _context.SavedRecipes.Any(s => s.RecipeId == r.Id && s.UserId == viewer))
+                : query.Where(_ => false);
+        }
+
+        // No ToLower(): MySQL's collation compares case-insensitively already.
+        foreach (var tag in filter.Tags)
+        {
+            query = query.Where(r => r.Tags != null && r.Tags.Contains(tag));
+        }
+
+        return await query
+            // A stable sort is what makes paging safe - without it the database is free to
+            // return the same row on two consecutive pages, and skip another entirely.
             .OrderByDescending(r => r.CreatedAt).ThenBy(r => r.Id)
             .Skip(skip)
             .Take(take)
@@ -74,30 +112,6 @@ public class RecipeRepository : BaseRepository<Recipe>, IRecipeRepository
             .Include(r => r.Ingredients)
                 .ThenInclude(i => i.FoodItem)
             .ToListAsync(ct);
-    }
-
-    public async Task<IReadOnlyList<Recipe>> GetByTagsAsync(IEnumerable<string> tags)
-    {
-        var tagList = tags.ToList();
-        if (tagList.Count == 0)
-        {
-            // Not "every recipe": an unfiltered browse is GetPagedAsync's job, and returning
-            // the whole library here - tracked, with every ingredient and food item - is what
-            // this used to do when someone passed an empty tag list.
-            return [];
-        }
-
-        // No ToLower(): MySQL's collation compares case-insensitively already.
-        var query = _dbSet.AsNoTracking();
-        foreach (var tag in tagList)
-        {
-            query = query.Where(r => r.Tags != null && r.Tags.Contains(tag));
-        }
-
-        return await query
-            .Include(r => r.Ingredients)
-                .ThenInclude(i => i.FoodItem)
-            .ToListAsync();
     }
 
     public void ReplaceIngredients(Recipe recipe, IReadOnlyList<RecipeIngredient> ingredients)

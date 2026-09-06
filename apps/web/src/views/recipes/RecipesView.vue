@@ -28,7 +28,7 @@
       </div>
 
       <!-- Empty -->
-      <EmptyState v-else-if="filteredRecipes.length === 0"
+      <EmptyState v-else-if="recipes.length === 0"
         title="No recipes found"
         description="Try adjusting your search or filters"
       />
@@ -36,10 +36,14 @@
       <!-- Recipe grid -->
       <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <RecipeCard
-          v-for="recipe in filteredRecipes"
+          v-for="recipe in recipes"
           :key="recipe.id"
           :recipe="recipe"
+          :can-save="isAuthenticated"
+          :is-saved="savedStore.savedIds.has(recipe.id)"
+          :is-save-pending="savedStore.pending.has(recipe.id)"
           @click="openRecipe(recipe)"
+          @toggle-save="toggleSaved(recipe)"
         />
       </div>
 
@@ -103,6 +107,10 @@ import AddToMealPlanModal from '@/components/mealplan/AddToMealPlanModal.vue';
 import { usePagedRecipes } from '@/composables/usePagedRecipes';
 import { useRecipeDetail } from '@/composables/useRecipeDetail';
 import { useRecipeFilterTags } from '@/composables/useRecipeFilterTags';
+import { useSavedRecipesStore } from '@/stores/savedRecipes';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { toRecipeQueryFilters } from '@foodeez/shared';
 import type { RecipeSuggestion } from '@/services/recipeService';
 import type { Recipe } from '@foodeez/shared';
 
@@ -137,19 +145,46 @@ const {
 // Administrator-managed, so this is a ref rather than a constant.
 const { filterTags } = useRecipeFilterTags();
 
-// Tag filter applied client-side on top of server results
-const filteredRecipes = computed(() => {
-  const tags = Array.from(activeTags.value);
-  if (tags.length === 0) return recipes.value;
-  return recipes.value.filter(r =>
-    tags.every(t => r.tags?.toLowerCase().includes(t.toLowerCase()))
-  );
-});
+const savedStore = useSavedRecipesStore();
+const auth = useAuthStore();
+const toast = useToastStore();
 
+/**
+ * Pressing a pill refetches from page one.
+ *
+ * The filtering happens in the database now. It used to be done here, over the pages the
+ * infinite scroll had already fetched, which meant a pill hid recipes it should have shown
+ * purely because nobody had scrolled far enough to load them - the behaviour that made the
+ * filters look broken.
+ */
 function toggleTag(tag: string) {
   const next = new Set(activeTags.value);
   if (next.has(tag)) next.delete(tag); else next.add(tag);
   activeTags.value = next;
+
+  void loadPage(searchQuery.value, toRecipeQueryFilters(next));
+}
+
+/**
+ * Marking is optimistic, so the card flips before the request lands. The message is not: it
+ * says what actually happened, and says nothing at all when the flip was undone.
+ */
+async function toggleSaved(recipe: Recipe) {
+  const nowSaved = await savedStore.toggle(recipe);
+
+  if (nowSaved === null) {
+    toast.error(savedStore.error ?? 'Your favorites could not be updated.');
+    return;
+  }
+
+  // Both are successes - the removal worked - so both announce politely and stay the same
+  // length. Only the glyph differs, because the two read almost identically at a glance and
+  // the colour is what says which way the change went.
+  if (nowSaved) {
+    toast.success(`You've added ${recipe.name} to your favorites.`, { icon: '❤️' });
+  } else {
+    toast.success(`You've removed ${recipe.name} from your favorites.`, { icon: '💔' });
+  }
 }
 
 // Committing a search rewrites the URL; the route watcher below does the fetching.
@@ -161,11 +196,17 @@ async function runSearch(q: string, suggestion?: RecipeSuggestion) {
   router.push({ path: '/recipes', query: { q } });
 }
 
+const isAuthenticated = computed(() => auth.isAuthenticated);
+
 // Re-fetch when route query changes (navigated from dashboard)
 watch(() => route.query.q, (q) => {
   searchQuery.value = (q as string) ?? '';
-  loadPage(searchQuery.value);
+  loadPage(searchQuery.value, toRecipeQueryFilters(activeTags.value));
 });
 
-onMounted(() => loadPage(searchQuery.value));
+onMounted(() => {
+  loadPage(searchQuery.value, toRecipeQueryFilters(activeTags.value));
+  // Only what this user kept, so the hearts are drawn correctly from the first paint.
+  if (auth.isAuthenticated) void savedStore.ensureLoaded();
+});
 </script>
