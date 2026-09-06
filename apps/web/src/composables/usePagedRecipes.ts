@@ -1,5 +1,6 @@
 import { nextTick, onUnmounted, ref, type Ref } from 'vue';
 import { recipeService } from '@/services/recipeService';
+import type { RecipeQueryFilters } from '@foodeez/shared';
 import type { Recipe } from '@foodeez/shared';
 
 export interface PagedRecipes {
@@ -16,8 +17,13 @@ export interface PagedRecipes {
   /** The element watched to trigger the next page. Bind it with `ref="sentinel"`. */
   sentinel: Ref<HTMLElement | null>;
 
-  /** Loads page one for a query, replacing what is shown. An empty query browses. */
-  load(query?: string): Promise<void>;
+  /**
+   * Loads page one, replacing what is shown. An empty query browses.
+   *
+   * Filters go with it rather than being applied to the result: they narrow the library in
+   * the database, not the pages already fetched.
+   */
+  load(query?: string, filters?: RecipeQueryFilters): Promise<void>;
   /** Appends the next page. Safe to call repeatedly; overlapping calls are ignored. */
   loadMore(): Promise<void>;
 }
@@ -44,16 +50,18 @@ export function usePagedRecipes(): PagedRecipes {
 
   let currentPage = 1;
   let currentQuery = '';
+  let currentFilters: RecipeQueryFilters | undefined;
   let observer: IntersectionObserver | null = null;
 
   function fetchPage(page: number) {
     return currentQuery
       ? recipeService.searchRecipes(currentQuery, page)
-      : recipeService.getRecipes(page);
+      : recipeService.getRecipes(page, currentFilters);
   }
 
-  async function load(query = ''): Promise<void> {
+  async function load(query = '', filters?: RecipeQueryFilters): Promise<void> {
     currentQuery = query.trim();
+    currentFilters = filters;
     currentPage = 1;
     isLoading.value = true;
     error.value = null;

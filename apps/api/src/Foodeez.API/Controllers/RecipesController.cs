@@ -52,7 +52,7 @@ public class RecipesController : FoodeezController
         if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
             return Ok(new List<RecipeSuggestionDto>());
 
-        return Ok(await _autocompleteUseCase.ExecuteAsync(q.Trim(), ct));
+        return Ok(await _autocompleteUseCase.ExecuteAsync(q.Trim(), UserIdOrNull, ct));
     }
 
     /// <summary>Search recipes by name/description with DB-first → Spoonacular fallback.</summary>
@@ -68,18 +68,35 @@ public class RecipesController : FoodeezController
         if (string.IsNullOrWhiteSpace(q))
             return BadRequest(Failure("Query parameter 'q' is required."));
 
-        return Ok(await _searchUseCase.ExecuteAsync(q, page, pageSize, ct));
+        return Ok(await _searchUseCase.ExecuteAsync(q, UserIdOrNull, page, pageSize, ct));
     }
 
-    /// <summary>Browse recipes, optionally filtered by comma-separated tags. Paged.</summary>
+    /// <summary>
+    /// Browse recipes, filtered and paged by the database.
+    ///
+    /// `previousMeals` and `favorites` are the two filters that are not tags: one asks who
+    /// wrote the recipe, the other whether this caller kept it. Both need to know who is
+    /// asking, and both answer with nothing at all when nobody is signed in.
+    /// </summary>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(PagedResult<RecipeDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRecipes(
         [FromQuery] string? tags,
+        [FromQuery] bool previousMeals = false,
+        [FromQuery] bool favorites = false,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = SearchRecipesUseCase.DefaultPageSize) =>
-        Ok(await _searchUseCase.BrowseAsync(tags, page, pageSize));
+        Ok(await _searchUseCase.BrowseAsync(
+            new RecipeBrowseFilter
+            {
+                Tags = SearchRecipesUseCase.ParseTags(tags),
+                ViewerId = UserIdOrNull,
+                OnlyPreviousMeals = previousMeals,
+                OnlyFavorites = favorites,
+            },
+            page,
+            pageSize));
 
     // -- Saved recipes --------------------------------------------------------
     // The only authenticated routes on this controller. The literal segment "saved" can

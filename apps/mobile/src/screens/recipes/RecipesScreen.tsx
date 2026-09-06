@@ -17,7 +17,14 @@ import { RecipesStackParamList } from '@/navigation/types';
 import { recipeService } from '@/services/recipeService';
 import { useSavedRecipeStore } from '@/store/savedRecipeStore';
 import { SavedRecipeDeck } from '@/components/recipe/SavedRecipeDeck';
-import { DEFAULT_RECIPE_FILTER_TAGS, isAiRecipeImage, RecipeDto } from '@/types';
+import {
+  DEFAULT_RECIPE_FILTER_TAGS,
+  isAiRecipeImage,
+  toRecipeQueryFilters,
+  type RecipeQueryFilters,
+  RecipeDto,
+  withSpecialRecipeFilters,
+} from '@/types';
 import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import { Spacing, FontSize, BorderRadius, FontWeight, Shadows } from '@/constants/theme';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -35,7 +42,10 @@ export function RecipesScreen({ navigation, route }: Props) {
   const [search, setSearch] = useState('');
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   // Administrator-managed. The built-in list shows until the server answers with theirs.
-  const [filterTags, setFilterTags] = useState<string[]>([...DEFAULT_RECIPE_FILTER_TAGS]);
+  // The two special pills lead the list and are never absent - see withSpecialRecipeFilters.
+  const [filterTags, setFilterTags] = useState<string[]>(
+    withSpecialRecipeFilters(DEFAULT_RECIPE_FILTER_TAGS),
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -65,13 +75,13 @@ export function RecipesScreen({ navigation, route }: Props) {
     }, [route.params?.initialSearch])
   );
 
-  const loadRecipes = useCallback(async (query?: string) => {
+  const loadRecipes = useCallback(async (query?: string, filters?: RecipeQueryFilters) => {
     pageRef.current = 1;
     try {
       const q = query?.trim();
       const result = q
         ? await recipeService.searchRecipes(q, 1)
-        : await recipeService.getRecipes(1);
+        : await recipeService.getRecipes(1, filters);
       setRecipes(result.items);
       setHasMore(result.hasMore);
     } finally {
@@ -94,7 +104,7 @@ export function RecipesScreen({ navigation, route }: Props) {
       const q = search.trim();
       const result = q
         ? await recipeService.searchRecipes(q, next)
-        : await recipeService.getRecipes(next);
+        : await recipeService.getRecipes(next, toRecipeQueryFilters(activeTags));
 
       // Dedupe: a recipe cached between pages could otherwise arrive twice.
       setRecipes((prev) => {
@@ -108,7 +118,7 @@ export function RecipesScreen({ navigation, route }: Props) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [hasMore, isLoading, isLoadingMore, search]);
+  }, [hasMore, isLoading, isLoadingMore, search, activeTags]);
 
   // Saves can be made from the detail screen, so re-read them on the way back in.
   // The first fetch is unconditional; later ones only matter once something has loaded.
@@ -127,19 +137,24 @@ export function RecipesScreen({ navigation, route }: Props) {
    * before anything arrives.
    */
   useEffect(() => {
+    const filters = toRecipeQueryFilters(activeTags);
+
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
-      loadRecipes(search);
+      loadRecipes(search, filters);
       return;
     }
 
+    // The pills share the search debounce rather than firing their own request. Pressing two
+    // in quick succession is one query rather than two, and 400ms is not a wait anyone
+    // notices next to the round trip that follows it.
     const timer = setTimeout(() => {
       setIsLoading(true);
-      loadRecipes(search);
+      loadRecipes(search, filters);
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [search, loadRecipes]);
+  }, [search, activeTags, loadRecipes]);
 
   /**
    * The pills an administrator has configured, read once per mount. A tag they have since
@@ -152,9 +167,12 @@ export function RecipesScreen({ navigation, route }: Props) {
     void recipeService.getFilterTags().then((tags) => {
       if (cancelled) return;
 
-      setFilterTags(tags);
+      const offeredTags = withSpecialRecipeFilters(tags);
+      setFilterTags(offeredTags);
       setActiveTags((prev) => {
-        const offered = new Set(tags.map((t) => t.toLowerCase()));
+        // Against the offered list, not the administrator's: the two special pills are not in
+        // theirs, so comparing with that would switch off a Favorites filter already pressed.
+        const offered = new Set(offeredTags.map((t) => t.toLowerCase()));
         const kept = Array.from(prev).filter((t) => offered.has(t.toLowerCase()));
         return kept.length === prev.size ? prev : new Set(kept);
       });
@@ -165,17 +183,9 @@ export function RecipesScreen({ navigation, route }: Props) {
     };
   }, []);
 
-  /**
-   * The tag filter on top of the server's results. Derived, not stored: keeping it in state
-   * behind a third effect meant every search landed twice - once with the new recipes and the
-   * old filtered list, then again once the effect caught up.
-   */
-  const filteredRecipes = useMemo(() => {
-    const tags = Array.from(activeTags);
-    if (tags.length === 0) return recipes;
-
-    return recipes.filter((r) => tags.every((t) => r.tags?.toLowerCase().includes(t.toLowerCase())));
-  }, [activeTags, recipes]);
+  // The filtering used to happen here, over the pages already fetched - so a pill hid recipes
+  // it should have shown until the list had been scrolled far enough to load them. It is a
+  // query parameter now, and `recipes` is already the filtered library.
 
   const toggleTag = (tag: string) => {
     setActiveTags(prev => {
@@ -309,7 +319,7 @@ export function RecipesScreen({ navigation, route }: Props) {
         <LoadingSpinner />
       ) : (
         <FlatList
-          data={filteredRecipes}
+          data={recipes}
           keyExtractor={r => r.id}
           // Takes the column's leftover height instead of asking for all of its content's,
           // which is what pushed the chip row above into being shrunk.

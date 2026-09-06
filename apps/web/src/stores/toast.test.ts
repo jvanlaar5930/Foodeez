@@ -17,6 +17,22 @@ describe('toast store', () => {
     vi.useRealTimers();
   });
 
+  it('carries a caller-supplied glyph, so a success can still read as an undo', () => {
+    const toasts = useToastStore();
+
+    toasts.success('Removed from favorites.', { icon: '💔' });
+
+    expect(toasts.toasts[0].icon).toBe('💔');
+  });
+
+  it('leaves the glyph unset when the caller does not ask for one', () => {
+    const toasts = useToastStore();
+
+    toasts.success('Meal logged.');
+
+    expect(toasts.toasts[0].icon).toBeUndefined();
+  });
+
   it('shows a toast and takes it away once its time is up', () => {
     const toasts = useToastStore();
 

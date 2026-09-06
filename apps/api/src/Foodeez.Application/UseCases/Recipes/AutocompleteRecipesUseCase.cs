@@ -21,13 +21,13 @@ public class AutocompleteRecipesUseCase
         _spoonacular = spoonacular;
     }
 
-    public async Task<List<RecipeSuggestionDto>> ExecuteAsync(string query, CancellationToken ct = default)
+    public async Task<List<RecipeSuggestionDto>> ExecuteAsync(string query, Guid? viewerId = null, CancellationToken ct = default)
     {
         var suggestions = new List<RecipeSuggestionDto>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Shorter names rank first: they're the closest match to a partial query.
-        var local = await _unitOfWork.Recipes.SearchAsync(query);
+        var local = await _unitOfWork.Recipes.SearchAsync(query, viewerId);
         foreach (var recipe in local.OrderBy(r => r.Name.Length).Take(MaxSuggestions))
         {
             if (!seen.Add(recipe.Name)) continue;

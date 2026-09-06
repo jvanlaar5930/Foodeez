@@ -36,6 +36,7 @@ public class SearchRecipesUseCase
     /// </summary>
     public async Task<PagedResult<RecipeDto>> ExecuteAsync(
         string query,
+        Guid? viewerId = null,
         int page = 1,
         int pageSize = DefaultPageSize,
         CancellationToken ct = default)
@@ -47,7 +48,7 @@ public class SearchRecipesUseCase
 
         // Over-fetch by one: if the extra row exists there is another page, and we learn that
         // without paying for a separate COUNT.
-        var dbMatches = await _unitOfWork.Recipes.SearchPagedAsync(query, skip, pageSize + 1);
+        var dbMatches = await _unitOfWork.Recipes.SearchPagedAsync(query, viewerId, skip, pageSize + 1);
         var dbHasMore = dbMatches.Count > pageSize;
         var dbPage = dbMatches.Take(pageSize).ToList();
 
@@ -134,31 +135,21 @@ public class SearchRecipesUseCase
     }
 
     /// <summary>
-    /// Browse with no query: purely local, since there is nothing to ask upstream for.
-    /// Optionally narrowed to recipes carrying all of the given tags.
+    /// Browse the library, filtered in the database.
+    ///
+    /// There used to be two paths here - a plain page, and "fetch every recipe carrying these
+    /// tags, then page it in memory" - and the clients did their own filtering on top of
+    /// whichever arrived. One filtered query replaces all of it: a pill now narrows the
+    /// library rather than the handful of pages already scrolled past.
     /// </summary>
     public async Task<PagedResult<RecipeDto>> BrowseAsync(
-        string? tags = null, int page = 1, int pageSize = DefaultPageSize)
+        RecipeBrowseFilter filter, int page = 1, int pageSize = DefaultPageSize)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
-        var tagList = ParseTags(tags);
-        return tagList.Count > 0
-            ? await BrowseByTagsAsync(tagList, page, pageSize)
-            : await BrowsePageAsync(page, pageSize);
-    }
-
-    /// <summary>Tags arrive as one comma-separated query parameter.</summary>
-    private static List<string> ParseTags(string? tags) =>
-        string.IsNullOrWhiteSpace(tags)
-            ? []
-            : tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-
-    private async Task<PagedResult<RecipeDto>> BrowsePageAsync(int page, int pageSize)
-    {
         // One row past the page, so "is there a next page" is answered without a count query.
-        var rows = await _unitOfWork.Recipes.GetPagedAsync((page - 1) * pageSize, pageSize + 1);
+        var rows = await _unitOfWork.Recipes.BrowseAsync(filter, (page - 1) * pageSize, pageSize + 1);
 
         return new PagedResult<RecipeDto>
         {
@@ -169,22 +160,10 @@ public class SearchRecipesUseCase
         };
     }
 
-    /// <summary>
-    /// Tags are stored as one comma-joined string, so there is no index to page against.
-    /// The matches are fetched and sliced here rather than pretending the database can do it -
-    /// which is also why this reports TotalAvailable and the untagged page above does not.
-    /// </summary>
-    private async Task<PagedResult<RecipeDto>> BrowseByTagsAsync(List<string> tags, int page, int pageSize)
-    {
-        var matches = await _unitOfWork.Recipes.GetByTagsAsync(tags);
+    /// <summary>Tags arrive as one comma-separated query parameter.</summary>
+    public static IReadOnlyList<string> ParseTags(string? tags) =>
+        string.IsNullOrWhiteSpace(tags)
+            ? []
+            : tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-        return new PagedResult<RecipeDto>
-        {
-            Items = matches.Skip((page - 1) * pageSize).Take(pageSize).Select(RecipeMapper.ToDto).ToList(),
-            Page = page,
-            PageSize = pageSize,
-            HasMore = matches.Count > page * pageSize,
-            TotalAvailable = matches.Count,
-        };
-    }
 }

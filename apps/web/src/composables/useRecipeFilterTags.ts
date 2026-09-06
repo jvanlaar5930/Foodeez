@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue';
-import { DEFAULT_RECIPE_FILTER_TAGS } from '@foodeez/shared';
+import { DEFAULT_RECIPE_FILTER_TAGS, withSpecialRecipeFilters } from '@foodeez/shared';
 import { recipeService } from '@/services/recipeService';
 
 /**
@@ -11,12 +11,15 @@ import { recipeService } from '@/services/recipeService';
  * browses, so re-requesting it per view would only add requests. The built-in defaults are
  * what render until the answer arrives.
  */
-const filterTags = ref<string[]>([...DEFAULT_RECIPE_FILTER_TAGS]);
+// "Previous Meals" and "Favorites" lead the list here rather than being added at each call
+// site, so they are present before the fetch answers and cannot be edited away by an
+// administrator - they are not tags, and nothing in the settings row governs them.
+const filterTags = ref<string[]>(withSpecialRecipeFilters(DEFAULT_RECIPE_FILTER_TAGS));
 let inFlight: Promise<void> | null = null;
 
 export function useRecipeFilterTags(): { filterTags: Ref<string[]> } {
   inFlight ??= recipeService.getFilterTags().then((tags) => {
-    filterTags.value = tags;
+    filterTags.value = withSpecialRecipeFilters(tags);
   });
 
   return { filterTags };
