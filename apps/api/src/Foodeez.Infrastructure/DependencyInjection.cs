@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddHttpClient<GeminiAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddHttpClient<GroqAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddHttpClient<OllamaAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddHttpClient<OpenRouterAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         // Self-hosted OpenAI-compatible servers (LM Studio, llama.cpp, vLLM, LocalAI, …).
         services.AddHttpClient<LocalAIService>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         // DynamicAIService is the active IAIService — reads provider from AppSettings at runtime

@@ -11,6 +11,13 @@ interface SettingField {
   isSecret: boolean;
   placeholder: string;
   type?: 'text' | 'toggle';
+  /**
+   * What to show when no row has been saved yet, for a setting the API does not treat as
+   * "off when absent". A toggle with no row renders as Disabled, which would misreport a
+   * default-on setting - and then write that misreport the first time anything on the page
+   * is saved.
+   */
+  defaultValue?: string;
 }
 
 /**
@@ -58,6 +65,18 @@ const AI_PROVIDERS: ProviderSection[] = [
       { key: 'groq.apiKey', label: 'Groq API Key', description: 'Free-tier key from console.groq.com', isSecret: true, placeholder: 'gsk_...' },
       { key: 'groq.model', label: 'Groq Model', description: 'Model ID', isSecret: false, placeholder: 'llama-3.1-8b-instant' },
       { key: 'groq.timeoutSeconds', label: 'Request Timeout (seconds)', description: 'How long one call may run before it is abandoned and the feature falls back', isSecret: false, placeholder: '60' },
+    ],
+  },
+  {
+    value: 'openrouter',
+    label: 'OpenRouter',
+    description: 'Free models available, one key for many providers',
+    fields: [
+      { key: 'openrouter.apiKey', label: 'OpenRouter API Key', description: 'Key from openrouter.ai/keys. Free models still need one — it identifies the account the free quota belongs to.', isSecret: true, placeholder: 'sk-or-v1-...' },
+      { key: 'openrouter.useFreeModels', label: 'Use Free Models', description: 'Routes every call through openrouter/free, which picks a zero-cost model per request. Turn this off and calls are billed to your OpenRouter credit.', isSecret: false, placeholder: '', type: 'toggle', defaultValue: 'true' },
+      { key: 'openrouter.model', label: 'Model', description: 'Only used when free models are off. A slug from openrouter.ai/models.', isSecret: false, placeholder: 'anthropic/claude-sonnet-4.5' },
+      { key: 'openrouter.supportsVision', label: 'Model Supports Images', description: 'Only used when free models are off — the free router always accepts photos. Off means photo logging returns nothing.', isSecret: false, placeholder: '', type: 'toggle' },
+      { key: 'openrouter.timeoutSeconds', label: 'Request Timeout (seconds)', description: 'Free models queue behind paid traffic, so allow more here than for a paid endpoint', isSecret: false, placeholder: '120' },
     ],
   },
   {
@@ -116,6 +135,17 @@ async function fetchSettings() {
     for (const s of settings) {
       values.value[s.key] = s.value;
     }
+
+    // Fill in the defaults the API applies to absent rows, so the form shows what is actually
+    // in effect rather than what an empty row happens to look like.
+    for (const provider of AI_PROVIDERS) {
+      for (const field of provider.fields) {
+        if (field.defaultValue !== undefined && values.value[field.key] === undefined) {
+          values.value[field.key] = field.defaultValue;
+        }
+      }
+    }
+
     filterTags.value = tags;
   } finally {
     isLoading.value = false;

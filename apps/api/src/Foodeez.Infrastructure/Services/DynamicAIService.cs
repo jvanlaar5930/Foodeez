@@ -50,6 +50,7 @@ public sealed class DynamicAIService : IAIService, IStreamingAIService
             "gemini" => _services.GetRequiredService<GeminiAIService>(),
             "groq" => _services.GetRequiredService<GroqAIService>(),
             "ollama" => _services.GetRequiredService<OllamaAIService>(),
+            "openrouter" or "open-router" => _services.GetRequiredService<OpenRouterAIService>(),
             // One OpenAI-compatible client covers every self-hosted server; the aliases are
             // accepted so a value someone typed by hand still lands on it.
             "local" or "lmstudio" or "lm-studio" or "llamacpp" or "llama.cpp" or "llama-cpp"

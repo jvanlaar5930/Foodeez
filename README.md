@@ -307,6 +307,8 @@ Secrets come from user-secrets in Development and environment variables when dep
 | `Spoonacular:ApiKey` | yes | Recipe search | |
 | `FoodData:ApiKey` | yes | USDA food search | `DEMO_KEY` works for light use |
 | `Gemini:ApiKey` / `Groq:ApiKey` | yes | Alternative AI providers | |
+| `OpenRouter:ApiKey` | yes | One key for many providers — a free key still works, see below | `sk-or-v1-...` |
+| `OpenRouter:UseFreeModels` | no | Route through `openrouter/free`, which picks a zero-cost model per request and bills nothing. On unless set false, in which case `OpenRouter:Model` must name a slug from openrouter.ai/models. | `true` |
 | `Ollama:*` / `LocalAI:*` | no | Self-hosted provider URL and model | see `appsettings.json` |
 | `Cors:AllowedOrigins` | no | Browser origins allowed outside Development. Empty is correct when the bundled nginx serves the web app, since that is same-origin. | `[]` |
 
