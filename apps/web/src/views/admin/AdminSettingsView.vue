@@ -180,7 +180,13 @@ async function save() {
       .filter(([, v]) => v !== undefined && v !== '')
       .map(([key, value]) => ({ key, value }));
     await adminService.updateSettings(pairs);
-    toastStore.success('Settings saved.');
+
+    // Which provider answers is what this page is really for, and it is chosen at the top of
+    // a long form - far enough from the button that commits it to be worth repeating back.
+    const provider = AI_PROVIDERS.find((p) => p.value === activeProvider.value);
+    toastStore.success(
+      provider ? `Settings saved. ${provider.label} is answering.` : 'Settings saved.',
+    );
   } catch (err: unknown) {
     // The save button sits at the bottom of a long page and the failure was silent before
     // this: the spinner stopped and the settings looked saved.
