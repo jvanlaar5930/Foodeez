@@ -1,5 +1,6 @@
 import { ActivityLevel, DietaryGoal, Gender, MealType, UnitSystem } from '../enums';
 import { MealAnalysis } from './meal';
+import { MealPlanEntry } from './mealPlan';
 import { NutritionalInfo } from './nutrition';
 import { User, UserProfile } from './user';
 
@@ -86,6 +87,36 @@ export interface MealPlanEntryRequest {
   foodItemId?: string;
   notes?: string;
   servings: number;
+}
+
+/**
+ * Where a meal is being dragged to - the destination only.
+ *
+ * Sending a whole `MealPlanEntryRequest` would mean rebuilding the recipe, servings and notes
+ * the drag is not touching, and getting any of that subtly wrong would rewrite the meal while
+ * appearing only to move it.
+ */
+export interface MealPlanEntryMoveRequest {
+  entryDate: string;
+  mealType: MealType;
+  /**
+   * The plan the destination day belongs to, when it is not the one the meal is in now.
+   *
+   * Needed wherever a plan covers less than the range being moved across: the mobile day
+   * screen creates a plan for the single day it was opened on, so any change of date there
+   * leaves that plan and the move would otherwise be refused as out of range.
+   */
+  targetPlanId?: string;
+}
+
+/**
+ * What a move changed. A drop onto an occupied slot swaps the two meals rather than replacing
+ * the one that was already there, so both cells have to be redrawn - `swapped` is the meal
+ * that has taken the dragged one's old place, and is absent when the destination was empty.
+ */
+export interface MealPlanEntryMoveResponse {
+  entry: MealPlanEntry;
+  swapped?: MealPlanEntry;
 }
 
 // AI

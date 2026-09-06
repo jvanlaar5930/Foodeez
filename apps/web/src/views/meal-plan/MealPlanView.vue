@@ -136,8 +136,12 @@
             :meal-type="mealType.value"
             :entry="getEntry(day, mealType.value)"
             :logged-label="getLoggedLabel(day, mealType.value)"
+            :is-drag-active="!!draggingEntry"
             class="border-l"
             @click="openSlot(day, mealType.value)"
+            @dragstart="onSlotDragStart"
+            @dragend="onSlotDragEnd"
+            @drop="onSlotDrop(day, mealType.value)"
           />
         </div>
       </AppCard>
@@ -366,6 +370,46 @@ const slotEntry = computed(() => getEntry(slotDate.value, slotMealType.value));
  */
 const logModalOpen = ref(false);
 const editingLog = ref<MealLog | null>(null);
+
+/**
+ * The meal currently under the cursor, held here rather than on the dataTransfer.
+ *
+ * The drop handler needs the entry itself - its plan, its old slot - and reading that back
+ * from a dragged id would mean a second lookup that can find a different row than the one the
+ * drag started on.
+ */
+const draggingEntry = ref<MealPlanEntry | null>(null);
+
+function onSlotDragStart(entry: MealPlanEntry) {
+  planStore.clearError();
+  draggingEntry.value = entry;
+}
+
+function onSlotDragEnd() {
+  draggingEntry.value = null;
+}
+
+async function onSlotDrop(date: Date, mealType: MealType) {
+  const entry = draggingEntry.value;
+  draggingEntry.value = null;
+  if (!entry) return;
+
+  const entryDate = format(date, 'yyyy-MM-dd');
+  // Dropping a meal back where it started is a mis-drag, not a request to write to the server.
+  if (entry.entryDate === entryDate && entry.mealType === mealType) return;
+
+  // Scoped to the plan the meal is already in. The API refuses a destination outside that
+  // plan's range, which is what stops a drag into a week this plan does not cover.
+  const plan = planStore.planCovering(entry.entryDate);
+  if (!plan) return;
+
+  try {
+    await planStore.moveEntry(plan.id, entry.id, { entryDate, mealType });
+  } catch {
+    // planStore.error is already rendered above the calendar; a thrown move needs nothing
+    // further here, and the grid has put itself back.
+  }
+}
 
 function openSlot(date: Date, mealType: MealType) {
   const entry = getEntry(date, mealType);

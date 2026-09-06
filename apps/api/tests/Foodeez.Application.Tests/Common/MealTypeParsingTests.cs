@@ -36,6 +36,21 @@ public class MealTypeParsingTests
         Read(json).Should().Be(expected);
     }
 
+    /// <summary>
+    /// The short labels the calendar itself shows. A model that has seen them, or that simply
+    /// reaches for the common wording, used to land on the fallback - which is Breakfast, so an
+    /// "AM Snack" became a breakfast without anything saying so.
+    /// </summary>
+    [Theory]
+    [InlineData("\"AM Snack\"", MealType.MorningSnack)]
+    [InlineData("\"am snack\"", MealType.MorningSnack)]
+    [InlineData("\"PM Snack\"", MealType.AfternoonSnack)]
+    [InlineData("\"Evening\"", MealType.EveningSnack)]
+    public void Read_TheAppsOwnShortLabels_LandOnTheRightSlot(string json, MealType expected)
+    {
+        Read(json).Should().Be(expected);
+    }
+
     [Theory]
     [InlineData("\"afternoon_snack\"")]
     [InlineData("\"afternoon-snack\"")]

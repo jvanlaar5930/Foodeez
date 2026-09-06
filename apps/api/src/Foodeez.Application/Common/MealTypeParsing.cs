@@ -39,11 +39,20 @@ public static class MealTypeParsing
                 return value;
         }
 
-        // "snack" on its own is common and has no exact member.
-        if (normalized.Equals("snack", StringComparison.OrdinalIgnoreCase))
-            return MealType.AfternoonSnack;
+        // The short labels the calendar itself shows. A model that has seen them - or that
+        // simply reaches for the common wording - would otherwise fall through to the fallback
+        // and be filed under whatever that happens to be, which is silent and wrong.
+        var alias = normalized.ToLowerInvariant() switch
+        {
+            "amsnack" => MealType.MorningSnack,
+            "pmsnack" => MealType.AfternoonSnack,
+            "evening" => MealType.EveningSnack,
+            // "snack" on its own is common and has no exact member.
+            "snack" => MealType.AfternoonSnack,
+            _ => (MealType?)null
+        };
 
-        return fallback;
+        return alias ?? fallback;
     }
 
     private static bool IsDefined(int value) => Enum.IsDefined(typeof(MealType), value);

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Foodeez.Application.DTOs.AI;
 using Foodeez.Application.DTOs.MealPlans;
 using Foodeez.Application.DTOs.Users;
+using Foodeez.Domain.Enums;
 
 namespace Foodeez.Application.Common;
 
@@ -13,6 +14,44 @@ namespace Foodeez.Application.Common;
 /// </summary>
 public static class MealPlanPrompt
 {
+    /// <summary>
+    /// What the numbers in "mealType" mean.
+    ///
+    /// The example JSON below shows <c>"mealType": 1</c> and nothing anywhere said what 1 was,
+    /// so the model had to guess the numbering from a single example - which is exactly what it
+    /// did, putting dinners in the breakfast slot and snacks wherever. A wrong guess was then
+    /// invisible: <see cref="MealTypeParsing"/> accepts any number the enum defines, so a
+    /// confidently misnumbered plan parses perfectly and lands in the wrong rows.
+    ///
+    /// Built from the enum rather than typed out, so a new meal type cannot leave this
+    /// describing a numbering that no longer exists.
+    /// </summary>
+    internal static string MealTypeLegend()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("\"mealType\" is one of these numbers. Use the number, and put each meal in the slot it belongs in:");
+
+        foreach (var value in Enum.GetValues<MealType>())
+        {
+            sb.AppendLine($"  {(int)value} = {Spaced(value.ToString())}");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>"MorningSnack" reads as "Morning Snack", which is what the slot is called on screen.</summary>
+    private static string Spaced(string pascalCase)
+    {
+        var sb = new StringBuilder();
+        foreach (var c in pascalCase)
+        {
+            if (char.IsUpper(c) && sb.Length > 0) sb.Append(' ');
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
     /// <summary>
     /// One day of the plan, which is how a plan is actually generated.
     ///
@@ -84,6 +123,7 @@ public static class MealPlanPrompt
         sb.AppendLine(AINarration.Instruction);
         sb.AppendLine("In those sentences, say what this day looks like and why - one day, not the whole week.");
         sb.AppendLine();
+        sb.AppendLine(MealTypeLegend());
         sb.AppendLine("JSON shape - one day only, no \"days\" array:");
         sb.AppendLine(@"{
   ""meals"": [
@@ -252,6 +292,7 @@ public static class MealPlanPrompt
         sb.AppendLine(AINarration.Instruction);
         sb.AppendLine("In those sentences, say what the week looks like overall - the sort of food, how it meets the goal - not a list of every meal.");
         sb.AppendLine();
+        sb.AppendLine(MealTypeLegend());
         sb.AppendLine("JSON shape:");
         sb.AppendLine(@"{
   ""days"": [

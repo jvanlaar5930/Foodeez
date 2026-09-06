@@ -5,6 +5,8 @@ import type {
   MealPlanDayDto,
   MealPlanDto,
   MealPlanEntryDto,
+  MealPlanEntryMoveRequest,
+  MealPlanEntryMoveResponse,
   MealPlanEntryRequest,
   MealPlanGenerationResultDto,
   MealPlanProgressDto,
@@ -71,6 +73,26 @@ export async function updateEntry(
   entry: MealPlanEntryRequest,
 ): Promise<MealPlanEntryDto> {
   const response = await api.put<MealPlanEntryDto>(`/meal-plans/${planId}/entries/${entryId}`, entry);
+  return response.data;
+}
+
+/**
+ * Sends one meal to a different day or slot, swapping with whatever is already there.
+ *
+ * Not `updateEntry` with the date changed: that endpoint deletes whatever occupies the
+ * destination, and a slot picked from a list is as easy to mis-tap as a cell is to mis-drop.
+ * `targetPlanId` is what lets the destination be a day this plan does not cover, which on the
+ * day screen is every other day.
+ */
+export async function moveEntry(
+  planId: string,
+  entryId: string,
+  destination: MealPlanEntryMoveRequest,
+): Promise<MealPlanEntryMoveResponse> {
+  const response = await api.put<MealPlanEntryMoveResponse>(
+    `/meal-plans/${planId}/entries/${entryId}/move`,
+    destination,
+  );
   return response.data;
 }
 

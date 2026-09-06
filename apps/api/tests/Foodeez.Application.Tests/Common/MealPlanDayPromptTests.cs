@@ -71,6 +71,37 @@ public class MealPlanDayPromptTests
         prompt.Should().Contain("one day only, no \"days\" array");
     }
 
+    /// <summary>
+    /// The example JSON shows "mealType": 1 and, before this, nothing said what 1 meant. A
+    /// model had one example to infer a six-value numbering from, and a wrong guess is invisible
+    /// - every number the enum defines parses, so a confidently misnumbered plan lands whole, in
+    /// the wrong rows. That is what "the AI puts meals in the wrong spots" was.
+    /// </summary>
+    [Theory]
+    [InlineData(1, "Breakfast")]
+    [InlineData(2, "Morning Snack")]
+    [InlineData(3, "Lunch")]
+    [InlineData(4, "Afternoon Snack")]
+    [InlineData(5, "Dinner")]
+    [InlineData(6, "Evening Snack")]
+    public void BuildDay_SaysWhichNumberIsWhichSlot(int number, string slot)
+    {
+        BuildDay().Should().Contain($"{number} = {slot}");
+    }
+
+    [Fact]
+    public void BuildDay_LegendCoversEverySlotThatExists()
+    {
+        var prompt = BuildDay();
+
+        foreach (var mealType in Enum.GetValues<MealType>())
+        {
+            prompt.Should().Contain(
+                $"{(int)mealType} = ",
+                because: "a meal type the legend omits is one the model has to guess at again");
+        }
+    }
+
     [Fact]
     public void BuildDay_NamesTheSlotsAlreadyTaken_AndForbidsReplanningThem()
     {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { format, parseISO } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MealPlanStackParamList } from '@/navigation/types';
 import { useMealPlanStore } from '@/store/mealPlanStore';
@@ -28,6 +28,7 @@ import { AiRecipeThumb } from '@/components/recipe/AiRecipeThumb';
 import {
   isAiRecipeImage,
   MEAL_TYPE_LABELS,
+  MEAL_TYPE_SHORT_LABELS,
   MealLogDto,
   MealPlanEntryDto,
   MealType,
@@ -57,6 +58,8 @@ export function CalendarDayScreen({ route, navigation }: Props) {
   const ensurePlanFor = useMealPlanStore((state) => state.ensurePlanFor);
   const saveEntry = useMealPlanStore((state) => state.saveEntry);
   const removeEntry = useMealPlanStore((state) => state.removeEntry);
+  const moveEntry = useMealPlanStore((state) => state.moveEntry);
+  const plans = useMealPlanStore((state) => state.plans);
   const clearError = useMealPlanStore((state) => state.clearError);
 
   const [loggedLogs, setLoggedLogs] = useState<MealLogDto[]>([]);
@@ -66,7 +69,22 @@ export function CalendarDayScreen({ route, navigation }: Props) {
   // matches what the web calendar's own slot dialog falls back to for anything that is not
   // a picked recipe, and keeps this screen from having to duplicate recipe search entirely.
   const [entryModalOpen, setEntryModalOpen] = useState(false);
+  /** The destination slot, which the picker can change - not necessarily the one opened. */
   const [entryMealType, setEntryMealType] = useState<MealType>(MealType.Breakfast);
+  /** The destination day, as 'yyyy-MM-dd'. Starts as the day this screen is showing. */
+  const [entryDate, setEntryDate] = useState(date);
+  /**
+   * The cell the dialog was opened on, and the meal that was in it.
+   *
+   * Held rather than looked up again, because the pickers below change where the meal is
+   * going: re-reading `getEntryForMeal(entryMealType)` mid-edit would start describing
+   * whatever sits in the *destination*, and the save would edit the wrong meal.
+   */
+  const [editingEntry, setEditingEntry] = useState<MealPlanEntryDto | null>(null);
+  const [openedSlot, setOpenedSlot] = useState<{ date: string; mealType: MealType }>({
+    date,
+    mealType: MealType.Breakfast,
+  });
   const [entryName, setEntryName] = useState('');
   const [entryServings, setEntryServings] = useState('1');
   const [entryError, setEntryError] = useState<string | null>(null);
@@ -111,6 +129,9 @@ export function CalendarDayScreen({ route, navigation }: Props) {
   const openEntryModal = useCallback((mealType: MealType) => {
     const entry = getEntryForMeal(mealType);
     setEntryMealType(mealType);
+    setEntryDate(date);
+    setEditingEntry(entry ?? null);
+    setOpenedSlot({ date, mealType });
     setEntryName(entry ? entryLabel(entry) : '');
     setEntryServings(String(entry?.servings ?? 1));
     setEntryError(null);
@@ -129,7 +150,33 @@ export function CalendarDayScreen({ route, navigation }: Props) {
         .catch(() => setLinkedRecipe(null))
         .finally(() => setLoadingRecipe(false));
     }
-  }, [getEntryForMeal, clearError]);
+  }, [getEntryForMeal, clearError, date]);
+
+  /**
+   * The days offered as a destination: three either side of the one on screen.
+   *
+   * Wide enough for "push tonight's dinner to tomorrow", which is what this is mostly for,
+   * and short enough to stay a row of taps rather than a date picker.
+   */
+  const dayOptions = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(parseISO(date), i - 3)),
+    [date],
+  );
+
+  /**
+   * The meal already sitting where this one is being sent, if any.
+   *
+   * Worth showing before the save rather than after: the move swaps the two, and a swap the
+   * person did not expect looks exactly like the other meal having been deleted.
+   */
+  const destinationOccupant = useMemo(() => {
+    if (!editingEntry) return null;
+    if (entryDate === openedSlot.date && entryMealType === openedSlot.mealType) return null;
+
+    const plan = plans.find((p) => p.startDate <= entryDate && p.endDate >= entryDate);
+    const found = plan?.entriesByDate?.[entryDate]?.find((e) => e.mealType === entryMealType);
+    return found && found.id !== editingEntry.id ? found : null;
+  }, [plans, entryDate, entryMealType, editingEntry, openedSlot]);
 
   const closeEntryModal = useCallback(() => setEntryModalOpen(false), []);
 
@@ -169,18 +216,57 @@ export function CalendarDayScreen({ route, navigation }: Props) {
     setSaving(true);
     setEntryError(null);
     try {
-      // A week with no plan yet has nothing to hang the entry on, so make one for it rather
-      // than refusing the save - same fallback the web calendar uses.
-      const plan = await ensurePlanFor(user.id, date, date, `Week of ${format(parsedDate, 'MMM d, yyyy')}`);
-      const existing = getEntryForMeal(entryMealType);
-      await saveEntry(user.id, plan.id, existing?.id ?? null, {
-        entryDate: date,
-        mealType: entryMealType,
+      const content = {
         recipeId: entryRecipeId,
         // A linked recipe carries its own name; notes would only duplicate it.
         notes: entryRecipeId ? undefined : trimmed,
         servings,
-      });
+      };
+
+      if (!editingEntry) {
+        // A day with no plan yet has nothing to hang the entry on, so make one for it rather
+        // than refusing the save - same fallback the web calendar uses.
+        const plan = await ensurePlanFor(
+          user.id,
+          entryDate,
+          entryDate,
+          `Week of ${format(parseISO(entryDate), 'MMM d, yyyy')}`,
+        );
+        await saveEntry(user.id, plan.id, null, {
+          entryDate,
+          mealType: entryMealType,
+          ...content,
+        });
+      } else {
+        // Written where the meal still is, before any move. A move that then fails leaves the
+        // edit saved in the slot the meal is actually in, rather than discarding both.
+        await saveEntry(user.id, editingEntry.mealPlanId, editingEntry.id, {
+          entryDate: openedSlot.date,
+          mealType: openedSlot.mealType,
+          ...content,
+        });
+
+        const relocating =
+          entryDate !== openedSlot.date || entryMealType !== openedSlot.mealType;
+
+        if (relocating) {
+          // The destination day may belong to another plan - on this screen it usually does,
+          // since a plan created here covers only the day it was created for.
+          const destination = await ensurePlanFor(
+            user.id,
+            entryDate,
+            entryDate,
+            `Week of ${format(parseISO(entryDate), 'MMM d, yyyy')}`,
+          );
+
+          await moveEntry(user.id, editingEntry.mealPlanId, editingEntry.id, {
+            entryDate,
+            mealType: entryMealType,
+            targetPlanId: destination.id,
+          });
+        }
+      }
+
       setEntryModalOpen(false);
     } catch {
       // Read fresh rather than the `error` captured when this closure was created - the
@@ -266,7 +352,7 @@ export function CalendarDayScreen({ route, navigation }: Props) {
       <ModalSheet
         visible={entryModalOpen}
         onClose={closeEntryModal}
-        title={`${getEntryForMeal(entryMealType) ? 'Edit' : 'Add'} ${MEAL_TYPE_LABELS[entryMealType]}`}
+        title={`${editingEntry ? 'Edit' : 'Add'} ${MEAL_TYPE_LABELS[openedSlot.mealType]}`}
         // A save is in flight; a stray tap on the backdrop should not throw it away.
         dismissOnBackdrop={!saving}
         footer={
@@ -303,6 +389,55 @@ export function CalendarDayScreen({ route, navigation }: Props) {
           accessibilityLabel="Servings"
         />
 
+        <Text style={styles.modalLabel}>Day</Text>
+        <View style={styles.chipRow}>
+          {dayOptions.map((day) => {
+            const value = format(day, 'yyyy-MM-dd');
+            const selected = value === entryDate;
+            return (
+              <TouchableOpacity
+                key={value}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => setEntryDate(value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={format(day, 'EEEE d MMMM')}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                  {format(day, 'EEE d')}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={styles.modalLabel}>Slot</Text>
+        <View style={styles.chipRow}>
+          {ORDERED_MEAL_TYPES.map((type) => {
+            const selected = type === entryMealType;
+            return (
+              <TouchableOpacity
+                key={type}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => setEntryMealType(type)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={MEAL_TYPE_LABELS[type]}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                  {MEAL_TYPE_SHORT_LABELS[type]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {destinationOccupant ? (
+          <Text style={styles.swapNote}>
+            Swaps with {entryLabel(destinationOccupant)}, which moves here.
+          </Text>
+        ) : null}
+
         {entryError ? <Text style={styles.modalError}>{entryError}</Text> : null}
       </ModalSheet>
     </SafeAreaView>
@@ -324,6 +459,18 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: C.text },
   list: { padding: Spacing.md, gap: Spacing.md },
   modalLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: C.text, marginTop: Spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs },
+  chip: {
+    borderWidth: 1,
+    borderColor: C.divider,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  chipSelected: { borderColor: C.primary, backgroundColor: C.primary },
+  chipText: { fontSize: FontSize.sm, color: C.text },
+  chipTextSelected: { color: C.surface, fontWeight: FontWeight.semibold },
+  swapNote: { fontSize: FontSize.xs, color: C.textSecondary, marginTop: Spacing.sm },
   modalInput: {
     borderWidth: 1,
     borderColor: C.divider,

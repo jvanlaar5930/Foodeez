@@ -19,6 +19,17 @@ public sealed record SaveEntryResult(
     string? Reason = null);
 
 /// <summary>
+/// A move, which can change two slots at once: <paramref name="Swapped"/> is the meal that
+/// was already in the destination and has taken the moved meal's old place. Null when the
+/// destination was empty.
+/// </summary>
+public sealed record MoveEntryResult(
+    SaveEntryOutcome Outcome,
+    MealPlanEntryDto? Entry = null,
+    MealPlanEntryDto? Swapped = null,
+    string? Reason = null);
+
+/// <summary>
 /// Adding, changing and clearing a single slot on the weekly calendar. Until this existed
 /// a plan could only arrive whole from the AI - there was no way to put one meal anywhere.
 /// </summary>
@@ -86,6 +97,89 @@ public class SaveMealPlanEntryUseCase
 
         await _unitOfWork.SaveChangesAsync(ct);
         return new SaveEntryResult(SaveEntryOutcome.Saved, GetMealPlanUseCase.MapEntry(entry));
+    }
+
+    /// <summary>
+    /// Move one meal to another day or slot, swapping with whatever is already there.
+    ///
+    /// Deliberately not <see cref="UpdateAsync"/>. That displaces the occupant - deletes it -
+    /// which is the right answer when someone has deliberately chosen a meal for a slot, and
+    /// the wrong one for a drag: the gesture is easy to misaim, and quietly losing a meal you
+    /// never touched is not a mistake the screen gives you any way to undo.
+    ///
+    /// A swap also cannot be assembled from two UpdateAsync calls, whichever order they go in:
+    /// the first move displaces the entry the second one was going to relocate, so the meal is
+    /// already deleted by the time anything tries to save it. Both ends have to move inside one
+    /// transaction, which is what this is.
+    /// </summary>
+    public async Task<MoveEntryResult> MoveAsync(
+        Guid planId,
+        Guid entryId,
+        Guid userId,
+        MealPlanEntryMoveRequest request,
+        CancellationToken ct = default)
+    {
+        if (await LoadOwnedPlanAsync(planId, userId) is not { } plan)
+        {
+            return new MoveEntryResult(SaveEntryOutcome.PlanNotFound);
+        }
+
+        var entry = plan.Entries.FirstOrDefault(e => e.Id == entryId);
+        if (entry is null)
+        {
+            return new MoveEntryResult(SaveEntryOutcome.EntryNotFound);
+        }
+
+        // The destination can live in another plan entirely - see TargetPlanId. Someone else's
+        // reads as missing here for the same reason it does anywhere else.
+        var destination = plan;
+        if (request.TargetPlanId is { } targetPlanId && targetPlanId != plan.Id)
+        {
+            if (await LoadOwnedPlanAsync(targetPlanId, userId) is not { } target)
+            {
+                return new MoveEntryResult(SaveEntryOutcome.PlanNotFound);
+            }
+
+            destination = target;
+        }
+
+        if (!destination.Covers(request.EntryDate))
+        {
+            return new MoveEntryResult(
+                SaveEntryOutcome.Rejected,
+                Reason: $"That date is outside this plan, which runs {destination.StartDate:MMM d} to {destination.EndDate:MMM d}.");
+        }
+
+        // One meal per slot is the plan's own invariant, so there is at most one to swap with.
+        var occupant = destination.OccupantsOf(request.EntryDate, request.MealType, exceptId: entry.Id)
+            .FirstOrDefault();
+
+        // Read before anything moves: one line further down these are the destination's.
+        var vacatedDate = entry.EntryDate;
+        var vacatedMealType = entry.MealType;
+        var vacatedPlanId = entry.MealPlanId;
+
+        entry.EntryDate = request.EntryDate;
+        entry.MealType = request.MealType;
+        entry.MealPlanId = destination.Id;
+
+        if (occupant is not null)
+        {
+            occupant.EntryDate = vacatedDate;
+            occupant.MealType = vacatedMealType;
+            // Follows the meal it swapped with, so a cross-plan swap leaves both plans holding
+            // one meal each rather than emptying one and doubling up the other.
+            occupant.MealPlanId = vacatedPlanId;
+        }
+
+        // Both entries were loaded tracked, so the mutations above are the update, and one
+        // SaveChanges makes the swap atomic - there is no moment where both sit in one slot.
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return new MoveEntryResult(
+            SaveEntryOutcome.Saved,
+            GetMealPlanUseCase.MapEntry(entry),
+            occupant is null ? null : GetMealPlanUseCase.MapEntry(occupant));
     }
 
     public async Task<SaveEntryResult> DeleteAsync(
