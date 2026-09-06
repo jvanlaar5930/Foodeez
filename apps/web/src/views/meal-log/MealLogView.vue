@@ -100,9 +100,11 @@ import DayAnalysisCard from '@/components/meal/DayAnalysisCard.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useMealStore } from '@/stores/meal';
+import { useToastStore } from '@/stores/toast';
 
 const authStore = useAuthStore();
 const mealStore = useMealStore();
+const toastStore = useToastStore();
 
 const selectedDate = ref(new Date());
 const showAddModal = ref(false);
@@ -157,7 +159,13 @@ async function handleDeleteMeal(mealLog: MealLog) {
     return;
   }
 
-  await mealStore.deleteMealLog(mealLog.id, authStore.user.id);
+  try {
+    await mealStore.deleteMealLog(mealLog.id, authStore.user.id);
+    toastStore.success('Meal removed from your log.');
+  } catch {
+    // Rethrown by the store so the row knows whether to disappear; nothing above catches it.
+    toastStore.error(mealStore.error ?? 'That meal could not be deleted.');
+  }
 }
 
 function onMealSaved() {

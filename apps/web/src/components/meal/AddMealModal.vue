@@ -14,6 +14,7 @@ import { aiService, type MealAnalysisResult } from '@/services/aiService';
 import { extractErrorMessage } from '@/utils/apiError';
 import { useMealStore } from '@/stores/meal';
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
 import {
   MEAL_TYPE_SHORT_LABELS,
   MealType,
@@ -30,6 +31,7 @@ const emit = defineEmits<{ close: []; saved: [] }>();
 
 const mealStore = useMealStore();
 const authStore = useAuthStore();
+const toastStore = useToastStore();
 
 useScrollLock(ref(true));
 
@@ -188,11 +190,17 @@ async function handleSave(): Promise<void> {
 
     if (props.mealLog) {
       await mealStore.updateMealLog(props.mealLog.id, payload);
+      toastStore.success('Meal updated.');
     } else {
       await mealStore.logMeal(payload);
+      toastStore.success('Meal logged.');
     }
 
     emit('saved');
+  } catch {
+    // The store already holds the reason. Without this the rejection escaped the click
+    // handler unhandled: the dialog stopped spinning and said nothing at all.
+    toastStore.error(mealStore.error ?? 'That meal could not be saved.');
   } finally {
     isSaving.value = false;
   }

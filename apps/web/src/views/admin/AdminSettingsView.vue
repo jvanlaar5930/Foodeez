@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue';
 import { adminService } from '@/services/adminService';
 import { recipeService } from '@/services/recipeService';
 import AppLayout from '@/components/layout/AppLayout.vue';
+import { useToastStore } from '@/stores/toast';
+import { extractErrorMessage } from '@/utils/apiError';
 
 interface SettingField {
   key: string;
@@ -114,10 +116,11 @@ const RECIPE_FILTER_TAGS_KEY = 'recipes.filterTags';
 const filterTags = ref<string[]>([]);
 const newTag = ref('');
 
+const toastStore = useToastStore();
+
 const values = ref<Record<string, string>>({});
 const isSaving = ref(false);
 const isLoading = ref(false);
-const savedMessage = ref('');
 const showSecrets = ref<Record<string, boolean>>({});
 
 /** Claude is what the API falls back to when the row is unset, so the page has to agree. */
@@ -177,8 +180,11 @@ async function save() {
       .filter(([, v]) => v !== undefined && v !== '')
       .map(([key, value]) => ({ key, value }));
     await adminService.updateSettings(pairs);
-    savedMessage.value = 'Settings saved.';
-    setTimeout(() => { savedMessage.value = ''; }, 3000);
+    toastStore.success('Settings saved.');
+  } catch (err: unknown) {
+    // The save button sits at the bottom of a long page and the failure was silent before
+    // this: the spinner stopped and the settings looked saved.
+    toastStore.error(extractErrorMessage(err, 'Those settings could not be saved.'));
   } finally {
     isSaving.value = false;
   }
@@ -199,7 +205,6 @@ onMounted(fetchSettings);
 
       <div class="flex items-center justify-between">
         <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">Admin Settings</h1>
-        <span v-if="savedMessage" class="text-sm text-green-600 dark:text-green-400">{{ savedMessage }}</span>
       </div>
 
       <div v-if="isLoading" class="text-center text-gray-400 py-8">Loading...</div>

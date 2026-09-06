@@ -7,6 +7,7 @@ import AppButton from '@/components/ui/AppButton.vue';
 import AppAlert from '@/components/ui/AppAlert.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useProfileStore } from '@/stores/profile';
+import { useToastStore } from '@/stores/toast';
 import {
   ActivityLevel,
   DietaryGoal,
@@ -23,6 +24,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>();
 
 const authStore = useAuthStore();
 const profileStore = useProfileStore();
+const toastStore = useToastStore();
 
 const GENDERS = [
   { value: Gender.Male, label: 'Male' },
@@ -178,8 +180,11 @@ async function save() {
       darkMode: profileStore.profile?.darkMode,
       unitSystem: units.value,
     });
+    toastStore.success('Profile saved.');
     emit('update:modelValue', false);
   } catch {
+    // Kept in the dialog rather than thrown at a toast: the dialog stays open, and the
+    // reason belongs next to the fields it is about.
     error.value = profileStore.error ?? 'Could not save your profile. Please try again.';
   }
 }

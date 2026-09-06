@@ -5,6 +5,7 @@ import AppInput from '@/components/ui/AppInput.vue';
 import AppButton from '@/components/ui/AppButton.vue';
 import { foodItemService } from '@/services/foodItemService';
 import { estimateNutrition } from '@/services/aiService';
+import { useToastStore } from '@/stores/toast';
 import type { FoodItem } from '@foodeez/shared';
 
 const emit = defineEmits<{
@@ -12,6 +13,8 @@ const emit = defineEmits<{
   created: [item: FoodItem];
   cancel: [];
 }>();
+
+const toastStore = useToastStore();
 
 const name = ref('');
 const brand = ref('');
@@ -130,6 +133,10 @@ async function save() {
       sugar: num(sugar.value),
       sodium: num(sodium.value),
     });
+
+    // The form closes on the way out, so this is the only word that the food was kept
+    // rather than just dropped into the meal being logged.
+    toastStore.success(`${created.name} was added to your foods.`);
     emit('created', created);
   } catch (err: unknown) {
     error.value = extractErrorMessage(err, 'Could not save this food.');
