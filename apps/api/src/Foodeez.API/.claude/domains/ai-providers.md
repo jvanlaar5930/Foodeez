@@ -26,6 +26,12 @@ and chat - goes through one interface pair with a provider chosen at runtime.
 
 ## Main Flows
 
+**Configuration** - every provider reads its settings through `ProviderConfiguration`: the
+`AppSettings` table first (`claude.apiKey`, `gemini.model`, `groq.timeoutSeconds`, `local.*`,
+...), falling back to `IConfiguration` (`Claude:ApiKey`, ...). Before this only
+`LocalAIService` consulted the table, so the `claude.*` / `gemini.*` / `groq.*` / `ollama.*`
+fields the admin panel had always offered were saved and then never read by anything.
+
 **Provider selection** - `DynamicAIService.ResolveAsync()` reads the `ai.provider` row from the
 `AppSettings` table (default `claude`) and resolves the matching registered service. The result
 is cached in the instance, and the instance is scoped, so one request resolves once. Accepted
@@ -76,8 +82,17 @@ OpenAI-compatible server (`LocalAI:BaseUrl`, `Model`, `ApiKey`, `SupportsVision`
 - **Never add a resilience/retry handler to an AI `HttpClient`.** A model call is not
   idempotent, is billed per attempt, can run for minutes, and a streaming body cannot be
   replayed. `AIProviderBase` already turns a failure into a usable fallback.
-- `LocalAIService`'s `HttpClient.Timeout` is deliberately infinite; its deadline is applied per
-  request from `LocalAI:TimeoutSeconds`.
+- **Every AI `HttpClient` has an infinite `Timeout` on purpose.** The real deadline is applied
+  per request by `AIProviderBase.UnderDeadlineAsync` / `StreamAsync` from each provider's own
+  `<provider>.timeoutSeconds` setting. `HttpClient.Timeout` is fixed once the client is built
+  and cannot express a per-provider deadline, and its expiry is indistinguishable from a
+  caller hanging up.
+- **A deadline expiry is translated into `AIGenerationFailedException` before it reaches
+  `RunAsync`.** That is deliberate: a timeout and a cancelled request arrive as the same
+  exception type but need opposite handling — a cancellation must propagate untouched, a
+  timeout is a provider fault and becomes the fallback. Do not try to tell them apart by
+  checking the caller's token in `RunAsync`; most requests pass `CancellationToken.None`, so
+  that reads every genuine cancellation as a timeout.
 - `LocalAI:MaxTokens` is intentionally unset - nothing here can know what a locally loaded
   model supports, so the server's own default is left in place.
 - Provider failures usually return a fallback rather than throwing. If a caller needs the

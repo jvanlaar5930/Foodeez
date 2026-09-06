@@ -2,7 +2,6 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Infrastructure.Services;
@@ -23,10 +22,13 @@ public sealed class GroqAIService : AIProviderBase
     /// </summary>
     private const int FallbackMaxOutputTokens = 8192;
 
-    private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
+    /// <summary>Groq's whole selling point is speed; a call this slow has stalled, not queued.</summary>
+    private const int DefaultTimeoutSeconds = 60;
 
-    public GroqAIService(HttpClient httpClient, IConfiguration configuration, ILogger<GroqAIService> logger)
+    private readonly HttpClient _httpClient;
+    private readonly ProviderConfiguration _configuration;
+
+    public GroqAIService(HttpClient httpClient, ProviderConfiguration configuration, ILogger<GroqAIService> logger)
         : base(logger)
     {
         _httpClient = httpClient;
@@ -35,12 +37,15 @@ public sealed class GroqAIService : AIProviderBase
 
     protected override string ProviderName => "Groq";
 
+    protected override async ValueTask<TimeSpan> RequestTimeoutAsync() =>
+        await _configuration.ResolveTimeoutAsync("groq.timeoutSeconds", "Groq:TimeoutSeconds", DefaultTimeoutSeconds);
+
     protected override string VisionUnsupportedNote =>
         "Photos need a provider that can see - Groq's free tier has no vision model. Describe the meal instead.";
 
     protected override async Task<string> SendAsync(string prompt, CancellationToken ct)
     {
-        using var request = BuildRequest(prompt, stream: false);
+        using var request = await BuildRequestAsync(prompt, stream: false);
 
         var response = await _httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
@@ -55,10 +60,10 @@ public sealed class GroqAIService : AIProviderBase
     }
 
     /// <summary>Groq speaks the OpenAI streaming protocol, so the frames read the same way.</summary>
-    public override async IAsyncEnumerable<string> StreamAsync(
-        string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    protected override async IAsyncEnumerable<string> StreamCoreAsync(
+        string prompt, [EnumeratorCancellation] CancellationToken ct)
     {
-        using var request = BuildRequest(prompt, stream: true);
+        using var request = await BuildRequestAsync(prompt, stream: true);
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
@@ -70,15 +75,16 @@ public sealed class GroqAIService : AIProviderBase
         }
     }
 
-    private HttpRequestMessage BuildRequest(string prompt, bool stream)
+    private async Task<HttpRequestMessage> BuildRequestAsync(string prompt, bool stream)
     {
-        var apiKey = _configuration["Groq:ApiKey"]
-            ?? throw new InvalidOperationException("Groq:ApiKey is not configured.");
+        var apiKey = await _configuration.ResolveAsync("groq.apiKey", "Groq:ApiKey")
+            ?? throw new InvalidOperationException(
+                "No Groq API key is configured. Set one in Admin > Settings, or supply Groq:ApiKey.");
 
         var body = new
         {
-            model = _configuration["Groq:Model"] ?? DefaultModel,
-            max_tokens = MaxOutputTokens(),
+            model = await _configuration.ResolveAsync("groq.model", "Groq:Model") ?? DefaultModel,
+            max_tokens = await MaxOutputTokensAsync(),
             stream,
             messages = new[] { new { role = "user", content = prompt } }
         };
@@ -93,8 +99,6 @@ public sealed class GroqAIService : AIProviderBase
         return request;
     }
 
-    private int MaxOutputTokens() =>
-        int.TryParse(_configuration["Groq:MaxTokens"], out var configured) && configured > 0
-            ? configured
-            : FallbackMaxOutputTokens;
+    private async Task<int> MaxOutputTokensAsync() =>
+        await _configuration.ResolveIntAsync("groq.maxTokens", "Groq:MaxTokens") ?? FallbackMaxOutputTokens;
 }

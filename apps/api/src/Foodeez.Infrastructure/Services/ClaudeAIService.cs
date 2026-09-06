@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Infrastructure.Services;
@@ -30,10 +29,16 @@ public sealed class ClaudeAIService : AIProviderBase
     /// </summary>
     private const int ImageMaxOutputTokens = 4096;
 
-    private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
+    /// <summary>
+    /// Anthropic answers a prompt of this size in seconds, so a call still running after two
+    /// minutes has gone wrong rather than gone slowly. Editable per deployment all the same.
+    /// </summary>
+    private const int DefaultTimeoutSeconds = 120;
 
-    public ClaudeAIService(HttpClient httpClient, IConfiguration configuration, ILogger<ClaudeAIService> logger)
+    private readonly HttpClient _httpClient;
+    private readonly ProviderConfiguration _configuration;
+
+    public ClaudeAIService(HttpClient httpClient, ProviderConfiguration configuration, ILogger<ClaudeAIService> logger)
         : base(logger)
     {
         _httpClient = httpClient;
@@ -42,14 +47,17 @@ public sealed class ClaudeAIService : AIProviderBase
 
     protected override string ProviderName => "Claude";
 
+    protected override async ValueTask<TimeSpan> RequestTimeoutAsync() =>
+        await _configuration.ResolveTimeoutAsync("claude.timeoutSeconds", "Claude:TimeoutSeconds", DefaultTimeoutSeconds);
+
     protected override Task<bool> SupportsVisionAsync() => Task.FromResult(true);
 
     protected override async Task<string> SendAsync(string prompt, CancellationToken ct)
     {
         var body = new
         {
-            model = Model,
-            max_tokens = MaxOutputTokens(),
+            model = await ModelAsync(),
+            max_tokens = await MaxOutputTokensAsync(),
             messages = new[] { new { role = "user", content = prompt } }
         };
 
@@ -61,7 +69,7 @@ public sealed class ClaudeAIService : AIProviderBase
     {
         var body = new
         {
-            model = Model,
+            model = await ModelAsync(),
             max_tokens = ImageMaxOutputTokens,
             messages = new[]
             {
@@ -93,13 +101,13 @@ public sealed class ClaudeAIService : AIProviderBase
     /// The same request as <see cref="SendAsync"/> with `stream` set, so the answer arrives in
     /// the pieces Anthropic writes it in rather than in one block at the end.
     /// </summary>
-    public override async IAsyncEnumerable<string> StreamAsync(
-        string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    protected override async IAsyncEnumerable<string> StreamCoreAsync(
+        string prompt, [EnumeratorCancellation] CancellationToken ct)
     {
         var body = new
         {
-            model = Model,
-            max_tokens = MaxOutputTokens(),
+            model = await ModelAsync(),
+            max_tokens = await MaxOutputTokensAsync(),
             stream = true,
             messages = new[] { new { role = "user", content = prompt } }
         };
@@ -120,12 +128,11 @@ public sealed class ClaudeAIService : AIProviderBase
         }
     }
 
-    private string Model => _configuration["Claude:Model"] ?? DefaultModel;
+    private async Task<string> ModelAsync() =>
+        await _configuration.ResolveAsync("claude.model", "Claude:Model") ?? DefaultModel;
 
-    private int MaxOutputTokens() =>
-        int.TryParse(_configuration["Claude:MaxTokens"], out var configured) && configured > 0
-            ? configured
-            : FallbackMaxOutputTokens;
+    private async Task<int> MaxOutputTokensAsync() =>
+        await _configuration.ResolveIntAsync("claude.maxTokens", "Claude:MaxTokens") ?? FallbackMaxOutputTokens;
 
     private async Task<string> PostAsync(object body, HttpCompletionOption completion, CancellationToken ct)
     {
@@ -144,8 +151,9 @@ public sealed class ClaudeAIService : AIProviderBase
     private async Task<HttpResponseMessage> SendRequestAsync(
         object body, HttpCompletionOption completion, CancellationToken ct)
     {
-        var apiKey = _configuration["Claude:ApiKey"]
-            ?? throw new InvalidOperationException("Claude:ApiKey configuration is required.");
+        var apiKey = await _configuration.ResolveAsync("claude.apiKey", "Claude:ApiKey")
+            ?? throw new InvalidOperationException(
+                "No Claude API key is configured. Set one in Admin > Settings, or supply Claude:ApiKey.");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, AnthropicBaseUrl)
         {

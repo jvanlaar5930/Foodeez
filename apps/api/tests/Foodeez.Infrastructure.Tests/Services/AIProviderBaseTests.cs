@@ -33,16 +33,21 @@ public class AIProviderBaseTests
             Func<string, CancellationToken, Task<string>> send,
             ILogger? logger = null,
             bool supportsVision = false,
-            Func<Task<ParsedMealDto>>? readImage = null)
+            Func<Task<ParsedMealDto>>? readImage = null,
+            TimeSpan? timeout = null)
             : base(logger ?? NullLogger.Instance)
         {
             _send = send;
             Vision = supportsVision;
             ReadImage = readImage;
+            Timeout = timeout ?? System.Threading.Timeout.InfiniteTimeSpan;
         }
 
         private bool Vision { get; }
         private Func<Task<ParsedMealDto>>? ReadImage { get; }
+        private TimeSpan Timeout { get; }
+
+        protected override ValueTask<TimeSpan> RequestTimeoutAsync() => new(Timeout);
 
         public string? LastPrompt { get; private set; }
         public int SendCount { get; private set; }
@@ -62,8 +67,8 @@ public class AIProviderBaseTests
             byte[] imageData, string? mimeType, CancellationToken ct) =>
             ReadImage?.Invoke() ?? throw new NotSupportedException();
 
-        public override async IAsyncEnumerable<string> StreamAsync(
-            string prompt, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        protected override async IAsyncEnumerable<string> StreamCoreAsync(
+            string prompt, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
         {
             await Task.Yield();
             yield return await _send(prompt, ct);
@@ -285,5 +290,64 @@ public class AIProviderBaseTests
         var act = () => provider.ParseMealImageAsync([1, 2, 3]);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    // ── The provider's own deadline ───────────────────────────────────────────
+    //
+    // A timeout and a cancellation arrive as the same exception type, and telling them apart
+    // is the whole reason the deadline is applied where it is. The pair below pin both halves:
+    // a provider that ran out of time produces the fallback and says so, while a caller who
+    // walked away still gets the cancellation rethrown untouched.
+
+    [Fact]
+    public async Task WhenTheProviderOutlastsItsTimeout_TheResultIsTheFallback_NotACancellation()
+    {
+        var logger = new Mock<ILogger>();
+
+        // Never answers. The deadline is what ends this, not the token the caller passed.
+        var provider = new FakeProvider(
+            async (_, token) =>
+            {
+                await Task.Delay(System.Threading.Timeout.Infinite, token);
+                return "unreachable";
+            },
+            logger.Object,
+            timeout: TimeSpan.FromMilliseconds(50));
+
+        var result = await provider.AnalyzeDayAsync(new DayAnalysisRequest { Date = new DateOnly(2026, 1, 5) });
+
+        result.Should().NotBeNull(because: "a timeout is a provider failure, and those become the fallback");
+        result.Score.Should().Be(0);
+
+        logger.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once,
+            "the deployment needs to know its model is running out of time");
+    }
+
+    [Fact]
+    public async Task WhenTheCallerCancels_ThatIsStillRethrown_EvenWithADeadlineSet()
+    {
+        using var caller = new CancellationTokenSource();
+
+        var provider = new FakeProvider(
+            async (_, token) =>
+            {
+                await caller.CancelAsync();
+                await Task.Delay(System.Threading.Timeout.Infinite, token);
+                return "unreachable";
+            },
+            timeout: TimeSpan.FromMinutes(5));
+
+        var act = () => provider.AnalyzeDayAsync(
+            new DayAnalysisRequest { Date = new DateOnly(2026, 1, 5) }, caller.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>(
+            because: "the reader leaving must not be reported as the model being slow");
     }
 }

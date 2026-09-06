@@ -37,6 +37,7 @@ const AI_PROVIDERS: ProviderSection[] = [
     fields: [
       { key: 'claude.apiKey', label: 'Claude API Key', description: 'Anthropic Claude API key (sk-ant-...)', isSecret: true, placeholder: 'sk-ant-api03-...' },
       { key: 'claude.model', label: 'Claude Model', description: 'Model ID (e.g. claude-sonnet-4-6)', isSecret: false, placeholder: 'claude-sonnet-4-6' },
+      { key: 'claude.timeoutSeconds', label: 'Request Timeout (seconds)', description: 'How long one call may run before it is abandoned and the feature falls back', isSecret: false, placeholder: '120' },
     ],
   },
   {
@@ -45,6 +46,8 @@ const AI_PROVIDERS: ProviderSection[] = [
     description: 'Free tier available, fast',
     fields: [
       { key: 'gemini.apiKey', label: 'Gemini API Key', description: 'Google AI Studio key — free tier available at aistudio.google.com', isSecret: true, placeholder: 'AIzaSy...' },
+      { key: 'gemini.model', label: 'Gemini Model', description: 'Model ID. Google retires these on their own schedule, so this is the field to change when every AI feature starts 404ing.', isSecret: false, placeholder: 'gemini-3.6-flash' },
+      { key: 'gemini.timeoutSeconds', label: 'Request Timeout (seconds)', description: 'How long one call may run before it is abandoned and the feature falls back', isSecret: false, placeholder: '120' },
     ],
   },
   {
@@ -54,6 +57,7 @@ const AI_PROVIDERS: ProviderSection[] = [
     fields: [
       { key: 'groq.apiKey', label: 'Groq API Key', description: 'Free-tier key from console.groq.com', isSecret: true, placeholder: 'gsk_...' },
       { key: 'groq.model', label: 'Groq Model', description: 'Model ID', isSecret: false, placeholder: 'llama-3.1-8b-instant' },
+      { key: 'groq.timeoutSeconds', label: 'Request Timeout (seconds)', description: 'How long one call may run before it is abandoned and the feature falls back', isSecret: false, placeholder: '60' },
     ],
   },
   {
@@ -63,6 +67,7 @@ const AI_PROVIDERS: ProviderSection[] = [
     fields: [
       { key: 'ollama.baseUrl', label: 'Ollama Base URL', description: 'Local Ollama server (must be running on this machine)', isSecret: false, placeholder: 'http://localhost:11434' },
       { key: 'ollama.model', label: 'Ollama Model', description: 'Model name — must be pulled first with `ollama pull <name>`', isSecret: false, placeholder: 'llama3' },
+      { key: 'ollama.timeoutSeconds', label: 'Request Timeout (seconds)', description: 'Runs on your own hardware, so this is generous by default — raise it if long requests get cut off', isSecret: false, placeholder: '300' },
     ],
   },
   {
@@ -74,7 +79,8 @@ const AI_PROVIDERS: ProviderSection[] = [
       { key: 'local.model', label: 'Local Model', description: 'Model name as the server reports it (GET /v1/models). llama.cpp serves one model and ignores this.', isSecret: false, placeholder: 'local-model' },
       { key: 'local.apiKey', label: 'Local Server API Key', description: 'Optional — only if your server requires a bearer token', isSecret: true, placeholder: 'leave empty for LM Studio / llama.cpp' },
       { key: 'local.supportsVision', label: 'Local Model Supports Images', description: 'Turn on only when a vision model is loaded (Qwen2-VL, LLaVA, …). Off means photo logging returns nothing.', isSecret: false, placeholder: '', type: 'toggle' },
-      { key: 'local.timeoutSeconds', label: 'Local Request Timeout (seconds)', description: 'Local models are slow on CPU — raise this if long requests get cut off', isSecret: false, placeholder: '300' },
+      { key: 'local.timeoutSeconds', label: 'Request Timeout (seconds)', description: 'Local models are slow on CPU — raise this if long requests get cut off', isSecret: false, placeholder: '300' },
+      { key: 'local.maxTokens', label: 'Max Output Tokens', description: 'Optional. Left unset the server uses its own per-model default, which is safer than guessing a number too small (truncating a long answer) or too large (rejected outright).', isSecret: false, placeholder: 'leave empty unless you know the model' },
     ],
   },
 ];

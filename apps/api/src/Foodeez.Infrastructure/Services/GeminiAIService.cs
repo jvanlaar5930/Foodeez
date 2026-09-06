@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using Foodeez.Application.Common;
 using Foodeez.Application.DTOs.AI;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Infrastructure.Services;
@@ -26,10 +25,13 @@ public sealed class GeminiAIService : AIProviderBase
     /// <summary>Low, because every prompt here asks for JSON rather than for invention.</summary>
     private const double Temperature = 0.3;
 
-    private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
+    /// <summary>A hosted model that has not answered in two minutes is not about to.</summary>
+    private const int DefaultTimeoutSeconds = 120;
 
-    public GeminiAIService(HttpClient httpClient, IConfiguration configuration, ILogger<GeminiAIService> logger)
+    private readonly HttpClient _httpClient;
+    private readonly ProviderConfiguration _configuration;
+
+    public GeminiAIService(HttpClient httpClient, ProviderConfiguration configuration, ILogger<GeminiAIService> logger)
         : base(logger)
     {
         _httpClient = httpClient;
@@ -37,6 +39,9 @@ public sealed class GeminiAIService : AIProviderBase
     }
 
     protected override string ProviderName => "Gemini";
+
+    protected override async ValueTask<TimeSpan> RequestTimeoutAsync() =>
+        await _configuration.ResolveTimeoutAsync("gemini.timeoutSeconds", "Gemini:TimeoutSeconds", DefaultTimeoutSeconds);
 
     protected override Task<bool> SupportsVisionAsync() => Task.FromResult(true);
 
@@ -82,8 +87,8 @@ public sealed class GeminiAIService : AIProviderBase
     }
 
     /// <summary>Google's streaming endpoint, asked for as server-sent events rather than a JSON array.</summary>
-    public override async IAsyncEnumerable<string> StreamAsync(
-        string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    protected override async IAsyncEnumerable<string> StreamCoreAsync(
+        string prompt, [EnumeratorCancellation] CancellationToken ct)
     {
         var body = new
         {
@@ -123,9 +128,10 @@ public sealed class GeminiAIService : AIProviderBase
     private async Task<HttpResponseMessage> PostAsync(
         string endpoint, object body, HttpCompletionOption completion, CancellationToken ct)
     {
-        var model = _configuration["Gemini:Model"] ?? DefaultModel;
-        var apiKey = _configuration["Gemini:ApiKey"]
-            ?? throw new InvalidOperationException("Gemini:ApiKey is not configured.");
+        var model = await _configuration.ResolveAsync("gemini.model", "Gemini:Model") ?? DefaultModel;
+        var apiKey = await _configuration.ResolveAsync("gemini.apiKey", "Gemini:ApiKey")
+            ?? throw new InvalidOperationException(
+                "No Gemini API key is configured. Set one in Admin > Settings, or supply Gemini:ApiKey.");
 
         var separator = endpoint.Contains('?') ? '&' : '?';
         var url = $"{ApiBase}/{model}:{endpoint}{separator}key={apiKey}";

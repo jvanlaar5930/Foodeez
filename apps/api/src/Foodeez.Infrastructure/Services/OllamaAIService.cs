@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Foodeez.Infrastructure.Services;
@@ -16,10 +15,16 @@ public sealed class OllamaAIService : AIProviderBase
     private const string DefaultBaseUrl = "http://localhost:11434";
     private const string DefaultModel = "llama3";
 
-    private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
+    /// <summary>
+    /// Ollama runs on someone's own hardware, so the honest default is the generous one that
+    /// <see cref="LocalAIService"/> uses: a model on a CPU can spend minutes on one prompt.
+    /// </summary>
+    private const int DefaultTimeoutSeconds = 300;
 
-    public OllamaAIService(HttpClient httpClient, IConfiguration configuration, ILogger<OllamaAIService> logger)
+    private readonly HttpClient _httpClient;
+    private readonly ProviderConfiguration _configuration;
+
+    public OllamaAIService(HttpClient httpClient, ProviderConfiguration configuration, ILogger<OllamaAIService> logger)
         : base(logger)
     {
         _httpClient = httpClient;
@@ -28,12 +33,15 @@ public sealed class OllamaAIService : AIProviderBase
 
     protected override string ProviderName => "Ollama";
 
+    protected override async ValueTask<TimeSpan> RequestTimeoutAsync() =>
+        await _configuration.ResolveTimeoutAsync("ollama.timeoutSeconds", "Ollama:TimeoutSeconds", DefaultTimeoutSeconds);
+
     protected override string VisionUnsupportedNote =>
         "Photos need a provider that can see - this Ollama model has no vision. Describe the meal instead.";
 
     protected override async Task<string> SendAsync(string prompt, CancellationToken ct)
     {
-        using var request = BuildRequest(prompt, stream: false);
+        using var request = await BuildRequestAsync(prompt, stream: false);
 
         var response = await _httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
@@ -47,10 +55,10 @@ public sealed class OllamaAIService : AIProviderBase
     }
 
     /// <summary>Ollama streams bare JSON objects, one per line, rather than server-sent events.</summary>
-    public override async IAsyncEnumerable<string> StreamAsync(
-        string prompt, [EnumeratorCancellation] CancellationToken ct = default)
+    protected override async IAsyncEnumerable<string> StreamCoreAsync(
+        string prompt, [EnumeratorCancellation] CancellationToken ct)
     {
-        using var request = BuildRequest(prompt, stream: true);
+        using var request = await BuildRequestAsync(prompt, stream: true);
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
@@ -67,13 +75,13 @@ public sealed class OllamaAIService : AIProviderBase
         }
     }
 
-    private HttpRequestMessage BuildRequest(string prompt, bool stream)
+    private async Task<HttpRequestMessage> BuildRequestAsync(string prompt, bool stream)
     {
-        var baseUrl = _configuration["Ollama:BaseUrl"] ?? DefaultBaseUrl;
+        var baseUrl = await _configuration.ResolveAsync("ollama.baseUrl", "Ollama:BaseUrl") ?? DefaultBaseUrl;
 
         var body = new
         {
-            model = _configuration["Ollama:Model"] ?? DefaultModel,
+            model = await _configuration.ResolveAsync("ollama.model", "Ollama:Model") ?? DefaultModel,
             stream,
             messages = new[] { new { role = "user", content = prompt } }
         };
