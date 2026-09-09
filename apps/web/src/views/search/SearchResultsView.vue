@@ -318,15 +318,18 @@ onMounted(load);
       v-if="selectedRecipe"
       :recipe="selectedRecipe"
       :loading="isDetailLoading"
+      :can-enhance="authStore.isAuthenticated"
       @close="closeDetail"
       @retry="retryDetail"
     >
-      <template #actions>
+      <!-- `shown` is whichever version the reader is looking at, so planning an enhanced
+           recipe puts the enhanced one in the calendar rather than the original. -->
+      <template #actions="{ recipe: shown }">
         <button
           v-if="authStore.isAuthenticated"
           type="button"
           class="block w-full rounded-xl bg-green-600 py-3 text-center font-semibold text-white transition-colors hover:bg-green-700"
-          @click="planningRecipe = selectedRecipe"
+          @click="planningRecipe = shown"
         >
           Add to Meal Plan
         </button>

@@ -34,6 +34,12 @@ public interface IRecipeRepository : IBaseRepository<Recipe>
     Task<IReadOnlyList<Recipe>> GetBySpoonacularIdsAsync(IEnumerable<int> spoonacularIds);
 
     /// <summary>
+    /// This person's elevated version of one recipe, or null if they have never asked for
+    /// one. There is at most one: asking again rewrites it rather than adding another.
+    /// </summary>
+    Task<Recipe?> GetEnhancementAsync(Guid originalId, Guid ownerId, CancellationToken ct = default);
+
+    /// <summary>
     /// Swap a tracked recipe's ingredient rows for a freshly built set. Needed because
     /// entities carry a client-assigned Guid key from birth, which an already-tracked parent
     /// causes the change tracker to misread as an existing row.

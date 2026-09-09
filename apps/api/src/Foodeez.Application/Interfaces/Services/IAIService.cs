@@ -35,4 +35,11 @@ public interface IAIService
 
     /// <summary>Estimate per-serving nutrition for a home-cooked dish from its description.</summary>
     Task<EstimatedNutritionDto> EstimateNutritionAsync(EstimateNutritionRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Rewrite one recipe as a restaurant kitchen would cook it - the same dish, raised by
+    /// technique. A result with Succeeded false is how a provider reports that it could not,
+    /// and must never be saved over the enhancement the reader already has.
+    /// </summary>
+    Task<EnhancedRecipeDto> EnhanceRecipeAsync(EnhanceRecipeRequest request, CancellationToken ct = default);
 }

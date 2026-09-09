@@ -49,6 +49,7 @@ public class GetMealPlanUseCase
         MealType = e.MealType,
         RecipeId = e.RecipeId,
         RecipeName = e.Recipe?.Name,
+        RecipeIsEnhanced = e.Recipe?.EnhancedFromRecipeId != null,
         FoodItemId = e.FoodItemId,
         FoodItemName = e.FoodItem?.Name,
         Notes = e.Notes,

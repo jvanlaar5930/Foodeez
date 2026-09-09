@@ -100,6 +100,14 @@ const mealColors: Record<MealType, string> = {
     @drop.prevent="onDrop"
   >
     <span v-if="displayName" class="line-clamp-2 font-medium leading-snug">
+      <!-- The enhanced version carries the same name as the recipe it elevates, so the star
+           is the only thing on this cell that says which of the two is being cooked. The
+           label is spelled out for a screen reader, which would otherwise read the emoji
+           itself - "star" says nothing about which version this is. -->
+      <span v-if="entry?.recipeIsEnhanced" title="The enhanced version of this recipe">
+        <span aria-hidden="true">⭐</span>
+        <span class="sr-only">Enhanced version of</span>
+      </span>
       {{ displayName }}
       <span v-if="loggedLabel" title="Also logged as eaten">✓</span>
     </span>
