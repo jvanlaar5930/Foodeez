@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router';
 import AppButton from '@/components/ui/AppButton.vue';
 import AppInput from '@/components/ui/AppInput.vue';
 import AppAlert from '@/components/ui/AppAlert.vue';
+import AppLogo from '@/components/ui/AppLogo.vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -51,10 +52,7 @@ async function handleSubmit() {
     <div class="w-full max-w-sm">
       <!-- Logo -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center gap-2 mb-2">
-          <span class="text-4xl">🥦</span>
-          <span class="text-3xl font-bold text-green-700 dark:text-green-400">Foodeez</span>
-        </div>
+        <AppLogo :height="46" class="mb-2" />
         <p class="text-gray-500 dark:text-gray-400 text-sm">Track your nutrition, reach your goals</p>
       </div>
 

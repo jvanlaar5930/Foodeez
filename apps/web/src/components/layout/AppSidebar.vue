@@ -2,6 +2,7 @@
 import { RouterLink, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
+import AppLogo from '@/components/ui/AppLogo.vue';
 import { computed } from 'vue';
 
 const route = useRoute();
@@ -74,9 +75,8 @@ function isActive(path: string): boolean {
 <template>
   <aside class="hidden lg:flex flex-col w-64 min-h-screen bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 px-4 py-6">
     <!-- Logo -->
-    <div class="flex items-center gap-2 px-2 mb-8">
-      <span class="text-2xl">🥦</span>
-      <span class="text-xl font-bold text-green-700 dark:text-green-400 tracking-tight">Foodeez</span>
+    <div class="flex items-center px-2 mb-8">
+      <AppLogo :height="30" />
     </div>
 
     <!-- Navigation -->

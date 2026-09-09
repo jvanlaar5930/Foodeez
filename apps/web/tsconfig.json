@@ -19,7 +19,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@foodeez/shared": ["../../packages/shared/src/index.ts"],
-      "@foodeez/shared/*": ["../../packages/shared/src/*"]
+      "@foodeez/shared/*": ["../../packages/shared/src/*"],
+      "@foodeez/brand/*": ["../../packages/brand/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
