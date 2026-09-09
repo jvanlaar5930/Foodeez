@@ -1,25 +1,103 @@
-# Foodeez
+<p align="center">
+  <img src="packages/brand/assets/Foodeez_mark.png" alt="" height="120">
+</p>
 
-An AI-powered food tracking and meal prepping application. Log meals, scan food with your camera, get personalized nutrition insights from Claude AI, and plan your weekly meals with an interactive calendar.
+<p align="center">
+  <img src="packages/brand/assets/Foodeez_image.svg" alt="Foodeez" height="72">
+</p>
+
+<p align="center">
+  <em>Log what you ate. Understand what it means. Decide what's next.</em>
+</p>
+
+---
+
+## What Foodeez is
+
+Foodeez is an AI-assisted food journal and meal planner. Photograph a plate or type a
+sentence, and it works out what you ate and roughly what was in it. Over days it turns that
+log into something you can actually read: where your week went, what a pattern looks like,
+what a sensible next meal would be. Recipes, a weekly calendar, and a grocery list all hang
+off the same record, so planning forward and looking back are the same data seen from
+different ends.
+
+It runs as two clients over one API — a Vue web app and a React Native app for Android —
+with a .NET backend that owns the domain and talks to the AI providers.
+
+### Philosophy
+
+**Logging has to be cheap, or it doesn't happen.** Every food tracker dies in the same
+place: the fourth day, when weighing portions and searching a database stops being worth it.
+So the fastest paths here are a camera and a plain sentence. An approximate log that exists
+beats a precise one that doesn't.
+
+**The AI reads your food, it doesn't run your life.** A model is used where it is genuinely
+better than a form — reading a photo, estimating a portion, noticing that three days ran
+short on protein, drafting a plan you then edit. It doesn't set your goals or grade you.
+Suggestions arrive as something to accept, change, or ignore.
+
+**Your data is yours, and it's local by default.** Meals you generate stay private to you.
+The whole stack runs on your own machine, against your own database and your own API keys,
+and every AI provider is swappable — Claude, Gemini, Groq, OpenRouter, or a model on your own
+hardware through Ollama or LocalAI. Nothing here needs a Foodeez-operated server to work.
+
+**Configuration belongs where you can see it.** Secrets live outside the repo, everything
+else sits in a file you can diff, and anything worth changing while running is editable from
+Admin → Settings without a redeploy.
+
+**One brand, one domain, one source of truth.** Shared types, shared artwork, one API. The
+two clients diverge where the platform demands it and nowhere else.
 
 ---
 
 ## Table of Contents
 
-- [Project Structure](#project-structure)
-- [Prerequisites](#prerequisites)
-- [1. Database Setup (MySQL)](#1-database-setup-mysql)
-- [2. Backend API (.NET 10)](#2-backend-api-net-10)
-- [3. Web App (Vue 3)](#3-web-app-vue-3)
-- [4. Mobile App (React Native / Expo)](#4-mobile-app-react-native--expo)
-- [Running Everything Together](#running-everything-together)
-- [Testing](#testing)
-- [Environment Variables Reference](#environment-variables-reference)
-- [Troubleshooting](#troubleshooting)
+- [What Foodeez is](#what-foodeez-is)
+  - [Philosophy](#philosophy)
+- [Features](#features)
+- [How it fits together](#how-it-fits-together)
+  - [Project Structure](#project-structure)
+  - [AI providers](#ai-providers)
+- [Technical Setup](#technical-setup)
+  - [Prerequisites](#prerequisites)
+  - [1. Database Setup (MySQL)](#1-database-setup-mysql)
+  - [2. Backend API (.NET 10)](#2-backend-api-net-10)
+  - [3. Web App (Vue 3)](#3-web-app-vue-3)
+  - [4. Mobile App (React Native / Expo)](#4-mobile-app-react-native--expo)
+  - [Running Everything Together](#running-everything-together)
+  - [Testing](#testing)
+  - [Environment Variables Reference](#environment-variables-reference)
+  - [Troubleshooting](#troubleshooting)
 
 ---
 
-## Project Structure
+## Features
+
+**Meal log** — Log a meal from a photo, a description, or a saved template. The AI reads the
+plate, estimates the nutrition, and streams its analysis back as it works. Everything stays
+editable afterwards.
+
+**Recipes** — Search the library, filter by tag, save what you like. Any recipe can get a
+chef's take: an AI-enhanced version kept beside the original rather than replacing it.
+
+**Meal plans** — A weekly calendar you fill by hand or generate. Entries move between days
+and slots; generated meals stay private to you.
+
+**Grocery lists** — Built from a plan, checked off as you shop.
+
+**Advice & reports** — Day-level analysis and recommendations drawn from your actual log,
+not from a generic template.
+
+**Chat** — Ask about what you ate, in conversation, with your history as context.
+
+**Admin** — Provider keys, models, and request timeouts editable at runtime; application logs
+viewable in place.
+
+---
+
+## How it fits together
+
+### Project Structure
 
 ```
 Foodeez/
@@ -28,10 +106,26 @@ Foodeez/
 │   ├── mobile/       # React Native (Expo) — Android-first mobile app
 │   └── web/          # Vue 3 — browser web app
 └── packages/
+    ├── brand/        # Logo and icon artwork shared by both clients
     └── shared/       # Shared TypeScript types used by mobile and web
 ```
 
+The backend is layered: `Foodeez.Domain` holds the entities, `Foodeez.Application` the use
+cases, `Foodeez.Infrastructure` the EF Core persistence and provider clients, and
+`Foodeez.API` the controllers. Tests sit alongside, one project per layer.
+
+### AI providers
+
+Claude is the default. Gemini, Groq, OpenRouter, Ollama and LocalAI all sit behind the same
+interface, chosen by configuration rather than by code, and each carries its own request
+timeout — a self-hosted model can spend minutes on one prompt, and the timeout is what decides
+whether that is patience or a failure.
+
 ---
+
+# Technical Setup
+
+Everything below is what you need to get the stack running locally.
 
 ## Prerequisites
 
@@ -248,6 +342,52 @@ Then scan the QR code with the Expo Go app.
 3. Click **Create Device** → choose a phone (e.g. Pixel 8) → select a system image (API 34 recommended) → Finish
 4. Click the play button to launch the emulator
 5. Run `npm run android` — Expo will detect the emulator automatically
+
+### Build a standalone APK
+
+An `.apk` you can sideload onto an Android phone — no Expo Go, no dev server, and it talks to the
+deployed API rather than your machine. The build profiles live in `apps/mobile/eas.json`.
+
+**Option A — EAS cloud build (recommended, nothing to install locally)**
+
+```
+cd apps/mobile
+npx eas-cli login          # first time only
+npx eas-cli build --platform android --profile preview
+```
+
+The `preview` profile sets `"buildType": "apk"` and points `EXPO_PUBLIC_API_URL` at the deployed
+API, so the build needs nothing else from you. On the first run EAS offers to generate an Android
+keystore — accept, and it reuses that keystore for every later build.
+
+The build queues on Expo's servers and takes roughly 10–20 minutes. When it finishes the CLI prints
+a URL and a QR code: open that link in the browser on your phone, download the APK, and tap it.
+Android asks you to allow installs from that browser the first time.
+
+> Use `--profile preview`, not `--profile production`. The production profile sets no `buildType`,
+> so it emits an `.aab` for the Play Store — that format cannot be sideloaded.
+
+> The `projectId` under `extra.eas` in `app.json` ties the build to one Expo account. If EAS reports
+> `Entity not authorized` for that id, you are logged in as a different account than the one that
+> owns the project — check with `npx eas-cli whoami`.
+
+**Option B — Local build (no queue, but needs the Android toolchain)**
+
+Requires JDK 17 or later and the Android SDK on your machine:
+
+```
+cd apps/mobile
+npx expo prebuild --platform android
+cd android
+./gradlew assembleRelease
+```
+
+The APK lands at `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`. Copy it to
+your phone over USB or cloud storage and tap it to install.
+
+> `expo prebuild` generates an `apps/mobile/android/` directory and rewrites the `android` and `ios`
+> scripts in `apps/mobile/package.json` to `expo run:*`. Both are derived from `app.json` and safe to
+> regenerate, so revert the `package.json` change and keep the `android/` directory out of commits.
 
 ---
 
