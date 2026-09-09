@@ -27,6 +27,23 @@ public class RecipeDto
     /// </summary>
     public bool DetailUnavailable { get; set; }
     public Guid? CreatedByUserId { get; set; }
+
+    /// <summary>The recipe this one elevates, or null when this is an ordinary recipe.</summary>
+    public Guid? EnhancedFromRecipeId { get; set; }
+
+    /// <summary>When the enhancement was last written. Null on an ordinary recipe.</summary>
+    public DateTime? EnhancedAt { get; set; }
+
+    /// <summary>What the model changed and why. Null on an ordinary recipe.</summary>
+    public string? EnhancementNotes { get; set; }
+
+    /// <summary>
+    /// Whether this is the elevated version of another recipe, which is what the clients
+    /// badge. Sent rather than left for each client to derive from the id above, so the three
+    /// of them cannot disagree about what counts as enhanced.
+    /// </summary>
+    public bool IsEnhanced => EnhancedFromRecipeId.HasValue;
+
     public NutritionalInfoDto NutritionalInfoPerServing { get; set; } = new();
     public List<RecipeIngredientDto> Ingredients { get; set; } = new();
 }

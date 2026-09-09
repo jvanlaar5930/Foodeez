@@ -90,6 +90,31 @@ export const recipeService = {
     return response.data;
   },
 
+  /**
+   * This user's enhanced version of a recipe, or null if they have never asked for one.
+   * A lookup only - it never starts a generation, so opening a recipe costs nothing.
+   */
+  async getEnhancedRecipe(id: string): Promise<Recipe | null> {
+    // 204 with an empty body is how "never enhanced" comes back, which axios hands over as
+    // an empty string rather than null.
+    const response = await api.get<Recipe | ''>(`/recipes/${id}/enhanced`);
+    return response.data ? (response.data as Recipe) : null;
+  },
+
+  /**
+   * Writes this user's enhanced version of a recipe and returns it.
+   *
+   * Without `refresh` the server hands back the enhancement they already have rather than
+   * writing another, so this is safe to call twice. `refresh` is the reader saying they have
+   * seen that one and want a different take on the same dish.
+   */
+  async enhanceRecipe(id: string, refresh = false): Promise<Recipe> {
+    const response = await api.post<Recipe>(`/recipes/${id}/enhance`, null, {
+      params: refresh ? { refresh: true } : {},
+    });
+    return response.data;
+  },
+
   async searchRecipes(
     query: string,
     page = 1,

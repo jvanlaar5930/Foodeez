@@ -30,6 +30,9 @@ public static class RecipeMapper
         SourceName = recipe.SourceName,
         HasInstructions = !string.IsNullOrWhiteSpace(recipe.Instructions),
         CreatedByUserId = recipe.CreatedByUserId,
+        EnhancedFromRecipeId = recipe.EnhancedFromRecipeId,
+        EnhancedAt = recipe.EnhancedAt,
+        EnhancementNotes = recipe.EnhancementNotes,
         NutritionalInfoPerServing = NutritionMapper.ToDto(recipe.NutritionalInfoPerServing),
         Ingredients = recipe.Ingredients.Select(ToDto).ToList()
     };

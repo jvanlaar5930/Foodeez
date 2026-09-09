@@ -26,6 +26,7 @@ const config = getDefaultConfig(projectRoot);
 // Expo Go to give up on it ("failed to download remote update").
 config.watchFolders = [
   path.resolve(workspaceRoot, 'packages/shared'),
+  path.resolve(workspaceRoot, 'packages/brand'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
@@ -38,5 +39,16 @@ config.resolver.nodeModulesPaths = [
 // npm hoists most dependencies to the root, so a package can legitimately be found in either
 // place. Without this, a hoisted React and a local one can both be loaded, which breaks hooks.
 config.resolver.disableHierarchicalLookup = true;
+
+// Brand SVGs come out of @foodeez/brand as React components rather than image files.
+//
+// Metro treats .svg as an asset by default, which on React Native means a bitmap loader that
+// cannot read vector markup - importing one yields an unrenderable object. Moving the
+// extension from assetExts to sourceExts and handing it to react-native-svg-transformer
+// compiles the markup into a react-native-svg component instead, so the same file the web app
+// points an <img> at can be rendered directly here.
+config.transformer.babelTransformerPath = require.resolve('react-native-svg-transformer');
+config.resolver.assetExts = config.resolver.assetExts.filter((ext) => ext !== 'svg');
+config.resolver.sourceExts = [...config.resolver.sourceExts, 'svg'];
 
 module.exports = config;

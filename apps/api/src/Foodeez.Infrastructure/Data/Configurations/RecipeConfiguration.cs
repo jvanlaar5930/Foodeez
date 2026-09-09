@@ -37,10 +37,30 @@ public class RecipeConfiguration : IEntityTypeConfiguration<Recipe>
         builder.Property(r => r.SourceName)
             .HasMaxLength(200);
 
+        builder.Property(r => r.EnhancementNotes)
+            .HasColumnType("text");
+
         builder.HasMany(r => r.Ingredients)
             .WithOne(i => i.Recipe)
             .HasForeignKey(i => i.RecipeId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // An enhancement points back at the recipe it elevates. Cascading is what stops a
+        // deleted recipe leaving an enhancement of nothing behind, reachable by id but with
+        // no original to compare it against.
+        builder.HasOne<Recipe>()
+            .WithMany()
+            .HasForeignKey(r => r.EnhancedFromRecipeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // At most one enhancement per recipe per person, enforced where it cannot be raced:
+        // two clicks landing together would otherwise each find no enhancement and each write
+        // one, and the reader would be left toggling between two "the" enhanced versions.
+        // MySQL lets a unique index hold any number of NULL rows, so ordinary recipes - every
+        // one of which has both columns null - are untouched by this.
+        builder.HasIndex(r => new { r.EnhancedFromRecipeId, r.CreatedByUserId })
+            .IsUnique()
+            .HasDatabaseName("ix_recipes_enhanced_from_user");
 
         builder.OwnsOne(r => r.NutritionalInfoPerServing, ni =>
         {

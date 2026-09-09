@@ -20,4 +20,14 @@ public static class NutritionMapper
         Sugar = nutrition.Sugar,
         Sodium = nutrition.Sodium
     };
+
+    /// <summary>The way back, for the features that write nutrition rather than read it.</summary>
+    public static NutritionalInfo ToDomain(NutritionalInfoDto nutrition) => new(
+        nutrition.Calories,
+        nutrition.Protein,
+        nutrition.Carbohydrates,
+        nutrition.Fat,
+        nutrition.Fiber,
+        nutrition.Sugar,
+        nutrition.Sodium);
 }

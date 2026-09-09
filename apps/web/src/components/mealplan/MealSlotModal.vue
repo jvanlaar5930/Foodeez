@@ -218,8 +218,15 @@ function submit(): void {
           </div>
 
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {{ linkedRecipe.name }}
+            <p class="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">
+              <span class="truncate">{{ linkedRecipe.name }}</span>
+              <!-- Which of the two versions this slot is linked to. They share a name. -->
+              <span
+                v-if="linkedRecipe.isEnhanced"
+                title="The enhanced version of this recipe"
+                class="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                >⭐ Enhanced</span
+              >
             </p>
             <p
               v-if="linkedRecipe.description"

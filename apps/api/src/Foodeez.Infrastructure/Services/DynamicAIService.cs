@@ -78,6 +78,9 @@ public sealed class DynamicAIService : IAIService, IStreamingAIService
     public async Task<EstimatedNutritionDto> EstimateNutritionAsync(EstimateNutritionRequest request, CancellationToken ct = default)
         => await (await ResolveAsync()).EstimateNutritionAsync(request, ct);
 
+    public async Task<EnhancedRecipeDto> EnhanceRecipeAsync(EnhanceRecipeRequest request, CancellationToken ct = default)
+        => await (await ResolveAsync()).EnhanceRecipeAsync(request, ct);
+
     /// <summary>
     /// Every provider streams, because <see cref="AIProviderBase"/> requires it - so this only
     /// has to pick one. It used to resolve an IAIService and check at runtime whether it also

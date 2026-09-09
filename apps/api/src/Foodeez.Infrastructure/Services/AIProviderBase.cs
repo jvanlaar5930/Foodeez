@@ -252,6 +252,16 @@ public abstract class AIProviderBase : IAIService, IStreamingAIService
             "estimate nutrition",
             ct);
 
+    public Task<EnhancedRecipeDto> EnhanceRecipeAsync(EnhanceRecipeRequest request, CancellationToken ct = default) =>
+        ExecuteAsync(
+            RecipeEnhancementPrompt.Build(request),
+            RecipeEnhancementPrompt.Parse,
+            // Not an empty recipe: the caller writes this one to the database, and a blank
+            // dish saved over someone's enhancement is worse than no answer at all.
+            RecipeEnhancementPrompt.Unavailable,
+            "enhance a recipe",
+            ct);
+
     // ── Vision, which not every provider has ──────────────────────────────────
 
     /// <summary>

@@ -334,25 +334,6 @@ public class GenerateAIMealPlanUseCase
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..max] + "…";
 
-    /// <summary>
-    /// Tags are stored as one comma-separated string, capped at the column's 500 characters.
-    /// Whole tags are dropped rather than the string being cut mid-word, which would leave a
-    /// corrupted last tag behind.
-    /// </summary>
-    private static string? JoinTags(List<string> tags)
-    {
-        var kept = tags.Where(tag => !string.IsNullOrWhiteSpace(tag)).Select(tag => tag.Trim()).ToList();
-
-        var joined = string.Join(",", kept);
-        while (joined.Length > 500 && kept.Count > 0)
-        {
-            kept.RemoveAt(kept.Count - 1);
-            joined = string.Join(",", kept);
-        }
-
-        return joined.Length == 0 ? null : joined;
-    }
-
     private async Task<UserProfileDto> LoadProfileAsync(Guid userId)
     {
         var user = await _unitOfWork.Users.GetByIdAsync(userId);
@@ -589,7 +570,7 @@ public class GenerateAIMealPlanUseCase
             PrepTimeMinutes = meal.PrepTimeMinutes,
             CookTimeMinutes = meal.CookTimeMinutes,
             Servings = meal.Servings > 0 ? meal.Servings : 1,
-            Tags = JoinTags(meal.Tags),
+            Tags = RecipeTags.Join(meal.Tags),
             ImageUrl = AiRecipeImage.Marker,
             IsAIGenerated = true,
             CreatedByUserId = userId,

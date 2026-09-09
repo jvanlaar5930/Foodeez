@@ -10,6 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@foodeez/brand": "*",
     "@foodeez/shared": "*",
     "@vitejs/plugin-vue": "^5.0.0",
     "@vueuse/core": "^11.0.0",

@@ -11,6 +11,9 @@
       ],
       "@foodeez/shared/*": [
         "../../packages/shared/src/*"
+      ],
+      "@foodeez/brand/*": [
+        "../../packages/brand/*"
       ]
     },
     "types": [

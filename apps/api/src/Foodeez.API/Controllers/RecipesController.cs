@@ -22,19 +22,22 @@ public class RecipesController : FoodeezController
     private readonly GetRecipeDetailUseCase _detailUseCase;
     private readonly SavedRecipesUseCase _savedUseCase;
     private readonly RecipeFilterTagsUseCase _filterTagsUseCase;
+    private readonly EnhanceRecipeUseCase _enhanceUseCase;
 
     public RecipesController(
         SearchRecipesUseCase searchUseCase,
         AutocompleteRecipesUseCase autocompleteUseCase,
         GetRecipeDetailUseCase detailUseCase,
         SavedRecipesUseCase savedUseCase,
-        RecipeFilterTagsUseCase filterTagsUseCase)
+        RecipeFilterTagsUseCase filterTagsUseCase,
+        EnhanceRecipeUseCase enhanceUseCase)
     {
         _searchUseCase = searchUseCase;
         _autocompleteUseCase = autocompleteUseCase;
         _detailUseCase = detailUseCase;
         _savedUseCase = savedUseCase;
         _filterTagsUseCase = filterTagsUseCase;
+        _enhanceUseCase = enhanceUseCase;
     }
 
     /// <summary>The filter pills the clients show above their results, in the admin's order.</summary>
@@ -133,6 +136,47 @@ public class RecipesController : FoodeezController
         return NoContent();
     }
 
+
+    // -- Enhanced versions ----------------------------------------------------
+    // A recipe may have one elevated version per person - the same dish rewritten the way a
+    // restaurant kitchen would cook it. It is a separate row that never replaces the original,
+    // and it is private to whoever asked for it, so both routes require a token.
+
+    /// <summary>
+    /// The signed-in user's enhanced version of a recipe, or 204 when they have not asked for
+    /// one. Never generates - opening a recipe must not quietly spend an AI call.
+    /// </summary>
+    [HttpGet("{id:guid}/enhanced")]
+    [Authorize]
+    [ProducesResponseType(typeof(RecipeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> GetEnhancedRecipe([FromRoute] Guid id, CancellationToken ct)
+    {
+        var enhanced = await _enhanceUseCase.GetAsync(id, UserId, ct);
+        return enhanced == null ? NoContent() : Ok(enhanced);
+    }
+
+    /// <summary>
+    /// Write the signed-in user's enhanced version of a recipe, or hand back the one they
+    /// already have.
+    ///
+    /// Idempotent by default, which is the point: a second click, a second tab or a client
+    /// that retried gets the existing enhancement rather than another generation and another
+    /// row. `refresh=true` is the reader saying they have seen it and want a different take,
+    /// and rewrites that same row.
+    /// </summary>
+    [HttpPost("{id:guid}/enhance")]
+    [Authorize]
+    [ProducesResponseType(typeof(RecipeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> EnhanceRecipe(
+        [FromRoute] Guid id, [FromQuery] bool refresh = false, CancellationToken ct = default)
+    {
+        // KeyNotFoundException -> 404, InvalidOperationException -> 400 and
+        // AIGenerationFailedException -> 503 are all mapped by ExceptionHandlingMiddleware.
+        return Ok(await _enhanceUseCase.ExecuteAsync(id, UserId, refresh, ct));
+    }
 
     /// <summary>Get a specific recipe by ID, including the full ingredient list and steps.</summary>
     [HttpGet("{id:guid}")]

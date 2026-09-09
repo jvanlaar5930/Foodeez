@@ -32,4 +32,17 @@ export interface Recipe {
   /** Who saved it, when it was not one of the built-in ones. Null for library recipes. */
   createdByUserId?: string;
   createdAt: string;
+
+  /**
+   * The recipe this one elevates, when it is an enhanced version rather than an ordinary
+   * recipe. Enhanced versions are private to whoever asked for one and never appear in the
+   * library beside their original - they are reached by opening that original.
+   */
+  enhancedFromRecipeId?: string;
+  /** When the enhancement was last written, so a refreshed one reads as new. */
+  enhancedAt?: string;
+  /** What the chef changed and why, one note per line. Only on an enhanced version. */
+  enhancementNotes?: string;
+  /** Whether this is the enhanced version of another recipe. Sent by the API, not derived. */
+  isEnhanced?: boolean;
 }

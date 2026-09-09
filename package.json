@@ -5,6 +5,7 @@
   "workspaces": [
     "apps/mobile",
     "apps/web",
+    "packages/brand",
     "packages/shared"
   ],
   "scripts": {

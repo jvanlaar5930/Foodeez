@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Palette } from '@/theme';
 import type { AuthStackParamList } from '@/navigation/types';
+import { Logo } from '@/components/ui/Logo';
 
 type WelcomeNav = NativeStackNavigationProp<AuthStackParamList, 'Welcome'>;
 
@@ -39,10 +40,7 @@ export function WelcomeScreen() {
       <View style={styles.container}>
         {/* Logo Section */}
         <View style={styles.logoSection}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoEmoji}>🥗</Text>
-          </View>
-          <Text style={styles.appName}>Foodeez</Text>
+          <Logo height={52} />
           <Text style={styles.tagline}>Your AI-powered nutrition companion</Text>
         </View>
 
@@ -96,28 +94,10 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     alignItems: 'center',
     paddingTop: Spacing.xxl,
   },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: C.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  logoEmoji: {
-    fontSize: 52,
-  },
-  appName: {
-    fontSize: 42,
-    fontWeight: FontWeight.bold,
-    color: C.primary,
-    letterSpacing: -1,
-  },
   tagline: {
     fontSize: FontSize.lg,
     color: C.textSecondary,
-    marginTop: Spacing.xs,
+    marginTop: Spacing.md,
     textAlign: 'center',
   },
   features: {

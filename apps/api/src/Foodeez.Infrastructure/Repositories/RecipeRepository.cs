@@ -19,17 +19,35 @@ public class RecipeRepository : BaseRepository<Recipe>, IRecipeRepository
     }
 
     /// <summary>
-    /// Hides AI-generated recipes that belong to somebody else.
+    /// Hides AI-generated recipes that belong to somebody else, and enhancements from
+    /// everybody.
     ///
-    /// They are written into the shared library as a plan is generated, which is what makes
-    /// them reusable - but they were written *for* one person, from their targets and their
-    /// excluded foods, and everyone else was seeing them in the same list as the real ones.
-    /// A signed-out caller sees none of them at all.
+    /// Generated recipes are written into the shared library as a plan is generated, which is
+    /// what makes them reusable - but they were written *for* one person, from their targets
+    /// and their excluded foods, and everyone else was seeing them in the same list as the
+    /// real ones. A signed-out caller sees none of them at all.
+    ///
+    /// An enhancement is hidden from listings even from its own author, because it is not a
+    /// separate dish: it is the elevated version of a recipe that is already in the list, and
+    /// showing both would put what looks like a duplicate beside every recipe anyone has ever
+    /// enhanced. It is reached by opening the original, which is the only place the choice
+    /// between the two versions makes any sense.
     /// </summary>
     private static IQueryable<Recipe> VisibleTo(IQueryable<Recipe> query, Guid? viewerId) =>
         viewerId is { } viewer
-            ? query.Where(r => !r.IsAIGenerated || r.CreatedByUserId == viewer)
-            : query.Where(r => !r.IsAIGenerated);
+            ? query.Where(r => r.EnhancedFromRecipeId == null && (!r.IsAIGenerated || r.CreatedByUserId == viewer))
+            : query.Where(r => r.EnhancedFromRecipeId == null && !r.IsAIGenerated);
+
+    public async Task<Recipe?> GetEnhancementAsync(Guid originalId, Guid ownerId, CancellationToken ct = default)
+    {
+        // Tracked, not AsNoTracking: the caller refreshes this very row in place when the
+        // reader asks for a different take on the same recipe.
+        return await _dbSet
+            .Include(r => r.Ingredients)
+                .ThenInclude(i => i.FoodItem)
+            .FirstOrDefaultAsync(
+                r => r.EnhancedFromRecipeId == originalId && r.CreatedByUserId == ownerId, ct);
+    }
 
     public async Task<IReadOnlyList<Recipe>> SearchAsync(string query, Guid? viewerId)
     {
@@ -107,8 +125,14 @@ public class RecipeRepository : BaseRepository<Recipe>, IRecipeRepository
         // An equality IN list, not a LIKE per name: an exact name is what the caller is
         // matching on, and this can use the index that a leading-wildcard LIKE cannot.
         // Tracked on purpose - the caller attaches these to new plan entries.
+        //
+        // Enhancements are excluded despite being this person's own rows: they carry the name
+        // of the recipe they elevate, so a generated plan that happened to name that dish
+        // would silently attach itself to the enhanced version instead of the recipe.
         return await _dbSet
-            .Where(r => r.CreatedByUserId == ownerId && wanted.Contains(r.Name))
+            .Where(r => r.CreatedByUserId == ownerId
+                        && r.EnhancedFromRecipeId == null
+                        && wanted.Contains(r.Name))
             .Include(r => r.Ingredients)
                 .ThenInclude(i => i.FoodItem)
             .ToListAsync(ct);

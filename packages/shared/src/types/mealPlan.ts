@@ -7,6 +7,11 @@ export interface MealPlanEntry {
   mealType: MealType;
   recipeId?: string;
   recipeName?: string;
+  /**
+   * True when the recipe in this slot is the enhanced version of another one. The two
+   * versions share a name, so without this the calendar cannot say which one is being cooked.
+   */
+  recipeIsEnhanced?: boolean;
   foodItemId?: string;
   foodItemName?: string;
   notes?: string;

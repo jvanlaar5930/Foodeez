@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import ThemeToggleButton from '@/components/ui/ThemeToggleButton.vue';
+import AppLogo from '@/components/ui/AppLogo.vue';
 
 defineProps<{
   /** Let the hero sit flush under a transparent header. */
@@ -30,11 +31,8 @@ const sectionLinks = [
       ]"
     >
       <div class="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
-        <RouterLink to="/" class="flex shrink-0 items-center gap-2">
-          <span class="text-2xl">🥦</span>
-          <span class="text-xl font-bold tracking-tight text-green-700 dark:text-green-400"
-            >Foodeez</span
-          >
+        <RouterLink to="/" class="flex shrink-0 items-center">
+          <AppLogo :height="30" />
         </RouterLink>
 
         <nav class="ml-6 hidden items-center gap-6 md:flex">
@@ -118,8 +116,7 @@ const sectionLinks = [
         class="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6"
       >
         <div class="flex items-center gap-2">
-          <span class="text-xl">🥦</span>
-          <span class="font-bold text-green-700 dark:text-green-400">Foodeez</span>
+          <AppLogo :height="26" />
           <span class="text-sm text-gray-400 dark:text-gray-500"
             >&middot; Eat well, without the guesswork.</span
           >

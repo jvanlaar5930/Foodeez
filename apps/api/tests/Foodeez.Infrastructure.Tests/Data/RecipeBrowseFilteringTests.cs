@@ -53,6 +53,25 @@ public class RecipeBrowseFilteringTests : IDisposable
         return recipe;
     }
 
+    /// <summary>One person's elevated version of a recipe, which shares its name.</summary>
+    private Recipe Enhance(Recipe original, Guid owner)
+    {
+        var enhancement = new Recipe
+        {
+            Name = original.Name,
+            Instructions = "Cook it properly.",
+            Servings = 1,
+            IsAIGenerated = true,
+            CreatedByUserId = owner,
+            EnhancedFromRecipeId = original.Id,
+            EnhancedAt = DateTime.UtcNow,
+        };
+
+        _context.Recipes.Add(enhancement);
+        _context.SaveChanges();
+        return enhancement;
+    }
+
     private void Save(Guid userId, Recipe recipe)
     {
         _context.SavedRecipes.Add(new SavedRecipe { UserId = userId, RecipeId = recipe.Id });
@@ -85,6 +104,75 @@ public class RecipeBrowseFilteringTests : IDisposable
         var anonymous = await Browse(new RecipeBrowseFilter { ViewerId = null });
 
         anonymous.Select(r => r.Name).Should().BeEquivalentTo("Library Lasagne");
+    }
+
+    // ── Enhanced versions ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// An enhancement is not a separate dish. It carries the name of the recipe it elevates,
+    /// so listing it puts what looks like a duplicate beside every recipe anyone has ever
+    /// enhanced - including for the person who asked for it, which is why this is hidden from
+    /// its own author too. It is reached by opening the original.
+    /// </summary>
+    [Fact]
+    public async Task AnEnhancedVersion_IsNotListedBesideTheRecipeItElevates()
+    {
+        var original = Add("Roast Chicken");
+        Enhance(original, _me);
+
+        var mine = await Browse(new RecipeBrowseFilter { ViewerId = _me });
+
+        mine.Select(r => r.Name).Should().BeEquivalentTo("Roast Chicken");
+    }
+
+    [Fact]
+    public async Task AnEnhancedVersion_IsNotAPreviousMeal()
+    {
+        var original = Add("Roast Chicken");
+        Enhance(original, _me);
+        Add("My Generated Curry", ai: true, owner: _me);
+
+        var previous = await Browse(new RecipeBrowseFilter { ViewerId = _me, OnlyPreviousMeals = true });
+
+        previous.Select(r => r.Name).Should().BeEquivalentTo("My Generated Curry");
+    }
+
+    [Fact]
+    public async Task AnEnhancedVersion_IsFoundByTheOwnerWhoAskedForIt()
+    {
+        var original = Add("Roast Chicken");
+        var mine = Enhance(original, _me);
+        Enhance(original, _someoneElse);
+
+        var found = await _recipes.GetEnhancementAsync(original.Id, _me);
+
+        found!.Id.Should().Be(mine.Id);
+    }
+
+    [Fact]
+    public async Task AnEnhancedVersion_IsNotVisibleToWhoeverDidNotAskForIt()
+    {
+        var original = Add("Roast Chicken");
+        Enhance(original, _someoneElse);
+
+        var found = await _recipes.GetEnhancementAsync(original.Id, _me);
+
+        found.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A generated plan naming a dish you have enhanced must land on the recipe, not on your
+    /// enhancement of it - they share a name, which is the only thing this query matches on.
+    /// </summary>
+    [Fact]
+    public async Task ReusingARecipeByName_NeverPicksUpAnEnhancement()
+    {
+        var original = Add("Roast Chicken", ai: true, owner: _me);
+        Enhance(original, _me);
+
+        var reusable = await _recipes.GetOwnedByNamesAsync(_me, ["Roast Chicken"]);
+
+        reusable.Should().ContainSingle().Which.Id.Should().Be(original.Id);
     }
 
     // ── Previous Meals ───────────────────────────────────────────────────────
